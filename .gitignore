@@ -1,0 +1,6 @@
+agent_staging/*
+!agent_staging/.gitkeep
+logs/
+*.log
+tmp/
+venv/

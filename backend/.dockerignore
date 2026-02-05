@@ -1,0 +1,69 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation and misc
+README.md
+CONTRIBUTING.md
+.env
+.env.local
+.env.*.local
+.editorconfig
+Makefile
+
+# Alembic
+alembic/versions/
+migrations/versions/
+
+# Tests and CI
+tests/
+pytest.ini
+.github/
+.gitlab-ci.yml
+.travis.yml

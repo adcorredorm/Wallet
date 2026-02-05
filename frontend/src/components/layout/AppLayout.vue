@@ -1,0 +1,70 @@
+<script setup lang="ts">
+/**
+ * App Layout Component - Updated with Side Drawer
+ *
+ * Why this layout?
+ * - Mobile-first with optimized 3-item bottom navigation
+ * - Side drawer for secondary navigation (Accounts, Categories)
+ * - Header with hamburger/back button for intuitive navigation
+ * - Consistent padding and safe areas
+ *
+ * Layout structure:
+ * ┌─────────────────────────────┐
+ * │ Header (Hamburger + Title)  │ ← AppHeader with HamburgerButton
+ * ├─────────────────────────────┤
+ * │                             │
+ * │   Main Content Area         │ ← slot for views
+ * │   (scrollable)              │
+ * │                             │
+ * ├─────────────────────────────┤
+ * │ Bottom Nav (3 items)        │ ← AppNavigation (mobile only)
+ * └─────────────────────────────┘
+ *
+ * When drawer opens:
+ * ┌────────┬────────────────────┐
+ * │ Drawer │ Dimmed Content     │ ← AppDrawer overlays with backdrop
+ * │ Panel  │                    │
+ * └────────┴────────────────────┘
+ *
+ * All screen sizes:
+ * - Fixed bottom navigation (3 items: Home, Transactions, Transfers)
+ * - Side drawer for Accounts & Categories
+ * - Proper bottom padding for nav
+ * - Max-width content container for readability on desktop
+ */
+
+import AppHeader from './AppHeader.vue'
+import AppNavigation from './AppNavigation.vue'
+import AppDrawer from './AppDrawer.vue'
+</script>
+
+<template>
+  <div class="flex flex-col h-screen">
+    <!--
+      Side Drawer
+      Why Teleport? Drawer uses fixed positioning and needs to be at root level
+      to overlay properly with correct z-index stacking
+    -->
+    <AppDrawer />
+
+    <!-- Header with hamburger button and navigation -->
+    <AppHeader class="flex-shrink-0" />
+
+    <!--
+      Main content area
+      Why pb-24? Bottom nav is 64px (4rem) + safe area
+      Prevents content from being hidden behind bottom nav
+    -->
+    <main class="flex-1 overflow-y-auto">
+      <div class="container mx-auto px-4 py-6 pb-24 max-w-7xl">
+        <slot />
+      </div>
+    </main>
+
+    <!--
+      Bottom navigation (all screen sizes)
+      3 items for optimal UX
+    -->
+    <AppNavigation class="flex-shrink-0" />
+  </div>
+</template>

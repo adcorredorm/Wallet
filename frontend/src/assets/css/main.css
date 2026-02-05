@@ -1,0 +1,211 @@
+/**
+ * Global Styles
+ * Tailwind imports + custom base styles
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Base layer - Mobile-first defaults
+ * Why these styles?
+ * - Dark mode by default for better mobile battery life
+ * - System font stack for faster loading
+ * - Touch-friendly sizing and spacing
+ */
+@layer base {
+  html {
+    @apply antialiased;
+    /* Use system font stack for performance */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    @apply bg-dark-bg-primary text-dark-text-primary;
+    /* Prevent text size adjustment on mobile */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+  }
+
+  /* Support for safe areas (iPhone notch, etc) */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Heading styles */
+  h1 {
+    @apply text-2xl font-bold;
+  }
+
+  h2 {
+    @apply text-xl font-semibold;
+  }
+
+  h3 {
+    @apply text-lg font-medium;
+  }
+
+  /* Link styles */
+  a {
+    @apply text-accent-blue;
+    @apply transition-colors duration-150;
+  }
+
+  a:hover {
+    @apply text-accent-blue/80;
+  }
+
+  /* Input and button focus styles */
+  button:focus,
+  input:focus,
+  select:focus,
+  textarea:focus {
+    @apply outline-none ring-2 ring-accent-blue ring-offset-2 ring-offset-dark-bg-primary;
+  }
+
+  /* Disable tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/**
+ * Component layer - Reusable utility classes
+ * These are used throughout components for consistency
+ */
+@layer components {
+  /* Card component base */
+  .card {
+    @apply bg-dark-bg-secondary rounded-lg p-4 shadow-sm;
+  }
+
+  .card-bordered {
+    @apply card border border-dark-border;
+  }
+
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium;
+    @apply min-h-touch min-w-touch; /* Touch-friendly size */
+    @apply transition-all duration-150;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent-blue text-white;
+    @apply hover:bg-accent-blue/90 active:bg-accent-blue/80;
+  }
+
+  .btn-secondary {
+    @apply btn bg-dark-bg-tertiary text-dark-text-primary;
+    @apply hover:bg-dark-bg-tertiary/90 active:bg-dark-bg-tertiary/80;
+  }
+
+  .btn-success {
+    @apply btn bg-accent-green text-white;
+    @apply hover:bg-accent-green/90 active:bg-accent-green/80;
+  }
+
+  .btn-danger {
+    @apply btn bg-accent-red text-white;
+    @apply hover:bg-accent-red/90 active:bg-accent-red/80;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-dark-text-primary;
+    @apply hover:bg-dark-bg-tertiary/50;
+  }
+
+  /* Form input base */
+  .input {
+    @apply w-full px-4 py-2 rounded-lg;
+    @apply bg-dark-bg-tertiary text-dark-text-primary;
+    @apply border border-dark-border;
+    @apply placeholder-dark-text-tertiary;
+    @apply min-h-touch; /* Touch-friendly height */
+    @apply transition-colors duration-150;
+  }
+
+  .input:focus {
+    @apply border-accent-blue bg-dark-bg-secondary;
+  }
+
+  /* Select dropdown */
+  .select {
+    @apply input appearance-none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1.25rem;
+    padding-right: 2.5rem;
+  }
+
+  /* Label */
+  .label {
+    @apply block text-sm font-medium text-dark-text-secondary mb-1;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-1 rounded text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-accent-blue/20 text-accent-blue;
+  }
+
+  .badge-success {
+    @apply badge bg-accent-green/20 text-accent-green;
+  }
+
+  .badge-danger {
+    @apply badge bg-accent-red/20 text-accent-red;
+  }
+
+  .badge-warning {
+    @apply badge bg-accent-amber/20 text-accent-amber;
+  }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-dark-border my-4;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-dark-border;
+    @apply border-t-accent-blue;
+  }
+}
+
+/**
+ * Utilities layer - Custom utilities
+ */
+@layer utilities {
+  /* Truncate text with ellipsis */
+  .truncate-2-lines {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Touch-friendly spacing between interactive elements */
+  .touch-spacing > * + * {
+    margin-top: 0.5rem; /* 8px minimum spacing */
+  }
+}

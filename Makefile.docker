@@ -1,0 +1,217 @@
+.PHONY: help build up down logs test migrate shell health clean
+
+# Wallet Docker Commands
+# Run: make -f Makefile.docker <command>
+
+help:
+	@echo "Wallet Docker Commands:"
+	@echo ""
+	@echo "Build & Run:"
+	@echo "  make build              - Build Docker images"
+	@echo "  make up                 - Start all services"
+	@echo "  make up-dev             - Start with development hot reload"
+	@echo "  make down               - Stop all services"
+	@echo "  make down-v             - Stop services and remove volumes (WARNING: data loss)"
+	@echo ""
+	@echo "Logs & Debugging:"
+	@echo "  make logs               - View all service logs"
+	@echo "  make logs-backend       - View backend logs"
+	@echo "  make logs-frontend      - View frontend logs"
+	@echo "  make logs-db            - View database logs"
+	@echo ""
+	@echo "Database:"
+	@echo "  make migrate            - Run database migrations"
+	@echo "  make migrate-new        - Create new migration (args: m='description')"
+	@echo "  make migrate-downgrade  - Downgrade to previous migration"
+	@echo "  make migrate-status     - Show migration status"
+	@echo "  make db-shell           - Access PostgreSQL shell"
+	@echo "  make db-backup          - Backup database to backup.sql"
+	@echo "  make db-restore         - Restore database from backup.sql"
+	@echo ""
+	@echo "Shells & Access:"
+	@echo "  make shell-backend      - Access backend container shell"
+	@echo "  make shell-frontend     - Access frontend container shell"
+	@echo "  make python-shell       - Access Flask Python shell"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test               - Run backend tests"
+	@echo "  make test-coverage      - Run tests with coverage report"
+	@echo "  make lint               - Run code linting"
+	@echo ""
+	@echo "Health & Status:"
+	@echo "  make health             - Check all services health"
+	@echo "  make ps                 - List running containers"
+	@echo "  make stats              - View container resource usage"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  make clean              - Remove containers and networks (keeps volumes)"
+	@echo "  make prune              - Clean up Docker system (unused images, volumes, networks)"
+	@echo "  make rebuild            - Force rebuild all images"
+	@echo ""
+
+# ============================================================================
+# Build & Run Commands
+# ============================================================================
+
+build:
+	docker-compose build
+
+up:
+	docker-compose up -d
+	@echo ""
+	@echo "Services started! Access:"
+	@echo "  Frontend: http://localhost:3000"
+	@echo "  Backend:  http://localhost:5000"
+	@echo "  pgAdmin:  http://localhost:5050"
+	@echo ""
+	@echo "Run 'make logs' to view startup logs"
+
+up-dev:
+	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	@echo ""
+	@echo "Development services started with hot reload!"
+	@echo "  Frontend (HMR): http://localhost:5173"
+	@echo "  Backend (watch): http://localhost:5000"
+	@echo "  pgAdmin: http://localhost:5050"
+	@echo ""
+
+down:
+	docker-compose down
+
+down-v:
+	@echo "WARNING: This will delete all data in volumes!"
+	@read -p "Type 'yes' to confirm: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		docker-compose down -v; \
+		echo "All containers, networks, and volumes removed."; \
+	else \
+		echo "Cancelled."; \
+	fi
+
+rebuild:
+	docker-compose build --no-cache
+	docker-compose up -d
+
+# ============================================================================
+# Logs & Debugging
+# ============================================================================
+
+logs:
+	docker-compose logs -f
+
+logs-backend:
+	docker-compose logs -f backend
+
+logs-frontend:
+	docker-compose logs -f frontend
+
+logs-db:
+	docker-compose logs -f db
+
+# ============================================================================
+# Database Commands
+# ============================================================================
+
+migrate:
+	@echo "Running database migrations..."
+	docker-compose exec backend flask db upgrade
+	@echo "Migrations completed!"
+
+migrate-new:
+	@if [ -z "$(m)" ]; then \
+		echo "Usage: make migrate-new m='description'"; \
+	else \
+		docker-compose exec backend flask db migrate -m "$(m)"; \
+	fi
+
+migrate-downgrade:
+	docker-compose exec backend flask db downgrade
+
+migrate-status:
+	@echo "Current migration:"
+	@docker-compose exec backend flask db current
+	@echo ""
+	@echo "Migration history:"
+	@docker-compose exec backend flask db history
+
+db-shell:
+	docker-compose exec db psql -U wallet_user -d wallet_db
+
+db-backup:
+	@echo "Backing up database..."
+	docker-compose exec db pg_dump -U wallet_user wallet_db > backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "Backup completed!"
+
+db-restore:
+	@if [ -z "$(file)" ]; then \
+		echo "Usage: make db-restore file=backup_20240131_123456.sql"; \
+	else \
+		docker-compose exec -T db psql -U wallet_user wallet_db < $(file); \
+		echo "Database restored from $(file)"; \
+	fi
+
+# ============================================================================
+# Shell Access
+# ============================================================================
+
+shell-backend:
+	docker-compose exec backend sh
+
+shell-frontend:
+	docker-compose exec frontend sh
+
+python-shell:
+	docker-compose exec backend flask shell
+
+# ============================================================================
+# Testing
+# ============================================================================
+
+test:
+	docker-compose exec backend pytest
+
+test-coverage:
+	docker-compose exec backend pytest --cov=app --cov-report=html
+	@echo ""
+	@echo "Coverage report generated in htmlcov/index.html"
+
+lint:
+	@echo "Linting backend..."
+	docker-compose exec backend ruff check app/
+	@echo "Running black format check..."
+	docker-compose exec backend black --check app/
+
+# ============================================================================
+# Health & Status
+# ============================================================================
+
+health:
+	@echo "Checking service health..."
+	@docker-compose ps
+	@echo ""
+	@echo "Backend health: "
+	@curl -s http://localhost:5000/health || echo "Backend not responding"
+	@echo ""
+	@echo "Frontend health: "
+	@curl -s http://localhost:3000/health || echo "Frontend not responding"
+
+ps:
+	docker-compose ps
+
+stats:
+	docker stats
+
+# ============================================================================
+# Maintenance
+# ============================================================================
+
+clean:
+	docker-compose down
+
+prune:
+	@echo "Cleaning up Docker system..."
+	docker system prune -a --volumes -f
+	@echo "Cleanup completed!"
+
+# Default target
+.DEFAULT_GOAL := help

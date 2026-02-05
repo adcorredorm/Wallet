@@ -1,0 +1,133 @@
+version: '3.8'
+
+# Development Compose Configuration
+# This file overlays the base docker-compose.yml with development-specific settings
+#
+# Usage:
+#   - Development (with hot reload): docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   - Production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The compose file merges, so base services are inherited and overridden by these settings
+
+services:
+  # Database service - same as production but with exposed ports for development tools
+  db:
+    # Development environment: expose port and enable more verbose logging
+    environment:
+      # Enable PostgreSQL statement logging for debugging (optional)
+      # Uncomment to see all SQL queries: POSTGRES_INITDB_ARGS: "-c log_statement=all"
+      POSTGRES_INITDB_ARGS: ""
+
+  # Backend Flask API Service with hot reload
+  backend:
+    # Use Flask development server with auto-reload enabled
+    # This watches source files and restarts the server when changes are detected
+    command: >
+      sh -c "
+        echo 'Starting backend in development mode...' &&
+        echo 'Waiting for database to be healthy...' &&
+        sleep 3 &&
+        flask db upgrade &&
+        echo 'Running Flask with auto-reload enabled' &&
+        flask run --host=0.0.0.0 --reload
+      "
+
+    # Mount entire backend directory for hot reload
+    # Python source changes trigger automatic server restart
+    volumes:
+      - ./backend:/app
+      # Exclude these directories from sync to avoid issues
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/venv
+      # Exclude pip cache for faster volume operations
+      - /app/.pip_cache
+
+    # Development environment: enable debug mode
+    environment:
+      # Flask debug mode for detailed error pages and auto-reload
+      DEBUG: "True"
+      # Flask env for development features
+      FLASK_ENV: development
+      # API URL accessible from frontend in dev
+      FLASK_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173,http://frontend:80"
+
+    # Healthcheck with longer timeout for development
+    # API may be slower under development with auto-reload
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Frontend Vue.js Application with Vite Dev Server (HMR)
+  frontend:
+    # Build using development Dockerfile with Vite dev server
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      # Don't use target: builder since Dockerfile.dev doesn't have multi-stage
+
+    # Override command to run Vite dev server
+    # This provides Hot Module Replacement (HMR) for instant UI updates
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+    # Port mappings for development access
+    ports:
+      # Vite dev server (HMR enabled)
+      - "5173:5173"
+      # Secondary port for compatibility/fallback
+      - "5174:5174"
+      # Legacy port for scripts/documentation that reference port 3000 (commented out due to conflict)
+      # - "3000:5173"
+
+    # Mount source code for live reload and HMR
+    # Changes to Vue components, templates, styles instantly reflect in browser
+    volumes:
+      # Mount frontend source for live reload
+      - ./frontend:/app
+      # Exclude node_modules from volume mount to use container's dependencies
+      # This prevents permission issues and ensures consistent versions
+      - /app/node_modules
+      # Exclude dist directory (can get large during dev)
+      - /app/dist
+
+    # Development environment variables
+    environment:
+      # Configure Vite HMR (Hot Module Replacement) for proper WebSocket connection
+      # VITE_HMR_HOST: Tells Vite client where to connect for HMR
+      # Use 'localhost' when accessing from host machine (browser)
+      VITE_HMR_HOST: localhost
+      VITE_HMR_PORT: 5173
+      # VITE_HMR_PROTOCOL: ws for development
+      VITE_HMR_PROTOCOL: ws
+
+      # API base URL for frontend to communicate with backend
+      # Development: use localhost:5001/api/v1 (host port mapping from container's 5000)
+      VITE_API_BASE_URL: http://localhost:5001/api/v1
+
+      # Frontend-specific environment
+      NODE_ENV: development
+
+    # Healthcheck adapted for Vite dev server
+    # Vite responds on root path with HTML
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # pgAdmin Database Management UI - enabled by default in development
+  # Web UI accessible at http://localhost:5050
+  # Credentials: admin@wallet.local / admin (override in .env)
+  pgadmin:
+    # Enable by default in development (empty profiles list)
+    # Disable with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml --profile disabled up
+    profiles: []
+
+# Development-specific network (inherited from base but can be customized)
+networks:
+  wallet_network:
+    driver: bridge

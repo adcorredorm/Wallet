@@ -1,0 +1,165 @@
+services:
+  # PostgreSQL Database Service
+  # Version: PostgreSQL 15 (Alpine for minimal size)
+  # Provides persistent data storage for the Wallet application
+  db:
+    image: postgres:15-alpine
+    container_name: wallet_postgres
+    environment:
+      # Database configuration - change these in production
+      POSTGRES_DB: ${DB_NAME:-wallet_db}
+      POSTGRES_USER: ${DB_USER:-wallet_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wallet_password}
+      # PostgreSQL timezone
+      PGTZ: UTC
+    ports:
+      # Port mapping: host:container
+      # Only expose in development; remove for production
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Persistent volume for database data
+      - postgres_data:/var/lib/postgresql/data
+      # Optional: Mount initialization scripts if needed
+      - ./backend/alembic:/docker-entrypoint-initdb.d
+    networks:
+      - wallet_network
+    healthcheck:
+      # Check if PostgreSQL is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wallet_user} -d ${DB_NAME:-wallet_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    # Security: Use read-only tmpfs for /tmp
+    tmpfs:
+      - /tmp
+      - /run
+
+  # Flask Backend API Service
+  # Handles all business logic, database operations, and API endpoints
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wallet_backend
+    environment:
+      # Flask configuration
+      FLASK_APP: run.py
+      FLASK_ENV: ${FLASK_ENV:-development}
+
+      # Database connection
+      # Update these to match db service credentials
+      DATABASE_URL: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
+      SQLALCHEMY_DATABASE_URI: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
+
+      # Application settings
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      DEBUG: ${DEBUG:-False}
+
+      # CORS configuration for frontend communication
+      FLASK_CORS_ORIGINS: ${FLASK_CORS_ORIGINS:-http://localhost:3000,http://frontend:80}
+    ports:
+      # Flask development server port
+      # Map to 5001 for external access (5000 is used by macOS AirPlay)
+      - "5001:5000"
+    volumes:
+      # Mount application code for development (enables hot reload)
+      - ./backend:/app
+      # Exclude virtual environment from volume
+      - /app/venv
+    depends_on:
+      # Wait for database to be healthy before starting
+      db:
+        condition: service_healthy
+    networks:
+      - wallet_network
+    healthcheck:
+      # Check Flask app health endpoint using Python
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 5 &&
+        flask db upgrade &&
+        flask run --host=0.0.0.0
+      "
+
+  # Vue.js Frontend Service
+  # Serves the compiled SPA application via Nginx
+  # Port mapping: 3000 for development compatibility, can be changed to 80
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wallet_frontend
+    ports:
+      # Primary port for frontend access
+      - "3000:80"
+    depends_on:
+      # Frontend doesn't strictly need backend to start, but good practice to wait
+      - backend
+    networks:
+      - wallet_network
+    environment:
+      # Frontend environment variables
+      # Can be used in nginx.conf or during build
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+    healthcheck:
+      # Check if Nginx is serving the application
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    # Read-only root filesystem for security in production
+    # Uncomment for production deployment
+    # read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+
+  # Optional: pgAdmin for database management
+  # Web UI for managing PostgreSQL at http://localhost:5050
+  # Credentials: admin@wallet.local / admin
+  # Remove this service if not needed in production
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: wallet_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@wallet.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - wallet_network
+    restart: unless-stopped
+    # Not suitable for production; set profiles: [dev] to disable by default
+    profiles: [dev]
+
+# Docker networks for service communication
+networks:
+  wallet_network:
+    driver: bridge
+
+# Docker volumes for data persistence
+volumes:
+  # PostgreSQL data persistence
+  # Data survives container restarts and removes
+  postgres_data:
+    driver: local
+  # pgAdmin configuration persistence
+  pgadmin_data:
+    driver: local

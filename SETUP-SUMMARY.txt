@@ -1,0 +1,400 @@
+================================================================================
+DEVELOPMENT WORKFLOW SETUP - COMPLETE
+================================================================================
+
+Project: Wallet Application
+Date Completed: 2026-02-05
+Status: Ready for Development with Hot-Reload
+
+================================================================================
+WHAT WAS CONFIGURED
+================================================================================
+
+1. FRONTEND HOT-RELOAD (Vite HMR)
+   - Vite dev server runs on port 5173
+   - Hot Module Replacement enabled
+   - File changes reflected instantly in browser
+   - No container rebuild required
+   - Application state preserved during updates
+
+2. BACKEND AUTO-RELOAD (Flask Development)
+   - Flask runs with --reload flag
+   - File changes trigger automatic restart
+   - New code available on next request
+   - Debug mode enabled
+   - Detailed error messages shown
+
+3. DATABASE PERSISTENCE
+   - PostgreSQL 15 running in container
+   - Data persists across restarts
+   - Accessible on port 5432 (dev only)
+   - Migrations auto-run on startup
+
+4. DEVELOPMENT TOOLS
+   - pgAdmin database UI on port 5050
+   - Browser-based database inspection
+   - SQL query execution
+   - Schema navigation
+
+5. DOCKER COMPOSE ARCHITECTURE
+   - Base configuration: docker-compose.yml
+   - Development overlay: docker-compose.dev.yml
+   - Production overlay: docker-compose.prod.yml
+   - File merging strategy for flexibility
+
+================================================================================
+FILES MODIFIED/CREATED
+================================================================================
+
+MODIFIED FILES (Enhanced):
+✓ frontend/Dockerfile.dev
+  - Added proper signal handling (dumb-init)
+  - Improved health checks
+  - Better HMR configuration
+  - Enhanced documentation
+
+✓ docker-compose.dev.yml
+  - Extensive documentation added
+  - Better environment variables
+  - Optimized volume mounts
+  - Improved health checks
+  - CORS configuration for both ports
+
+CREATED DOCUMENTATION FILES:
+✓ DEV-QUICK-START.md (5-minute setup guide)
+✓ DEVELOPMENT-WORKFLOW.md (comprehensive procedures)
+✓ DOCKER-COMPOSE-ARCHITECTURE.md (technical deep dive)
+✓ DEVELOPMENT-SETUP-COMPLETE.md (what was changed)
+✓ VERIFY-SETUP.md (verification checklist)
+✓ COMMAND-REFERENCE.md (copy-paste commands)
+✓ DEVELOPMENT-INDEX.md (documentation index)
+✓ SETUP-SUMMARY.txt (this file)
+
+CREATED HELPER SCRIPT:
+✓ dev-commands.sh (bash helper with common commands)
+
+DOCKER CONFIGURATION FILES (Unchanged but Optimized):
+✓ docker-compose.yml (base configuration)
+✓ docker-compose.prod.yml (production settings)
+✓ frontend/Dockerfile (production build)
+✓ backend/Dockerfile (Python container)
+
+================================================================================
+QUICK START COMMANDS
+================================================================================
+
+1. START DEVELOPMENT:
+   cd /Users/angelcorredor/Code/Wallet
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+2. OPEN IN BROWSER:
+   Frontend: http://localhost:3000 (or http://localhost:5173)
+   Backend: http://localhost:5001
+   pgAdmin: http://localhost:5050
+
+3. START CODING:
+   - Edit frontend/src/components/*.vue → See changes instantly
+   - Edit backend/app/routes/*.py → Auto-reload on save
+   - Use pgAdmin at http://localhost:5050 for database inspection
+
+4. COMMON COMMANDS:
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f frontend
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml exec db psql -U wallet_user -d wallet_db
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml exec backend flask db current
+
+================================================================================
+DIRECTORY STRUCTURE
+================================================================================
+
+/Users/angelcorredor/Code/Wallet/
+├── docker-compose.yml              [Base configuration - production defaults]
+├── docker-compose.dev.yml          [ENHANCED - Development overrides]
+├── docker-compose.prod.yml         [Production overrides]
+│
+├── frontend/
+│   ├── Dockerfile                  [Production multi-stage build]
+│   ├── Dockerfile.dev              [ENHANCED - Development]
+│   ├── src/                        [Edit here for instant HMR]
+│   └── package.json
+│
+├── backend/
+│   ├── Dockerfile                  [Python container]
+│   ├── app/                        [Edit here for auto-reload]
+│   ├── alembic/                    [Migrations]
+│   └── requirements.txt
+│
+└── DOCUMENTATION/
+    ├── DEV-QUICK-START.md          [START HERE - 5 minute setup]
+    ├── DEVELOPMENT-WORKFLOW.md     [Comprehensive guide]
+    ├── DOCKER-COMPOSE-ARCHITECTURE.md [Technical deep dive]
+    ├── DEVELOPMENT-SETUP-COMPLETE.md [What was set up]
+    ├── VERIFY-SETUP.md             [Verification checklist]
+    ├── COMMAND-REFERENCE.md        [Copy-paste commands]
+    ├── DEVELOPMENT-INDEX.md        [Documentation index]
+    ├── SETUP-SUMMARY.txt           [This file]
+    └── dev-commands.sh             [Helper script]
+
+================================================================================
+ENVIRONMENT SETUP
+================================================================================
+
+Environment File: .env
+- Copy from: .env.example
+- Configure with your values
+- Docker Compose auto-loads it
+- Required for all services
+
+Key Variables:
+- DB_NAME=wallet_db
+- DB_USER=wallet_user
+- DB_PASSWORD=wallet_password
+- FLASK_ENV=development
+- DEBUG=True
+- VITE_API_BASE_URL=http://localhost:5000
+
+================================================================================
+HOW HOT-RELOAD WORKS
+================================================================================
+
+FRONTEND (Vite HMR):
+1. You edit: frontend/src/components/Card.vue
+2. Docker volume detects change
+3. Vite watches files and detects change
+4. Vite recompiles only changed module
+5. HMR sends update via WebSocket (ws://localhost:5173)
+6. Browser applies update
+7. You see changes in ~1-2 seconds
+8. Application state preserved
+
+BACKEND (Flask Auto-Reload):
+1. You edit: backend/app/routes/api.py
+2. Docker volume detects change
+3. Flask's reloader detects change
+4. Flask restarts application context
+5. Watch for: "[Restarting with stat]" in terminal
+6. Next API call uses new code
+7. No container restart needed
+
+DATABASE:
+1. Data persists in docker volume
+2. Survives service restarts
+3. Migrations run automatically on startup
+4. Access via pgAdmin at http://localhost:5050
+
+================================================================================
+VERIFICATION CHECKLIST
+================================================================================
+
+Before starting, verify:
+  □ Docker installed: docker --version
+  □ Docker Compose installed: docker-compose --version
+  □ .env file exists
+  □ All ports free: 3000, 5001, 5050, 5173, 5432
+  □ Project files present
+  □ Configuration valid: docker-compose config
+
+After starting, verify:
+  □ All services show "healthy" status
+  □ Frontend responds: http://localhost:5173
+  □ Backend responds: http://localhost:5001/health
+  □ Database accepts connections: psql localhost -U wallet_user
+  □ pgAdmin responds: http://localhost:5050
+  □ Volume mounts working: files synchronized
+  □ HMR working: make frontend change, see instant update
+  □ Auto-reload working: make backend change, see restart
+
+See VERIFY-SETUP.md for detailed verification procedures.
+
+================================================================================
+DOCUMENTATION GUIDE
+================================================================================
+
+START HERE:
+→ Open: DEV-QUICK-START.md (5 minutes)
+  Covers: Quick setup, common commands, basic troubleshooting
+
+THEN READ:
+→ DEVELOPMENT-SETUP-COMPLETE.md (10 minutes)
+  Covers: What was changed, architecture, next steps
+
+COMPREHENSIVE REFERENCE:
+→ DEVELOPMENT-WORKFLOW.md (30 minutes)
+  Covers: Detailed procedures, all workflows, extensive troubleshooting
+
+TECHNICAL UNDERSTANDING:
+→ DOCKER-COMPOSE-ARCHITECTURE.md (20 minutes)
+  Covers: How Docker Compose works, file merging, architecture
+
+TROUBLESHOOTING:
+→ VERIFY-SETUP.md (15 minutes)
+  Covers: Verification steps, health checks, fix procedures
+
+DAILY REFERENCE:
+→ COMMAND-REFERENCE.md (quick lookup)
+  Covers: Copy-paste commands for all tasks
+
+FINDING DOCS:
+→ DEVELOPMENT-INDEX.md (5 minutes)
+  Covers: Navigation guide to all documentation
+
+================================================================================
+PRODUCTION DEPLOYMENT
+================================================================================
+
+When ready to deploy to production:
+
+1. Switch from development:
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+2. Start production:
+   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+3. Production features:
+   ✓ Static frontend builds (no Vite dev server)
+   ✓ Gunicorn WSGI server (multiple workers)
+   ✓ No source code volumes (immutable)
+   ✓ Closed database port (security)
+   ✓ Strict health checks
+   ✓ Resource limits (CPU, memory)
+   ✓ Read-only filesystem (security)
+   ✓ Always restart policies
+
+See DOCKER-COMPOSE-ARCHITECTURE.md for production details.
+
+================================================================================
+TROUBLESHOOTING QUICK REFERENCE
+================================================================================
+
+ISSUE: Changes not appearing
+SOLUTION:
+  - Frontend: Clear browser cache (Cmd+Shift+Delete)
+  - Backend: Check Flask reloader in logs
+  - Docker: Restart service (docker-compose restart frontend)
+
+ISSUE: Port already in use
+SOLUTION:
+  - Find process: lsof -i :5173
+  - Kill it: kill -9 <PID>
+
+ISSUE: Services won't start
+SOLUTION:
+  - Check logs: docker-compose logs
+  - Validate config: docker-compose config > /dev/null
+  - Rebuild images: docker-compose build --no-cache
+
+ISSUE: Database connection error
+SOLUTION:
+  - Check DB status: docker-compose ps db
+  - View DB logs: docker-compose logs db
+  - Restart DB: docker-compose restart db
+
+For more troubleshooting:
+→ See DEVELOPMENT-WORKFLOW.md (Troubleshooting section)
+→ See VERIFY-SETUP.md (Troubleshooting section)
+
+================================================================================
+SUPPORT & REFERENCES
+================================================================================
+
+Docker Compose:
+  https://docs.docker.com/compose/
+
+Vite HMR:
+  https://vitejs.dev/guide/ssr.html#setting-up-the-dev-server
+
+Flask Development:
+  https://flask.palletsprojects.com/development/
+
+Vue 3:
+  https://vuejs.org/guide/introduction.html
+
+PostgreSQL:
+  https://www.postgresql.org/docs/
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. READ: DEV-QUICK-START.md (5 minutes)
+
+2. SETUP:
+   cd /Users/angelcorredor/Code/Wallet
+   cp .env.example .env
+   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+3. VERIFY:
+   - Frontend: http://localhost:3000
+   - Backend: http://localhost:5001
+   - pgAdmin: http://localhost:5050
+
+4. DEVELOP:
+   - Edit frontend code → See instant changes
+   - Edit backend code → See auto-reload
+   - Use pgAdmin for database inspection
+
+5. REFERENCE:
+   - Keep COMMAND-REFERENCE.md open while working
+   - Refer to DEVELOPMENT-WORKFLOW.md for procedures
+   - Use VERIFY-SETUP.md if troubleshooting
+
+================================================================================
+CONFIGURATION SUMMARY
+================================================================================
+
+Services Running:
+  ✓ Frontend (Vite dev server): Port 3000, 5173
+  ✓ Backend (Flask): Port 5001 (internal 5000)
+  ✓ Database (PostgreSQL): Port 5432
+  ✓ pgAdmin: Port 5050
+
+Hot-Reload:
+  ✓ Frontend: Vite HMR (WebSocket)
+  ✓ Backend: Flask auto-reload (file watcher)
+  ✓ Database: Persistent across restarts
+
+Network:
+  ✓ Bridge network: wallet_network
+  ✓ Service discovery via DNS: db, backend, frontend
+  ✓ External access via port forwarding
+
+Volumes:
+  ✓ frontend:/app (live source sync)
+  ✓ backend:/app (live source sync)
+  ✓ postgres_data (database persistence)
+
+Environment:
+  ✓ FLASK_ENV=development (Flask dev mode)
+  ✓ DEBUG=True (Flask debug mode)
+  ✓ VITE_HMR_HOST=localhost (Frontend HMR)
+  ✓ FLASK_CORS_ORIGINS=http://localhost:3000,http://localhost:5173 (CORS)
+
+================================================================================
+VERSION INFORMATION
+================================================================================
+
+Setup Version: 1.0
+Created: 2026-02-05
+Status: Ready for Development
+
+Components:
+- Docker Compose: 1.29+ required
+- Docker: 20.10+ required
+- Frontend: Node.js 20, Vite 5.x, Vue 3.x
+- Backend: Python 3.11, Flask, SQLAlchemy
+- Database: PostgreSQL 15
+
+All systems ready for production-quality development!
+
+================================================================================
+END OF SETUP SUMMARY
+================================================================================
+
+To begin: cd /Users/angelcorredor/Code/Wallet
+          docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+Then visit: http://localhost:3000
+
+Documentation: Read DEV-QUICK-START.md first
+
+Happy coding!
+================================================================================

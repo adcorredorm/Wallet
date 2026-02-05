@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.env.local
+.env.*.local
+
+# Documentation
+README.md
+CONTRIBUTING.md
+docs/
+.github/
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+.github/workflows/
+
+# Directories that will be handled by docker-compose volumes
+# These are mounted at runtime, not copied during build
+agent_staging/
+ADD/
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts at root level
+dist/
+build/

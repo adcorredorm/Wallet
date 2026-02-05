@@ -1,0 +1,88 @@
+"""
+Application configuration module.
+
+Provides configuration classes for different environments (development, testing, production).
+"""
+
+import os
+from typing import Any
+
+
+class Config:
+    """Base configuration with common settings."""
+
+    # Flask
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "DATABASE_URL",
+        "postgresql://wallet_user:wallet_password@localhost:5432/wallet_db"
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = False
+
+    # CORS
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
+    # Pagination
+    DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", "20"))
+    MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "100"))
+
+    # JSON
+    JSON_SORT_KEYS = False
+    JSONIFY_PRETTYPRINT_REGULAR = True
+
+
+class DevelopmentConfig(Config):
+    """Development environment configuration."""
+
+    DEBUG = True
+    SQLALCHEMY_ECHO = True
+
+
+class TestingConfig(Config):
+    """Testing environment configuration."""
+
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = "postgresql://wallet_user:wallet_password@localhost:5432/wallet_test_db"
+
+
+class ProductionConfig(Config):
+    """Production environment configuration."""
+
+    DEBUG = False
+    TESTING = False
+
+    # Ensure SECRET_KEY is set in production
+    if not os.getenv("SECRET_KEY"):
+        raise ValueError("SECRET_KEY must be set in production environment")
+
+
+def get_config(config_name: str = "development") -> type[Config]:
+    """
+    Get configuration class based on environment name.
+
+    Args:
+        config_name: Environment name (development, testing, production)
+
+    Returns:
+        Configuration class for the specified environment
+
+    Raises:
+        ValueError: If config_name is not recognized
+    """
+    configs = {
+        "development": DevelopmentConfig,
+        "testing": TestingConfig,
+        "production": ProductionConfig,
+    }
+
+    config = configs.get(config_name)
+    if not config:
+        raise ValueError(
+            f"Invalid config name: {config_name}. "
+            f"Valid options: {', '.join(configs.keys())}"
+        )
+
+    return config

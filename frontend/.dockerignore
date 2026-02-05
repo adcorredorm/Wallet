@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Build output
+dist/
+*.d.ts
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation and misc
+README.md
+CONTRIBUTING.md
+.eslintignore
+.prettierignore
+.editorconfig
+
+# Tests
+src/__tests__
+tests/
+cypress/
+.cypress/
+coverage/
+.nyc_output/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Project specific
+vite.config.ts
+tsconfig.json
+tsconfig.node.json
+vitest.config.ts
+.husky/
