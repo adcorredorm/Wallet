@@ -105,7 +105,7 @@ services:
     tmpfs:
       - /var/cache/nginx
       - /var/run
-    - /tmp
+      - /tmp
 
     # Always restart
     restart: always
