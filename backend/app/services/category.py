@@ -81,9 +81,14 @@ class CategoryService:
         icono: str | None = None,
         color: str | None = None,
         categoria_padre_id: UUID | None = None,
+        client_id: str | None = None,
     ) -> Category:
         """
         Create a new category.
+
+        If client_id is provided and a record with that key already exists in
+        the database the existing category is returned immediately without
+        inserting a duplicate row (offline-first idempotency).
 
         Args:
             nombre: Category name
@@ -91,15 +96,21 @@ class CategoryService:
             icono: Optional icon identifier
             color: Optional color in hex format
             categoria_padre_id: Optional parent category ID
+            client_id: Optional client-generated idempotency key
 
         Returns:
-            Created category instance
+            Created or pre-existing category instance
 
         Raises:
             NotFoundError: If parent category not found
             BusinessRuleError: If parent category type is incompatible
         """
         from app.models.category import CategoryType
+
+        if client_id:
+            existing = self.repository.get_by_client_id(client_id)
+            if existing:
+                return existing
 
         # Validate parent category if provided
         if categoria_padre_id:
@@ -120,6 +131,7 @@ class CategoryService:
             icono=icono,
             color=color,
             categoria_padre_id=categoria_padre_id,
+            client_id=client_id,
         )
 
     def update(

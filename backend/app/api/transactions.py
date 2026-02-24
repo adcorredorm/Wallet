@@ -2,10 +2,10 @@
 Transactions API endpoints.
 """
 
+from datetime import date, datetime, timezone
 from flask import Blueprint, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
-from datetime import date
 
 from app.schemas.transaction import (
     TransactionCreate,
@@ -22,6 +22,30 @@ from app.utils.responses import success_response, error_response, paginated_resp
 
 transactions_bp = Blueprint("transactions", __name__, url_prefix="/api/v1/transactions")
 transaction_service = TransactionService()
+
+
+def _parse_client_updated_at(header_value: str | None) -> datetime | None:
+    """
+    Parse the X-Client-Updated-At header value into a UTC datetime.
+
+    The header must be an ISO-8601 string.  Timezone-naive values are treated
+    as UTC.  Returns None when the header is absent or cannot be parsed.
+
+    Args:
+        header_value: Raw header string or None
+
+    Returns:
+        Parsed datetime (UTC-aware) or None
+    """
+    if not header_value:
+        return None
+    try:
+        dt = datetime.fromisoformat(header_value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
 
 
 @transactions_bp.route("", methods=["GET"])
@@ -141,7 +165,7 @@ def create_transaction():
         # Validate request data
         transaction_data = TransactionCreate(**request.json)
 
-        # Create transaction
+        # Create transaction (idempotent when client_id is present)
         transaction = transaction_service.create(
             tipo=transaction_data.tipo.value,
             monto=transaction_data.monto,
@@ -151,6 +175,7 @@ def create_transaction():
             titulo=transaction_data.titulo,
             descripcion=transaction_data.descripcion,
             tags=transaction_data.tags,
+            client_id=transaction_data.client_id,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
@@ -173,8 +198,18 @@ def update_transaction(transaction_id: UUID):
     """
     Update an existing transaction.
 
+    Supports Last-Write-Wins (LWW) conflict detection for offline-first clients.
+    When the optional request header X-Client-Updated-At is present its value is
+    compared against the record's server-side updated_at timestamp.  If the
+    server version is more recent the update is rejected with HTTP 409 and the
+    current server state is returned so the client can reconcile.
+
     Path Parameters:
         transaction_id (UUID): Transaction ID
+
+    Request Headers:
+        X-Client-Updated-At (str, optional): ISO-8601 timestamp of the version
+            the client last observed.  Used for LWW conflict detection.
 
     Request Body:
         TransactionUpdate schema
@@ -183,12 +218,32 @@ def update_transaction(transaction_id: UUID):
         200: Updated transaction
         400: Validation error
         404: Transaction, account, or category not found
+        409: Conflict — server version is newer than client version
         422: Business rule violation
         500: Internal server error
     """
     try:
         # Validate request data
         transaction_data = TransactionUpdate(**request.json)
+
+        # LWW conflict detection
+        client_updated_at = _parse_client_updated_at(
+            request.headers.get("X-Client-Updated-At")
+        )
+        if client_updated_at is not None:
+            current_transaction = transaction_service.get_by_id(transaction_id)
+            server_updated_at = current_transaction.updated_at
+            if server_updated_at.tzinfo is None:
+                server_updated_at = server_updated_at.replace(tzinfo=timezone.utc)
+            if server_updated_at > client_updated_at:
+                server_data = TransactionResponse.model_validate(
+                    current_transaction
+                ).model_dump(mode="json")
+                return error_response(
+                    "Conflicto: el servidor tiene una version mas reciente de este recurso",
+                    status_code=409,
+                    errors={"server_version": server_data},
+                )
 
         # Update transaction
         transaction = transaction_service.update(

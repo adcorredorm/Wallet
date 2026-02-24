@@ -24,8 +24,7 @@ const categories = computed(() => categoriesStore.categories)
 async function handleSubmit(data: CreateTransactionDto) {
   try {
     await transactionsStore.createTransaction(data)
-    // Refresh account balance
-    await accountsStore.fetchBalance(data.cuenta_id)
+    // Balance is updated by adjustBalance() inside createTransaction — no API call needed.
     uiStore.showSuccess('Transacción creada exitosamente')
     router.push('/transactions')
   } catch (error: any) {

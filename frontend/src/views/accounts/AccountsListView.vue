@@ -26,12 +26,14 @@ const balances = computed(() => {
 
 onMounted(async () => {
   try {
+    // Loads IndexedDB immediately; background revalidation updates the list.
     await accountsStore.fetchAccounts()
-    // Fetch balances for all accounts
-    await accountsStore.fetchAllBalances()
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar cuentas')
   }
+  // Balance is kept accurate by adjustBalance() on every write (persisted to
+  // IndexedDB). After sync, recomputeBalancesFromTransactions() updates it
+  // from the full local transaction history. No backend balance call needed.
 })
 
 function goToAccount(account: any) {

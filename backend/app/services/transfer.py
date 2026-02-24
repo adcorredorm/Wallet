@@ -79,9 +79,14 @@ class TransferService:
         fecha: date,
         descripcion: str | None = None,
         tags: list[str] | None = None,
+        client_id: str | None = None,
     ) -> Transfer:
         """
         Create a new transfer.
+
+        If client_id is provided and a record with that key already exists in
+        the database the existing transfer is returned immediately without
+        inserting a duplicate row (offline-first idempotency).
 
         Args:
             cuenta_origen_id: Source account ID
@@ -90,14 +95,20 @@ class TransferService:
             fecha: Transfer date
             descripcion: Optional description
             tags: Optional tags
+            client_id: Optional client-generated idempotency key
 
         Returns:
-            Created transfer instance
+            Created or pre-existing transfer instance
 
         Raises:
             NotFoundError: If source or destination account not found
             BusinessRuleError: If accounts have different currencies
         """
+        if client_id:
+            existing = self.repository.get_by_client_id(client_id)
+            if existing:
+                return existing
+
         # Validate both accounts exist
         cuenta_origen = self.account_repository.get_by_id_or_fail(cuenta_origen_id)
         cuenta_destino = self.account_repository.get_by_id_or_fail(cuenta_destino_id)
@@ -116,6 +127,7 @@ class TransferService:
             fecha=fecha,
             descripcion=descripcion,
             tags=tags or [],
+            client_id=client_id,
         )
 
     def update(

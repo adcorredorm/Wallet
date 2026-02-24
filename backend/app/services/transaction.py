@@ -89,9 +89,14 @@ class TransactionService:
         titulo: str | None = None,
         descripcion: str | None = None,
         tags: list[str] | None = None,
+        client_id: str | None = None,
     ) -> Transaction:
         """
         Create a new transaction.
+
+        If client_id is provided and a record with that key already exists in
+        the database the existing transaction is returned immediately without
+        inserting a duplicate row (offline-first idempotency).
 
         Args:
             tipo: Transaction type (ingreso or gasto)
@@ -102,14 +107,20 @@ class TransactionService:
             titulo: Optional title
             descripcion: Optional description
             tags: Optional tags
+            client_id: Optional client-generated idempotency key
 
         Returns:
-            Created transaction instance
+            Created or pre-existing transaction instance
 
         Raises:
             NotFoundError: If account or category not found
             BusinessRuleError: If category type is incompatible with transaction type
         """
+        if client_id:
+            existing = self.repository.get_by_client_id(client_id)
+            if existing:
+                return existing
+
         # Validate account exists
         account = self.account_repository.get_by_id_or_fail(cuenta_id)
 
@@ -129,6 +140,7 @@ class TransactionService:
             titulo=titulo,
             descripcion=descripcion,
             tags=tags or [],
+            client_id=client_id,
         )
 
     def update(

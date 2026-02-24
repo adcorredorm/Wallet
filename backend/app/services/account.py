@@ -88,9 +88,14 @@ class AccountService:
         divisa: str,
         descripcion: str | None = None,
         tags: list[str] | None = None,
+        client_id: str | None = None,
     ) -> Account:
         """
         Create a new account.
+
+        If client_id is provided and a record with that key already exists in
+        the database the existing account is returned immediately without
+        inserting a duplicate row (offline-first idempotency).
 
         Args:
             nombre: Account name
@@ -98,11 +103,17 @@ class AccountService:
             divisa: Currency code (ISO 4217)
             descripcion: Optional description
             tags: Optional list of tags
+            client_id: Optional client-generated idempotency key
 
         Returns:
-            Created account instance
+            Created or pre-existing account instance
         """
         from app.models.account import AccountType
+
+        if client_id:
+            existing = self.repository.get_by_client_id(client_id)
+            if existing:
+                return existing
 
         return self.repository.create(
             nombre=nombre,
@@ -110,6 +121,7 @@ class AccountService:
             divisa=divisa.upper(),
             descripcion=descripcion,
             tags=tags or [],
+            client_id=client_id,
         )
 
     def update(

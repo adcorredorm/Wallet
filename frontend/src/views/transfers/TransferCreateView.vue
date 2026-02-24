@@ -22,11 +22,7 @@ const accounts = computed(() => accountsStore.activeAccounts)
 async function handleSubmit(data: CreateTransferDto) {
   try {
     await transfersStore.createTransfer(data)
-    // Refresh balances for both accounts
-    await Promise.all([
-      accountsStore.fetchBalance(data.cuenta_origen_id),
-      accountsStore.fetchBalance(data.cuenta_destino_id)
-    ])
+    // Balances are updated by adjustBalance() inside createTransfer — no API call needed.
     uiStore.showSuccess('Transferencia creada exitosamente')
     router.push('/transfers')
   } catch (error: any) {

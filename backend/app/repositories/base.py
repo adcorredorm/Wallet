@@ -42,6 +42,29 @@ class BaseRepository(Generic[T]):
         """
         return db.session.get(self.model, id)
 
+    def get_by_client_id(self, client_id: str) -> Optional[T]:
+        """
+        Get a single record by its client-generated idempotency key.
+
+        This method supports the offline-first pattern: when a client retries
+        a creation request after an uncertain response, it sends the same
+        client_id so the server can detect the duplicate and return the
+        previously persisted record rather than creating a second one.
+
+        Args:
+            client_id: Client-generated idempotency key (max 100 characters)
+
+        Returns:
+            Model instance if a record with that client_id exists, else None
+        """
+        return (
+            db.session.execute(
+                db.select(self.model).where(self.model.client_id == client_id)
+            )
+            .scalars()
+            .one_or_none()
+        )
+
     def get_by_id_or_fail(self, id: UUID) -> T:
         """
         Get a single record by ID or raise exception.

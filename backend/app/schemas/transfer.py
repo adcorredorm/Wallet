@@ -23,6 +23,9 @@ class TransferCreate(BaseModel):
         fecha: Transfer date
         descripcion: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
+        client_id: Optional client-generated UUID for offline idempotency.
+            When provided, a retry of the same creation request will return
+            the existing record instead of creating a duplicate.
 
     Raises:
         ValueError: If source and destination accounts are the same
@@ -34,6 +37,7 @@ class TransferCreate(BaseModel):
     fecha: date
     descripcion: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
+    client_id: Optional[str] = Field(None, max_length=100)
 
     @model_validator(mode="after")
     def validate_different_accounts(self) -> "TransferCreate":

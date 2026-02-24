@@ -9,11 +9,21 @@
 import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+// Phase 5: SyncBadge shows per-item sync state (pending / error dot)
+import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatAccountType } from '@/utils/formatters'
 import type { Account } from '@/types'
+import type { LocalAccount } from '@/offline/types'
 
 interface Props {
-  account: Account
+  /**
+   * Why accept LocalAccount | Account?
+   * The store exposes LocalAccount[] (extends Account with _sync_status).
+   * Downstream consumers that don't use offline mode can still pass a plain
+   * Account — the badge simply won't render because _sync_status will be
+   * undefined, which the v-if check below handles gracefully.
+   */
+  account: LocalAccount | Account
   balance?: number
   clickable?: boolean
 }
@@ -52,9 +62,27 @@ const accountIcon = computed(() => {
 
         <!-- Info -->
         <div class="flex-1 min-w-0">
-          <h3 class="font-semibold truncate">
-            {{ account.nombre }}
-          </h3>
+          <!--
+            Why flex + items-center on the title row?
+            We need the account name and the SyncBadge dot to sit on the same
+            baseline. flex + items-center achieves this without a table layout.
+            gap-2 (8px) ensures the dot has breathing room from the name text.
+          -->
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold truncate">
+              {{ account.nombre }}
+            </h3>
+            <!--
+              SyncBadge is only rendered when the account has a _sync_status
+              field (i.e. it is a LocalAccount from the offline-first store).
+              The 'in' operator checks for the key's existence at runtime.
+              This makes AccountCard safe to use with plain Account objects too.
+            -->
+            <SyncBadge
+              v-if="'_sync_status' in account"
+              :status="(account as LocalAccount)._sync_status"
+            />
+          </div>
           <p class="text-sm text-dark-text-secondary">
             {{ accountTypeLabel }} • {{ account.divisa }}
           </p>

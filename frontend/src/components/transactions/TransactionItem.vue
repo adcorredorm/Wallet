@@ -8,11 +8,18 @@
 
 import { computed } from 'vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+// Phase 5: SyncBadge shows per-item sync state (pending / error dot)
+import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatDateRelative } from '@/utils/formatters'
 import type { Transaction } from '@/types'
+import type { LocalTransaction } from '@/offline/types'
 
 interface Props {
-  transaction: Transaction
+  /**
+   * Accept either the plain server type or the offline-enriched LocalTransaction.
+   * The badge only renders when _sync_status is present on the object.
+   */
+  transaction: LocalTransaction | Transaction
   showAccount?: boolean
 }
 
@@ -50,10 +57,20 @@ const currency = computed(() => props.transaction.cuenta?.divisa || 'USD')
 
     <!-- Info -->
     <div class="flex-1 min-w-0">
-      <!-- Title or category name -->
-      <h4 class="font-medium truncate">
-        {{ transaction.titulo || categoryName }}
-      </h4>
+      <!-- Title or category name + sync badge -->
+      <div class="flex items-center gap-2">
+        <h4 class="font-medium truncate">
+          {{ transaction.titulo || categoryName }}
+        </h4>
+        <!--
+          Same runtime check as AccountCard: only render the badge if this
+          transaction came from the offline-first store (has _sync_status).
+        -->
+        <SyncBadge
+          v-if="'_sync_status' in transaction"
+          :status="(transaction as LocalTransaction)._sync_status"
+        />
+      </div>
 
       <!-- Account and date -->
       <div class="flex items-center gap-2 text-sm text-dark-text-secondary">

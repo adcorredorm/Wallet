@@ -47,9 +47,7 @@ onMounted(async () => {
 async function handleSubmit(data: UpdateTransactionDto) {
   try {
     await transactionsStore.updateTransaction(transactionId, data)
-    if (data.cuenta_id) {
-      await accountsStore.fetchBalance(data.cuenta_id)
-    }
+    // Balance is updated by adjustBalance() inside updateTransaction — no API call needed.
     uiStore.showSuccess('Transacción actualizada exitosamente')
     router.push('/transactions')
   } catch (error: any) {
@@ -64,11 +62,8 @@ function handleCancel() {
 async function confirmDelete() {
   deleting.value = true
   try {
-    const accountId = transaction.value?.cuenta_id
     await transactionsStore.deleteTransaction(transactionId)
-    if (accountId) {
-      await accountsStore.fetchBalance(accountId)
-    }
+    // Balance is updated by adjustBalance() inside deleteTransaction — no API call needed.
     uiStore.showSuccess('Transacción eliminada exitosamente')
     router.push('/transactions')
   } catch (error: any) {

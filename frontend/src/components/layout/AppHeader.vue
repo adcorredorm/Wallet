@@ -19,6 +19,8 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUiStore } from '@/stores'
 import HamburgerButton from '@/components/ui/HamburgerButton.vue'
+// Phase 5: sync status indicator in the header right slot
+import SyncIndicator from '@/components/sync/SyncIndicator.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,9 +82,21 @@ function toggleDrawer() {
         </h1>
       </div>
 
-      <!-- Right: Quick actions (future: notifications, profile) -->
+      <!--
+        Right: Sync indicator + future quick actions (notifications, profile)
+
+        Why SyncIndicator here specifically?
+        The right side of a mobile header is the conventional location for
+        status/action icons (iOS: navigation bar trailing items, Android:
+        toolbar overflow). Placing the sync indicator here is spatially
+        consistent with those platform conventions, so users will intuitively
+        scan this area for status information.
+
+        The SyncIndicator is tap-to-reveal — it does not auto-expand or show
+        text by default, keeping the header visually clean on mobile.
+      -->
       <div class="flex items-center gap-2">
-        <!-- Placeholder for future features (notifications, user menu, etc) -->
+        <SyncIndicator />
       </div>
     </div>
   </header>

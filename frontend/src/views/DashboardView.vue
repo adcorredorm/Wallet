@@ -23,7 +23,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
-import { dashboardApi } from '@/api/dashboard'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import AccountsOverview from '@/components/dashboard/AccountsOverview.vue'
 import RecentActivity from '@/components/dashboard/RecentActivity.vue'
@@ -36,7 +35,6 @@ const transactionsStore = useTransactionsStore()
 const uiStore = useUiStore()
 
 const loading = ref(true)
-const netWorth = ref(0)
 
 const accountsWithBalances = computed(() =>
   accountsStore.accountsWithBalances as (Account & { balance: number })[]
@@ -46,33 +44,35 @@ const recentTransactions = computed(() =>
   transactionsStore.transactions.slice(0, 5)
 )
 
+// netWorth is always derived locally from accountsWithBalances.
+// Using a server override (dashboardApi.getSummary) would cause the net worth
+// to show a stale value whenever there are unsynced offline transactions.
+// The local sum is always correct because adjustBalance() keeps IndexedDB
+// and balances.value in sync with every write.
+const netWorth = computed(() =>
+  accountsStore.accountsWithBalances.reduce((sum, a) => sum + (a.balance ?? 0), 0)
+)
+
 onMounted(async () => {
+  loading.value = true
   try {
-    loading.value = true
-
-    // Fetch accounts with balances
-    await accountsStore.fetchAccounts(true) // true = active only
-
-    // Fetch dashboard summary data
-    const summary = await dashboardApi.getSummary()
-
-    // Calculate net worth from patrimonio_neto.balances
-    if (summary.patrimonio_neto && summary.patrimonio_neto.balances) {
-      netWorth.value = summary.patrimonio_neto.balances.reduce(
-        (sum: number, balance: any) => sum + balance.total,
-        0
-      )
-    } else {
-      netWorth.value = 0
-    }
-
-    // Fetch recent transactions
-    await transactionsStore.fetchTransactions({ limit: 5 })
+    // Step 1 — Load from IndexedDB immediately (non-blocking, returns fast).
+    // Both calls return cached data right away; background revalidation will
+    // update the reactive refs when the network responds.
+    await Promise.all([
+      accountsStore.fetchAccounts(true),
+      transactionsStore.fetchTransactions({ limit: 5 })
+    ])
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar el dashboard')
   } finally {
+    // Unblock the UI as soon as IndexedDB has been read.
     loading.value = false
   }
+
+  // Balance is kept accurate by adjustBalance() on every write (persisted to
+  // IndexedDB). After sync, recomputeBalancesFromTransactions() recomputes
+  // from the full local history. No backend balance endpoint is ever called.
 })
 
 function goToAccount(account: Account) {

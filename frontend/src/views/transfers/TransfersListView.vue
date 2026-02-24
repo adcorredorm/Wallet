@@ -13,7 +13,10 @@ import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import SimpleFab from '@/components/ui/SimpleFab.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+// Phase 5: per-item sync state badge
+import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatDateRelative } from '@/utils/formatters'
+import type { LocalTransfer } from '@/offline/types'
 
 const router = useRouter()
 const transfersStore = useTransfersStore()
@@ -24,12 +27,13 @@ const transfers = computed(() => transfersStore.transfers)
 onMounted(async () => {
   try {
     await transfersStore.fetchTransfers()
-  } catch (error: any) {
-    uiStore.showError(error.message || 'Error al cargar transferencias')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Error al cargar transferencias'
+    uiStore.showError(message)
   }
 })
 
-function goToTransfer(transfer: any) {
+function goToTransfer(transfer: LocalTransfer) {
   router.push(`/transfers/${transfer.id}/edit`)
 }
 
@@ -72,9 +76,20 @@ function createTransfer() {
 
           <!-- Info -->
           <div class="flex-1 min-w-0">
-            <h4 class="font-medium truncate">
-              {{ transfer.titulo || 'Transferencia' }}
-            </h4>
+            <!--
+              Title row with SyncBadge
+              Same pattern as AccountCard / TransactionItem: flex row so
+              the badge sits inline with the title without breaking layout.
+            -->
+            <div class="flex items-center gap-2">
+              <h4 class="font-medium truncate">
+                {{ transfer.titulo || 'Transferencia' }}
+              </h4>
+              <SyncBadge
+                v-if="'_sync_status' in transfer"
+                :status="(transfer as LocalTransfer)._sync_status"
+              />
+            </div>
             <div class="text-sm text-dark-text-secondary">
               <p>{{ transfer.cuenta_origen?.nombre }} → {{ transfer.cuenta_destino?.nombre }}</p>
               <p>{{ formatDateRelative(transfer.fecha) }}</p>

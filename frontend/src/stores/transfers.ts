@@ -5,32 +5,58 @@
  * - Filter by account (source or destination)
  * - Date range filtering
  * - CRUD operations
+ *
+ * Phase 3 change: write actions now follow the offline-first pattern.
+ * Writes go to IndexedDB and the mutation queue immediately; the UI updates
+ * optimistically. The SyncManager (Phase 4) will flush to the server.
+ *
+ * Important: cuenta_origen_id and cuenta_destino_id in transfer payloads
+ * may be temporary IDs if either account was created offline. The IDs are
+ * preserved verbatim in the mutation payload. The SyncManager resolves
+ * temp IDs to real server UUIDs before sending the mutation, relying on
+ * FIFO queue ordering to guarantee the account CREATEs are processed first.
  */
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { transfersApi } from '@/api/transfers'
 import type {
-  Transfer,
   CreateTransferDto,
   UpdateTransferDto,
   TransferFilters
 } from '@/types'
+import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import type { LocalTransfer } from '@/offline'
+import { useAccountsStore } from '@/stores/accounts'
 
 export const useTransfersStore = defineStore('transfers', () => {
   // State
-  const transfers = ref<Transfer[]>([])
+  // Why LocalTransfer[] instead of Transfer[]?
+  // LocalTransfer extends Transfer, so all consumers continue to work.
+  const transfers = ref<LocalTransfer[]>([])
   const filters = ref<TransferFilters>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  // Actions
+  // ---------------------------------------------------------------------------
+  // Actions — Reads (offline-first, stale-while-revalidate)
+  // ---------------------------------------------------------------------------
+
   async function fetchTransfers(customFilters?: TransferFilters) {
     loading.value = true
     error.value = null
     try {
       const appliedFilters = customFilters || filters.value
-      transfers.value = await transfersApi.getAll(appliedFilters)
+
+      const localData = await fetchAllWithRevalidation(
+        db.transfers,
+        () => transfersApi.getAll(appliedFilters),
+        (freshItems) => {
+          transfers.value = freshItems
+        }
+      )
+
+      transfers.value = localData
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencias'
       throw err
@@ -43,15 +69,29 @@ export const useTransfersStore = defineStore('transfers', () => {
     loading.value = true
     error.value = null
     try {
-      const transfer = await transfersApi.getById(id)
-      // Update or add to transfers array
-      const index = transfers.value.findIndex(t => t.id === id)
-      if (index >= 0) {
-        transfers.value[index] = transfer
-      } else {
-        transfers.value.push(transfer)
+      const localItem = await fetchByIdWithRevalidation(
+        db.transfers,
+        id,
+        (transferId) => transfersApi.getById(transferId),
+        (freshItem) => {
+          const index = transfers.value.findIndex(t => t.id === id)
+          if (index >= 0) {
+            transfers.value[index] = freshItem
+          } else {
+            transfers.value.push(freshItem)
+          }
+        }
+      )
+
+      if (localItem) {
+        const index = transfers.value.findIndex(t => t.id === id)
+        if (index >= 0) {
+          transfers.value[index] = localItem
+        } else {
+          transfers.value.push(localItem)
+        }
+        return localItem
       }
-      return transfer
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencia'
       throw err
@@ -64,7 +104,20 @@ export const useTransfersStore = defineStore('transfers', () => {
     loading.value = true
     error.value = null
     try {
-      transfers.value = await transfersApi.getByAccount(accountId, customFilters)
+      const localData = await fetchAllWithRevalidation(
+        db.transfers,
+        () => transfersApi.getByAccount(accountId, customFilters),
+        (freshItems) => {
+          transfers.value = freshItems
+        }
+      )
+
+      // Narrow the stale result to transfers involving this account.
+      // This mirrors the existing getTransfersByAccount() logic and ensures
+      // the UI shows relevant-only data even before revalidation completes.
+      transfers.value = localData.filter(t =>
+        t.cuenta_origen_id === accountId || t.cuenta_destino_id === accountId
+      )
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencias de la cuenta'
       throw err
@@ -73,13 +126,60 @@ export const useTransfersStore = defineStore('transfers', () => {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Actions — Writes (Phase 3: offline-first pattern)
+  // ---------------------------------------------------------------------------
+
   async function createTransfer(data: CreateTransferDto) {
+    const tempId = generateTempId()
+    const now = new Date().toISOString()
+
+    // Build the full local transfer record.
+    // tags defaults to [] because the Transfer interface requires string[]
+    // (not optional), while CreateTransferDto.tags is optional.
+    // cuenta_origen_id and cuenta_destino_id are kept verbatim — they may
+    // be temp-* IDs if either account was created offline in the same session.
+    const localTransfer: LocalTransfer = {
+      id: tempId,
+      cuenta_origen_id: data.cuenta_origen_id,
+      cuenta_destino_id: data.cuenta_destino_id,
+      monto: data.monto,
+      fecha: data.fecha,
+      titulo: data.titulo,
+      descripcion: data.descripcion,
+      tags: data.tags ?? [],
+      created_at: now,
+      updated_at: now,
+      _sync_status: 'pending',
+      _local_updated_at: now
+    }
+
     loading.value = true
     error.value = null
     try {
-      const newTransfer = await transfersApi.create(data)
-      transfers.value.unshift(newTransfer) // Add to beginning
-      return newTransfer
+      // Step 1 — IndexedDB write.
+      await db.transfers.add(localTransfer)
+
+      // Step 2 — Optimistic UI update. unshift places the newest transfer
+      // at the top of the list to match read action ordering.
+      transfers.value.unshift(localTransfer)
+
+      // Adjust both account balances immediately so the UI is accurate offline.
+      const accountsStore = useAccountsStore()
+      accountsStore.adjustBalance(data.cuenta_origen_id, -Number(data.monto))
+      accountsStore.adjustBalance(data.cuenta_destino_id, Number(data.monto))
+
+      // Step 3 — Enqueue CREATE mutation.
+      // client_id enables server-side idempotency on retries.
+      // cuenta_origen_id / cuenta_destino_id may be temp IDs.
+      await mutationQueue.enqueue({
+        entity_type: 'transfer',
+        entity_id: tempId,
+        operation: 'create',
+        payload: { ...data, client_id: tempId }
+      })
+
+      return localTransfer
     } catch (err: any) {
       error.value = err.message || 'Error al crear transferencia'
       throw err
@@ -89,15 +189,56 @@ export const useTransfersStore = defineStore('transfers', () => {
   }
 
   async function updateTransfer(id: string, data: UpdateTransferDto) {
+    const localUpdatedAt = new Date().toISOString()
+
     loading.value = true
     error.value = null
     try {
-      const updatedTransfer = await transfersApi.update(id, data)
-      const index = transfers.value.findIndex(t => t.id === id)
-      if (index >= 0) {
-        transfers.value[index] = updatedTransfer
+      // Step 1 — Partial IndexedDB update.
+      await db.transfers.update(id, {
+        ...data,
+        _sync_status: 'pending',
+        _local_updated_at: localUpdatedAt
+      })
+
+      // Step 2 — Reactive ref update + optimistic balance adjustment.
+      const idx = transfers.value.findIndex(t => t.id === id)
+      if (idx !== -1) {
+        const old = transfers.value[idx]
+        transfers.value[idx] = {
+          ...old,
+          ...data,
+          _sync_status: 'pending',
+          _local_updated_at: localUpdatedAt
+        }
+
+        // Reverse the old transfer's effect, then apply the updated values.
+        // This handles all cases: amount change, account change, or both.
+        const accountsStore = useAccountsStore()
+        accountsStore.adjustBalance(old.cuenta_origen_id, Number(old.monto))
+        accountsStore.adjustBalance(old.cuenta_destino_id, -Number(old.monto))
+        const newOrigenId = data.cuenta_origen_id ?? old.cuenta_origen_id
+        const newDestinoId = data.cuenta_destino_id ?? old.cuenta_destino_id
+        const newMonto = data.monto ?? old.monto
+        accountsStore.adjustBalance(newOrigenId, -Number(newMonto))
+        accountsStore.adjustBalance(newDestinoId, Number(newMonto))
       }
-      return updatedTransfer
+
+      // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE.
+      const pendingCreate = await mutationQueue.findPendingCreate('transfer', id)
+      if (pendingCreate && pendingCreate.id != null) {
+        await mutationQueue.updatePayload(pendingCreate.id, {
+          ...pendingCreate.payload,
+          ...data
+        })
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'transfer',
+          entity_id: id,
+          operation: 'update',
+          payload: data as Record<string, unknown>
+        })
+      }
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar transferencia'
       throw err
@@ -110,8 +251,39 @@ export const useTransfersStore = defineStore('transfers', () => {
     loading.value = true
     error.value = null
     try {
-      await transfersApi.delete(id)
+      // Capture the transfer before removal so we can reverse its balance effects.
+      const transfer = transfers.value.find(t => t.id === id)
+
+      // Cancellation optimisation: if the CREATE is still pending, remove
+      // everything locally without sending anything to the server.
+      const pendingCreate = await mutationQueue.findPendingCreate('transfer', id)
+      if (pendingCreate && pendingCreate.id != null) {
+        await mutationQueue.remove(pendingCreate.id)
+        await db.transfers.delete(id)
+        transfers.value = transfers.value.filter(t => t.id !== id)
+        if (transfer) {
+          const accountsStore = useAccountsStore()
+          accountsStore.adjustBalance(transfer.cuenta_origen_id, Number(transfer.monto))
+          accountsStore.adjustBalance(transfer.cuenta_destino_id, -Number(transfer.monto))
+        }
+        return
+      }
+
+      // Entity exists on the server — mark pending, remove from UI, enqueue DELETE.
+      await db.transfers.update(id, { _sync_status: 'pending' })
       transfers.value = transfers.value.filter(t => t.id !== id)
+      if (transfer) {
+        const accountsStore = useAccountsStore()
+        accountsStore.adjustBalance(transfer.cuenta_origen_id, Number(transfer.monto))
+        accountsStore.adjustBalance(transfer.cuenta_destino_id, -Number(transfer.monto))
+      }
+
+      await mutationQueue.enqueue({
+        entity_type: 'transfer',
+        entity_id: id,
+        operation: 'delete',
+        payload: { id }
+      })
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar transferencia'
       throw err
@@ -128,10 +300,15 @@ export const useTransfersStore = defineStore('transfers', () => {
     filters.value = {}
   }
 
-  function getTransfersByAccount(accountId: string): Transfer[] {
+  function getTransfersByAccount(accountId: string): LocalTransfer[] {
     return transfers.value.filter(t =>
       t.cuenta_origen_id === accountId || t.cuenta_destino_id === accountId
     )
+  }
+
+  async function refreshFromDB() {
+    const data = await db.transfers.toArray()
+    transfers.value = [...data].sort((a, b) => b.fecha.localeCompare(a.fecha))
   }
 
   return {
@@ -149,6 +326,7 @@ export const useTransfersStore = defineStore('transfers', () => {
     deleteTransfer,
     setFilters,
     clearFilters,
-    getTransfersByAccount
+    getTransfersByAccount,
+    refreshFromDB
   }
 })

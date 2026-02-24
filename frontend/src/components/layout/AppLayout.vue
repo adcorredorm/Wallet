@@ -36,10 +36,20 @@
 import AppHeader from './AppHeader.vue'
 import AppNavigation from './AppNavigation.vue'
 import AppDrawer from './AppDrawer.vue'
+// Phase 5: offline visibility banner — shown when device has no connectivity
+import NetworkBanner from '@/components/sync/NetworkBanner.vue'
 </script>
 
 <template>
   <div class="flex flex-col h-screen">
+    <!--
+      NetworkBanner (Phase 5)
+      First flex child so it pushes the header and all content downward when
+      visible. Uses a max-height collapse animation so the push-down is smooth
+      rather than an instant layout jump.
+    -->
+    <NetworkBanner />
+
     <!--
       Side Drawer
       Why Teleport? Drawer uses fixed positioning and needs to be at root level

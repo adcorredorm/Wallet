@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <meta name="description" content="Wallet - Gestión de gastos personales">
+
+    <!-- PWA: Apple / iOS home screen support.
+         Safari does not read the Web App Manifest for these values, so we must
+         supply them as proprietary meta tags.
+         'black-translucent' lets app content extend behind the iOS status bar,
+         giving a full-bleed look on iPhones with a notch or Dynamic Island. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Wallet">
+    <!-- TODO: Replace icon-192.svg with icon-192.png once real PNG icons are generated. -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+
     <link rel="icon" type="image/svg+xml" href="/vite.svg">
     <title>Wallet</title>
   </head>

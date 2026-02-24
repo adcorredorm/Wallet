@@ -45,15 +45,7 @@ onMounted(async () => {
 async function handleSubmit(data: UpdateTransferDto) {
   try {
     await transfersStore.updateTransfer(transferId, data)
-    // Refresh balances
-    const origenId = data.cuenta_origen_id || transfer.value?.cuenta_origen_id
-    const destinoId = data.cuenta_destino_id || transfer.value?.cuenta_destino_id
-    if (origenId && destinoId) {
-      await Promise.all([
-        accountsStore.fetchBalance(origenId),
-        accountsStore.fetchBalance(destinoId)
-      ])
-    }
+    // Balances are updated by adjustBalance() inside updateTransfer — no API call needed.
     uiStore.showSuccess('Transferencia actualizada exitosamente')
     router.push('/transfers')
   } catch (error: any) {
@@ -68,15 +60,8 @@ function handleCancel() {
 async function confirmDelete() {
   deleting.value = true
   try {
-    const origenId = transfer.value?.cuenta_origen_id
-    const destinoId = transfer.value?.cuenta_destino_id
     await transfersStore.deleteTransfer(transferId)
-    if (origenId && destinoId) {
-      await Promise.all([
-        accountsStore.fetchBalance(origenId),
-        accountsStore.fetchBalance(destinoId)
-      ])
-    }
+    // Balances are updated by adjustBalance() inside deleteTransfer — no API call needed.
     uiStore.showSuccess('Transferencia eliminada exitosamente')
     router.push('/transfers')
   } catch (error: any) {
