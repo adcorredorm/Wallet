@@ -2,7 +2,7 @@
 description: Full feature development lifecycle with Notion tracking
 argument-hint: [feature description or Notion page URL]
 model: sonnet
-allowed-tools: Agent, mcp__notion__notion-create-pages, mcp__notion__notion-update-page, mcp__notion__notion-fetch, Bash(python -m pytest:*), Read, Glob, Grep
+allowed-tools: Agent, Skill, mcp__notion__notion-create-pages, mcp__notion__notion-update-page, mcp__notion__notion-fetch, Bash(cd backend && python -m pytest:*), Bash(cd frontend && npm run type-check:*), Bash(cd frontend && npm run lint:*), Read, Glob, Grep
 ---
 
 # Wallet Feature Development
@@ -29,7 +29,7 @@ Input: $ARGUMENTS
 |---|---|---|
 | `Architect` | `the-architect` | ADD generation, architectural oversight |
 | `Backend` | `backend-architect` | Flask API, models, DB, business logic |
-| `Frontend` | `vue-mobile-first-dev` | Vue.js components, mobile-first UI |
+| `Frontend` | `nico-front` | Vue.js components, mobile-first UI |
 | `DevOps` | `docker-manager` | Docker, docker-compose, infra config |
 | `User` | (human) | Decisions or tasks requiring user judgment |
 
@@ -38,7 +38,9 @@ Input: $ARGUMENTS
 ## Phase 0: Resolve Notion entry
 
 Check if the input is a Notion page URL or ID:
-- **If yes**: fetch the existing page with `mcp__notion__notion-fetch`. Use that page as the main entry. Update its Status to `In Progress` and Tags to `["Architect"]` if not already set.
+- **If yes**: fetch the existing page with `mcp__notion__notion-fetch`.
+  - If the fetch fails or the page does not exist, inform the user and ask them to confirm whether to create a new entry or provide a valid URL. Do not continue until resolved.
+  - If successful, use that page as the main entry. Update its Status to `In Progress` and Tags to `["Architect"]` if not already set.
 - **If no**: create a new entry in the Kanban with:
   - **Name**: concise feature name derived from the input
   - **Status**: `In Progress`
@@ -52,23 +54,33 @@ Save the page ID — you will update it throughout the flow.
 
 ## Phase 1: Architecture Design Document (ADD)
 
-Launch `the-architect` agent with the following prompt:
+Before launching the architect, explore the codebase to build context:
+- Backend: `backend/models/`, `backend/routes/`, `backend/services/`
+- Frontend: `frontend/src/components/`, `frontend/src/views/`, `frontend/src/stores/`
+- Look for existing patterns similar to what the feature requires
+
+Then launch `the-architect` agent with the following prompt:
 
 > "You are responsible for designing the architecture for a new feature in the Wallet project.
 >
 > **Feature**: $ARGUMENTS
 >
+> Before designing, explore the codebase for existing patterns:
+> - Backend: `backend/models/`, `backend/routes/`, `backend/services/`
+> - Frontend: `frontend/src/components/`, `frontend/src/views/`, `frontend/src/stores/`
+>
 > Produce a complete Architecture Design Document (ADD) that includes:
 > 1. **Overview**: what the feature does and why it's needed
 > 2. **Scope**: what is in and out of scope
 > 3. **Affected layers**: which parts of the system are touched (backend, frontend, DevOps)
-> 4. **Design decisions**: key technical choices with rationale and trade-offs
+> 4. **Design decisions**: key technical choices with rationale and trade-offs — reference existing patterns where applicable
 > 5. **Data model changes**: new or modified entities, fields, relationships
 > 6. **API changes**: new or modified endpoints (method, path, request/response shape)
-> 7. **Sub-tasks per agent**: a task list broken down by agent (backend-architect, vue-mobile-first-dev, docker-manager), each with a clear description and acceptance criteria
-> 8. **Clarifying questions**: any ambiguities or decisions that require user input before implementation
+> 7. **Sub-tasks per agent**: a task list broken down by agent (backend-architect, nico-front, docker-manager), each with a clear description and acceptance criteria
+> 8. **API contract**: if frontend consumes new backend endpoints, define the full contract here so both agents can work from the same spec
+> 9. **Clarifying questions**: any ambiguities or decisions that require user input before implementation
 >
-> Be specific. Reference existing patterns in the codebase where relevant."
+> Be specific. Reference existing files and patterns found in the codebase."
 
 After the agent responds:
 1. Present the ADD and clarifying questions to the user
@@ -95,7 +107,7 @@ Present the list of created sub-tickets to the user for review before proceeding
 
 For each sub-task that has an agent (not `User` tagged), launch the corresponding agent with:
 
-> "Review the following ADD and your assigned sub-task. Produce a detailed implementation plan before writing any code:
+> "Review the following ADD and your assigned sub-task. Use `superpowers:writing-plans` to produce a detailed implementation plan before writing any code:
 >
 > **ADD**: [paste relevant sections of the ADD]
 > **Your sub-task**: [sub-task description and acceptance criteria]
@@ -118,13 +130,30 @@ Write each approved plan into the body of the corresponding Notion sub-ticket.
 
 **DO NOT START WITHOUT USER CONFIRMATION OF ALL PLANS.**
 
+Use `superpowers:using-git-worktrees` to set up an isolated workspace before starting implementation.
+
 For each sub-task, launch the corresponding agent referencing its approved plan:
 - `Backend` → `backend-architect`
-- `Frontend` → `vue-mobile-first-dev`
+- `Frontend` → `nico-front`
 - `DevOps` → `docker-manager`
 - `User` → pause, inform the user what needs to be done manually, and wait for confirmation before continuing
 
-Run independent agents in parallel when there are no dependencies. When dependencies exist (e.g. frontend needs the API contract from backend first), run sequentially.
+### Parallelism rules
+
+Run agents in parallel **only when** both conditions are true:
+1. Their sub-tasks have no shared files or state
+2. Frontend does NOT consume new backend endpoints introduced by this feature
+
+If frontend consumes new backend endpoints: run `backend-architect` first, wait for it to complete and confirm the API contract, then start `nico-front`.
+
+DevOps tasks can always run in parallel with backend unless they modify the same config files.
+
+### Agent failure recovery
+
+If an agent fails, returns incomplete work, or gets blocked:
+1. Do not re-launch with the same prompt — that will repeat the same failure
+2. Re-launch with: the original approved plan + the full error or incomplete output + explicit instruction: "Continue from [last completed step]. Do not redo previous steps."
+3. If the agent fails a second time, pause and report to the user with a clear description of what failed and what was attempted
 
 As each sub-task starts, update its Notion Status to `In Progress`. When it completes, update to `Done`.
 
@@ -132,19 +161,37 @@ As each sub-task starts, update its Notion Status to `In Progress`. When it comp
 
 ## Phase 5: Testing
 
-After all sub-tasks are complete:
-1. Run: `python -m pytest`
-2. If tests fail, identify which agent is responsible for the failing area and re-launch it with the full failure output and a reference to its approved plan
-3. Repeat until the suite passes cleanly
+Use `superpowers:verification-before-completion` before declaring this phase complete.
+
+After all sub-tasks are complete, run both suites:
+
+**Backend:**
+```
+cd backend && python -m pytest
+```
+
+**Frontend:**
+```
+cd frontend && npm run type-check
+cd frontend && npm run lint
+```
+
+If any check fails:
+- Identify which agent is responsible for the failing area
+- Re-launch it with the full failure output and a reference to its approved plan
+- Repeat until all checks pass cleanly
 
 ---
 
 ## Phase 6: Close
 
+Use `superpowers:requesting-code-review` before closing.
+
 1. Update the main Notion entry Status to `Done`
-2. Present a final summary:
+2. Use `git-flow` skill to tag the completed feature with the appropriate semver tag
+3. Present a final summary:
    - What was built
    - Sub-tasks completed per agent
    - Files modified
-   - Test results
+   - Test results (backend pytest + frontend type-check + lint)
    - Any follow-up items or known limitations (suggest adding them to the backlog)
