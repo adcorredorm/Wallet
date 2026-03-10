@@ -228,6 +228,63 @@ def mock_category():
 
 
 # ============================================================================
+# TRANSFER FIXTURES
+# ============================================================================
+
+@pytest.fixture
+def mock_transfer():
+    """
+    Create a mock Transfer instance.
+
+    Returns:
+        Mock Transfer instance with typical attributes
+    """
+    from app.models.transfer import Transfer
+    from datetime import date
+    from decimal import Decimal
+
+    transfer = Mock(spec=Transfer)
+    transfer.id = uuid4()
+    transfer.cuenta_origen_id = uuid4()
+    transfer.cuenta_destino_id = uuid4()
+    transfer.monto = Decimal("500.00")
+    transfer.fecha = date(2026, 3, 1)
+    transfer.descripcion = "Transferencia test"
+    transfer.tags = ["test"]
+    transfer.client_id = None
+    return transfer
+
+
+# ============================================================================
+# TRANSACTION FIXTURES
+# ============================================================================
+
+@pytest.fixture
+def mock_transaction():
+    """
+    Create a mock Transaction instance.
+
+    Returns:
+        Mock Transaction instance with typical attributes
+    """
+    from app.models.transaction import Transaction, TransactionType
+
+    transaction = Mock(spec=Transaction)
+    transaction.id = uuid4()
+    transaction.tipo = TransactionType.GASTO
+    transaction.monto = Decimal("250.00")
+    from datetime import date
+    transaction.fecha = date(2026, 3, 1)
+    transaction.cuenta_id = uuid4()
+    transaction.categoria_id = uuid4()
+    transaction.titulo = "Compra test"
+    transaction.descripcion = "Descripción test"
+    transaction.tags = ["test"]
+    transaction.client_id = None
+    return transaction
+
+
+# ============================================================================
 # DECIMAL/BALANCE FIXTURES
 # ============================================================================
 
