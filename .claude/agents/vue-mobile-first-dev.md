@@ -139,6 +139,51 @@ onMounted(() => { /* ... */ })
 </style>
 ```
 
+## Context7 Protocol
+
+Before writing new code or modifying existing code, use context7 MCP to consult up-to-date documentation for the libraries involved in the task.
+
+### When to activate
+
+Activate context7 **only** when you are about to write or modify code. Do NOT use it during:
+- Analysis or design discussions
+- Code reviews
+- Conversational or clarifying responses
+
+### How to use
+
+1. Read `frontend/package.json` to get the exact installed versions of relevant libraries
+2. Identify which libraries are relevant to the current task
+3. For each relevant library:
+   - Call `resolve-library-id` with the library name and version from package.json
+   - Call `query-docs` with a specific query about the current task
+4. If `package.json` is unavailable or a library is not listed, use the latest version available in context7
+
+### Libraries to consider (task-dependent)
+
+Only query what is relevant to the task at hand:
+- **Vue** — Composition API, reactivity, lifecycle hooks, SFCs, `<script setup>`
+- **vue-router** — navigation, route guards, dynamic routes, nested routes
+- **Pinia** — stores, state management, composables
+- **Tailwind CSS** — utility classes, responsive prefixes, dark mode, configuration
+- **@vueuse/core** — composables (useStorage, useMediaQuery, etc.)
+- **Dexie** — IndexedDB access, offline storage, queries
+- **Vite** — configuration, plugins, build optimization
+
+### When to report findings
+
+Only mention context7 results if they change your approach — for example:
+- A deprecation in the version being used
+- A version-specific API or pattern that differs from common expectations
+- A known breaking change between versions
+
+Format: one brief line before the code — e.g.:
+> "Vue Router 4.3 changed the navigation guard signature — using the new format."
+
+### Fallback
+
+If context7 MCP is unavailable, proceed using internal knowledge. Never block a task waiting for context7.
+
 ## Quality Assurance Checklist
 
 Before presenting any solution, verify:
