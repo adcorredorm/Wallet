@@ -215,12 +215,86 @@ def detect_test_run(command: str, output: str, exit_code: int) -> str | None:
     return None
 
 
+def get_last_ask_user_question(transcript_path: str) -> str:
+    """
+    Find the last AskUserQuestion tool call in the transcript and format
+    it as question + options for display in Telegram.
+    """
+    try:
+        path = Path(transcript_path)
+        if not path.exists():
+            return ""
+
+        lines = path.read_text().splitlines()
+
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+
+            if entry.get("type") != "assistant":
+                continue
+
+            content = entry.get("message", {}).get("content", [])
+            if not isinstance(content, list):
+                continue
+
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") != "tool_use":
+                    continue
+                if block.get("name") != "AskUserQuestion":
+                    continue
+
+                questions = block.get("input", {}).get("questions", [])
+                if not questions:
+                    continue
+
+                parts = []
+                for q in questions:
+                    parts.append(f"<b>{q.get('question', '')}</b>")
+                    for opt in q.get("options", []):
+                        label = opt.get("label", "")
+                        desc = opt.get("description", "")
+                        parts.append(f"  • {label}" + (f" — {desc}" if desc else ""))
+
+                return "\n".join(parts)
+
+        return ""
+    except Exception as e:
+        print(f"[telegram hook] ask_user_question read failed: {e}", file=sys.stderr)
+        return ""
+
+
 def handle_notification(payload: dict, token: str, chat_id: str):
-    """Forward Claude's notification to Telegram."""
+    """Forward Claude's notification to Telegram, enriched with last assistant message."""
     message = payload.get("message", "")
+    # Debug: log full payload keys and message
     if not message:
         return
-    text = f"💬 <b>Wallet — Claude necesita tu input</b>\n\n{message}"
+
+    notification_type = payload.get("notification_type", "")
+
+    if notification_type == "permission_prompt":
+        text = f"🔐 <b>Wallet — Permiso requerido</b>\n\n{message}"
+    else:
+        text = f"💬 <b>Wallet — Claude necesita tu input</b>"
+        generic_messages = {"claude code needs your attention", "needs your attention"}
+        if message.strip().lower() in generic_messages:
+            transcript_path = payload.get("transcript_path", "")
+            context = get_last_ask_user_question(transcript_path)
+            if not context:
+                context = get_last_assistant_message(transcript_path)
+            if context:
+                text += f"\n\n{context}"
+        else:
+            text += f"\n\n{message}"
+
     send_telegram(token, chat_id, text, silent=False)
 
 
