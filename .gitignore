@@ -1,5 +1,6 @@
 agent_staging/*
 .worktrees/
+.claude/hooks/.env
 docs/superpowers/
 !agent_staging/.gitkeep
 logs/

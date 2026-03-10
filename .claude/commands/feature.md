@@ -59,15 +59,16 @@ Before launching the architect, explore the codebase to build context:
 - Frontend: `frontend/src/components/`, `frontend/src/views/`, `frontend/src/stores/`
 - Look for existing patterns similar to what the feature requires
 
+Collect those findings — you will pass them to the architect so it doesn't re-explore.
+
 Then launch `the-architect` agent with the following prompt:
 
 > "You are responsible for designing the architecture for a new feature in the Wallet project.
 >
 > **Feature**: $ARGUMENTS
 >
-> Before designing, explore the codebase for existing patterns:
-> - Backend: `backend/models/`, `backend/routes/`, `backend/services/`
-> - Frontend: `frontend/src/components/`, `frontend/src/views/`, `frontend/src/stores/`
+> **Codebase findings** (already explored — do not re-explore):
+> [paste the full findings from your exploration here]
 >
 > Produce a complete Architecture Design Document (ADD) that includes:
 > 1. **Overview**: what the feature does and why it's needed
@@ -80,7 +81,7 @@ Then launch `the-architect` agent with the following prompt:
 > 8. **API contract**: if frontend consumes new backend endpoints, define the full contract here so both agents can work from the same spec
 > 9. **Clarifying questions**: any ambiguities or decisions that require user input before implementation
 >
-> Be specific. Reference existing files and patterns found in the codebase."
+> Be specific. Reference existing files and patterns from the codebase findings above."
 
 After the agent responds:
 1. Present the ADD and clarifying questions to the user
@@ -99,7 +100,11 @@ Based on the approved ADD, create one Notion entry per sub-task:
 - **Notes**: acceptance criteria from the ADD (concise, one or two lines)
 - **Parent**: set to `["<main-feature-page-url>"]` to link each sub-ticket to the parent feature entry
 
-Present the list of created sub-tickets to the user for review before proceeding.
+Only present the sub-tickets to the user if at least one of the following is true:
+- There is a ticket tagged `User` (requires human action)
+- A ticket introduces scope not clearly derived from the approved ADD
+
+Otherwise, proceed directly to Phase 3.
 
 ---
 
@@ -155,7 +160,7 @@ If an agent fails, returns incomplete work, or gets blocked:
 2. Re-launch with: the original approved plan + the full error or incomplete output + explicit instruction: "Continue from [last completed step]. Do not redo previous steps."
 3. If the agent fails a second time, pause and report to the user with a clear description of what failed and what was attempted
 
-As each sub-task starts, update its Notion Status to `In Progress`. When it completes, update to `Done`.
+As each sub-task starts, update its Notion Status to `In Progress`. When it completes, update to `Done`. **Do not rely on the agent to update Notion — always update from the orchestrator** using the page IDs saved in Phase 2.
 
 ---
 
