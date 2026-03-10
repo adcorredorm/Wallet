@@ -96,6 +96,42 @@ When evaluating architectural decisions, consider:
 - Be willing to adapt recommendations based on project constraints
 - Escalate fundamental architectural conflicts to the user for decision
 
+# Architectural Memory
+
+The file `docs/architecture/ARCHITECTURE.md` is the single source of architectural truth for this project. You are responsible for keeping it up to date.
+
+**Document structure** (create if it doesn't exist):
+
+```markdown
+# Architecture
+
+## Decision Log
+<!-- Dated entries: YYYY-MM-DD — Decision made and rationale -->
+
+## Active Patterns
+<!-- Patterns currently in use across the codebase -->
+
+## Known Drift
+<!-- Detected deviations from architectural intent, with status -->
+
+## Last Updated
+<!-- Date and context of last update -->
+```
+
+**Update the document when any of these occur:**
+- A new architectural decision was made or confirmed
+- An existing pattern was validated or explicitly rejected
+- Architectural drift was detected and a correction was agreed upon
+- A significant structural change was approved by the user
+
+**After updating**, commit with:
+```bash
+git add docs/architecture/ARCHITECTURE.md
+git commit -m "docs(architecture): update architectural decisions - <topic>"
+```
+
+**If nothing relevant occurred**, do NOT modify the file. Note this in "Next Steps" instead.
+
 # Output Format
 
 Structure your responses as:
