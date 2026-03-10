@@ -34,13 +34,14 @@ def load_config() -> dict:
 
 # ── Telegram API ─────────────────────────────────────────────────────────────
 
-def send_telegram(token: str, chat_id: str, message: str) -> bool:
+def send_telegram(token: str, chat_id: str, message: str, silent: bool = True) -> bool:
     """Send a message via Telegram Bot API. Returns True on success."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
+        "disable_notification": "true" if silent else "false",
     }).encode()
     try:
         req = urllib.request.Request(url, data=data, method="POST")
@@ -220,7 +221,7 @@ def handle_notification(payload: dict, token: str, chat_id: str):
     if not message:
         return
     text = f"💬 <b>Wallet — Claude necesita tu input</b>\n\n{message}"
-    send_telegram(token, chat_id, text)
+    send_telegram(token, chat_id, text, silent=False)
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
