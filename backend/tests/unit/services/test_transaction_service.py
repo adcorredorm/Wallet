@@ -9,7 +9,7 @@ import pytest
 from decimal import Decimal
 from datetime import date
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 from app.services.transaction import TransactionService
 from app.models.transaction import Transaction, TransactionType
@@ -67,7 +67,7 @@ def sample_transaction():
     tipo and categoria_id are set so that the update path can read the
     effective values when only one of them is changing.
     """
-    transaction = Mock(spec=Transaction)
+    transaction = MagicMock()
     transaction.id = uuid4()
     transaction.tipo = TransactionType.GASTO
     transaction.monto = Decimal("250.00")
@@ -87,12 +87,12 @@ def sample_transaction():
 
 def _make_account() -> Mock:
     """Return a bare Mock with Account spec."""
-    return Mock(spec=Account)
+    return MagicMock()
 
 
 def _make_category(tipo: CategoryType) -> Mock:
     """Return a Mock with Category spec and the given tipo set."""
-    cat = Mock(spec=Category)
+    cat = MagicMock()
     cat.tipo = tipo
     return cat
 
@@ -405,7 +405,7 @@ class TestUpdate:
         """Should re-validate compatibility when transaction type changes."""
         # sample_transaction.tipo == GASTO, existing category will be fetched
         # by categoria_id from the transaction mock
-        gasto_category = Mock(spec=Category)
+        gasto_category = MagicMock()
         gasto_category.tipo = CategoryType.GASTO  # incompatible with new INGRESO tipo
 
         mock_transaction_repo.get_by_id_or_fail.return_value = sample_transaction
@@ -425,7 +425,7 @@ class TestUpdate:
         sample_transaction,
     ):
         """Should re-validate compatibility when category changes."""
-        ingreso_category = Mock(spec=Category)
+        ingreso_category = MagicMock()
         ingreso_category.tipo = CategoryType.INGRESO  # incompatible with existing GASTO tipo
 
         mock_transaction_repo.get_by_id_or_fail.return_value = sample_transaction

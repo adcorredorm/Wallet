@@ -96,7 +96,7 @@ def _make_mock_transaction(tipo: TransactionType = TransactionType.GASTO) -> Moc
     The service accesses trans.categoria.nombre and trans.cuenta.nombre when
     formatting recent activity, so those nested attributes must exist.
     """
-    trans = Mock(spec=Transaction)
+    trans = MagicMock()
     trans.id = uuid4()
     trans.tipo = tipo
     trans.monto = Decimal("100.00")
@@ -121,7 +121,7 @@ def _make_mock_transfer() -> Mock:
     The service accesses transfer.cuenta_origen.nombre and
     transfer.cuenta_destino.nombre when formatting recent activity.
     """
-    transfer = Mock(spec=Transfer)
+    transfer = MagicMock()
     transfer.id = uuid4()
     transfer.monto = Decimal("200.00")
     transfer.fecha = date(2026, 3, 1)
@@ -149,15 +149,15 @@ class TestGetNetWorth:
         self, dashboard_service, mock_account_repo
     ):
         """Should group account balances by currency and sum them correctly."""
-        account_mxn_1 = Mock(spec=Account)
+        account_mxn_1 = MagicMock()
         account_mxn_1.id = uuid4()
         account_mxn_1.divisa = "MXN"
 
-        account_mxn_2 = Mock(spec=Account)
+        account_mxn_2 = MagicMock()
         account_mxn_2.id = uuid4()
         account_mxn_2.divisa = "MXN"
 
-        account_usd = Mock(spec=Account)
+        account_usd = MagicMock()
         account_usd.id = uuid4()
         account_usd.divisa = "USD"
 

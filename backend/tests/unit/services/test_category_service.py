@@ -7,7 +7,7 @@ No database, no Flask app context, no db.session — pure unit tests.
 
 import pytest
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 from app.services.category import CategoryService
 from app.models.category import Category, CategoryType
@@ -41,7 +41,7 @@ def sample_category():
     Includes dynamic relationship mocks (.subcategorias, .transacciones)
     with count() returning 0 by default so delete guards pass unless overridden.
     """
-    category = Mock(spec=Category)
+    category = MagicMock()
     category.id = uuid4()
     category.nombre = "Alimentación"
     category.tipo = CategoryType.GASTO
@@ -144,7 +144,7 @@ class TestCreate:
         self, category_service, mock_repository, sample_category
     ):
         """Should create subcategory when parent type equals child type."""
-        parent = Mock(spec=Category)
+        parent = MagicMock()
         parent.id = uuid4()
         parent.tipo = CategoryType.GASTO
 
@@ -164,7 +164,7 @@ class TestCreate:
         self, category_service, mock_repository
     ):
         """Should raise BusinessRuleError when child type conflicts with parent type."""
-        parent = Mock(spec=Category)
+        parent = MagicMock()
         parent.id = uuid4()
         parent.tipo = CategoryType.INGRESO  # INGRESO parent
 
@@ -181,7 +181,7 @@ class TestCreate:
         self, category_service, mock_repository, sample_category
     ):
         """Should allow any child type when parent type is AMBOS."""
-        parent = Mock(spec=Category)
+        parent = MagicMock()
         parent.id = uuid4()
         parent.tipo = CategoryType.AMBOS
 
@@ -200,7 +200,7 @@ class TestCreate:
         self, category_service, mock_repository, sample_category
     ):
         """AMBOS child under a typed parent should be allowed (inner guard: if tipo_enum != AMBOS)."""
-        parent = Mock(spec=Category)
+        parent = MagicMock()
         parent.id = uuid4()
         parent.tipo = CategoryType.INGRESO  # typed parent
 
@@ -240,7 +240,7 @@ class TestUpdate:
         self, category_service, mock_repository, sample_category
     ):
         """Should include only the provided fields in the repository update call."""
-        updated = Mock(spec=Category)
+        updated = MagicMock()
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.update.return_value = updated
 
@@ -258,7 +258,7 @@ class TestUpdate:
         self, category_service, mock_repository, sample_category
     ):
         """Should return the updated category from the repository."""
-        updated = Mock(spec=Category)
+        updated = MagicMock()
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.update.return_value = updated
 
@@ -288,7 +288,7 @@ class TestUpdate:
         self, category_service, mock_repository, sample_category
     ):
         """Should raise BusinessRuleError when setting parent would create a circular reference."""
-        parent = Mock(spec=Category)
+        parent = MagicMock()
         parent.id = uuid4()
         # The proposed parent already has sample_category as its own parent
         parent.categoria_padre_id = sample_category.id

@@ -9,7 +9,7 @@ import pytest
 from decimal import Decimal
 from datetime import date
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 from app.services.transfer import TransferService
 from app.models.transfer import Transfer
@@ -110,9 +110,9 @@ class TestCreate:
         self, transfer_service, mock_transfer_repo, mock_account_repo, mock_transfer
     ):
         """Should create and return a transfer when both accounts share the same currency."""
-        origin = Mock(spec=Account)
+        origin = MagicMock()
         origin.divisa = "MXN"
-        destination = Mock(spec=Account)
+        destination = MagicMock()
         destination.divisa = "MXN"
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
@@ -132,9 +132,9 @@ class TestCreate:
         self, transfer_service, mock_account_repo
     ):
         """Should raise BusinessRuleError when the two accounts have different currencies."""
-        origin = Mock(spec=Account)
+        origin = MagicMock()
         origin.divisa = "MXN"
-        destination = Mock(spec=Account)
+        destination = MagicMock()
         destination.divisa = "USD"
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
@@ -189,7 +189,7 @@ class TestCreate:
         self, transfer_service, mock_account_repo
     ):
         """Should raise NotFoundError when the destination account does not exist."""
-        origin = Mock(spec=Account)
+        origin = MagicMock()
         origin.divisa = "MXN"
         mock_account_repo.get_by_id_or_fail.side_effect = [
             origin,

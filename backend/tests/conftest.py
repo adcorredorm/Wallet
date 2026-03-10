@@ -239,11 +239,10 @@ def mock_transfer():
     Returns:
         Mock Transfer instance with typical attributes
     """
-    from app.models.transfer import Transfer
     from datetime import date
     from decimal import Decimal
 
-    transfer = Mock(spec=Transfer)
+    transfer = MagicMock()
     transfer.id = uuid4()
     transfer.cuenta_origen_id = uuid4()
     transfer.cuenta_destino_id = uuid4()
@@ -267,9 +266,9 @@ def mock_transaction():
     Returns:
         Mock Transaction instance with typical attributes
     """
-    from app.models.transaction import Transaction, TransactionType
+    from app.models.transaction import TransactionType
 
-    transaction = Mock(spec=Transaction)
+    transaction = MagicMock()
     transaction.id = uuid4()
     transaction.tipo = TransactionType.GASTO
     transaction.monto = Decimal("250.00")
