@@ -1,4 +1,6 @@
 agent_staging/*
+.worktrees/
+docs/superpowers/
 !agent_staging/.gitkeep
 logs/
 *.log
