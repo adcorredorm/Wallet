@@ -20,7 +20,8 @@
     "Notification": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/telegram.py notification" }
+          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/telegram.py notification" },
+          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/notify_sound.py" }
         ]
       }
     ]
