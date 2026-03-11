@@ -5,7 +5,7 @@
  * Form to create a new category
  */
 
-import { reactive } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCategoriesStore, useUiStore } from '@/stores'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -24,7 +24,23 @@ const form = reactive({
   nombre: '',
   tipo: '' as CategoryType,
   icono: '',
-  color: '#3b82f6'
+  color: '#3b82f6',
+  categoria_padre_id: '' as string
+})
+
+// Eligible parent categories based on the selected tipo
+const parentOptions = computed(() => {
+  if (!form.tipo) return []
+  return categoriesStore.compatibleParentCategories(form.tipo as CategoryType)
+    .map(cat => ({
+      value: cat.id,
+      label: `${cat.icono ?? ''} ${cat.nombre}`.trim()
+    }))
+})
+
+// Reset parent when tipo changes (parent compatibility may change)
+watch(() => form.tipo, () => {
+  form.categoria_padre_id = ''
 })
 
 const errors = reactive({
@@ -61,7 +77,8 @@ async function handleSubmit() {
       nombre: form.nombre.trim(),
       tipo: form.tipo,
       icono: form.icono || undefined,
-      color: form.color || undefined
+      color: form.color || undefined,
+      categoria_padre_id: form.categoria_padre_id || undefined
     }
 
     await categoriesStore.createCategory(data)
@@ -101,6 +118,22 @@ function handleCancel() {
           :error="errors.tipo"
           required
         />
+
+        <!-- Categoría padre -->
+        <div>
+          <BaseSelect
+            v-model="form.categoria_padre_id"
+            label="Categoría padre (opcional)"
+            :options="[
+              { value: '', label: 'Ninguna (categoría raíz)' },
+              ...parentOptions
+            ]"
+            :disabled="!form.tipo"
+          />
+          <p v-if="!form.tipo" class="mt-1 text-xs text-dark-text-secondary">
+            Selecciona un tipo primero
+          </p>
+        </div>
 
         <!-- Icono -->
         <div>
