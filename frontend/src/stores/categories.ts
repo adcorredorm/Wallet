@@ -19,9 +19,19 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { categoriesApi } from '@/api/categories'
-import type { CreateCategoryDto, UpdateCategoryDto, CategoryType } from '@/types'
+import { CategoryType } from '@/types/category'
+import type { CreateCategoryDto, UpdateCategoryDto } from '@/types'
 import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalCategory } from '@/offline'
+
+/**
+ * CategoryGroup — a parent category with its direct children.
+ * Used by categoryTree to present a grouped, 2-level hierarchy.
+ */
+export interface CategoryGroup {
+  parent: LocalCategory
+  children: LocalCategory[]
+}
 
 export const useCategoriesStore = defineStore('categories', () => {
   // State
@@ -51,6 +61,101 @@ export const useCategoriesStore = defineStore('categories', () => {
   // Helper to get subcategories of a parent
   const getSubcategories = (parentId: string) =>
     categories.value.filter(cat => cat.categoria_padre_id === parentId)
+
+  /**
+   * categoryTree — groups all categories into a 2-level hierarchy.
+   *
+   * Each CategoryGroup has a parent and its direct children.
+   * Sorting: groups with children come first (alphabetical by nombre),
+   * then standalone categories (no children, alphabetical by nombre).
+   * Orphaned children (padre_id set but parent not in store) are treated
+   * as standalone root entries.
+   */
+  const categoryTree = computed<CategoryGroup[]>(() => {
+    const byId = new Map<string, LocalCategory>()
+    for (const cat of categories.value) {
+      byId.set(cat.id, cat)
+    }
+
+    // Identify root categories: no padre_id, or padre_id not found in store
+    const roots: LocalCategory[] = []
+    const childrenMap = new Map<string, LocalCategory[]>()
+
+    for (const cat of categories.value) {
+      if (!cat.categoria_padre_id || !byId.has(cat.categoria_padre_id)) {
+        // This is a root (or an orphan treated as root)
+        roots.push(cat)
+      } else {
+        // This is a valid child
+        const parentId = cat.categoria_padre_id
+        if (!childrenMap.has(parentId)) {
+          childrenMap.set(parentId, [])
+        }
+        childrenMap.get(parentId)!.push(cat)
+      }
+    }
+
+    // Build groups
+    const groups: CategoryGroup[] = roots.map(root => ({
+      parent: root,
+      children: (childrenMap.get(root.id) ?? []).sort((a, b) =>
+        a.nombre.localeCompare(b.nombre)
+      )
+    }))
+
+    // Sort: groups with children first (alpha), then standalone (alpha)
+    const withChildren = groups
+      .filter(g => g.children.length > 0)
+      .sort((a, b) => a.parent.nombre.localeCompare(b.parent.nombre))
+    const standalone = groups
+      .filter(g => g.children.length === 0)
+      .sort((a, b) => a.parent.nombre.localeCompare(b.parent.nombre))
+
+    return [...withChildren, ...standalone]
+  })
+
+  /**
+   * compatibleParentCategories — returns root categories eligible as parents
+   * for a category of the given tipo.
+   *
+   * Rules:
+   * - Only root categories can be parents (no categoria_padre_id).
+   *   This enforces the 2-level limit: a child cannot itself become a parent.
+   * - A root category that already has children CAN still accept more children.
+   * - Type compatibility: ingreso -> ingreso|ambos, gasto -> gasto|ambos, ambos -> ambos only
+   * - Excludes excludeId (self) and its children (prevents circular references)
+   */
+  function compatibleParentCategories(tipo: CategoryType, excludeId?: string): LocalCategory[] {
+    return categories.value.filter(cat => {
+      // Must be root (no parent) — this is the 2-level limit:
+      // a category that already has a parent cannot itself become a parent
+      if (cat.categoria_padre_id) return false
+
+      // Exclude self
+      if (excludeId && cat.id === excludeId) return false
+
+      // Exclude children of the excluded category (prevents circular)
+      if (excludeId && cat.categoria_padre_id === excludeId) return false
+
+      // Type compatibility:
+      // ingreso child -> parent must be ingreso or ambos
+      // gasto child   -> parent must be gasto or ambos
+      // ambos child   -> parent must be ambos
+      const t = tipo as string
+      const ct = cat.tipo as string
+      if (t === 'ingreso') {
+        return ct === 'ingreso' || ct === 'ambos'
+      }
+      if (t === 'gasto') {
+        return ct === 'gasto' || ct === 'ambos'
+      }
+      if (t === 'ambos') {
+        return ct === 'ambos'
+      }
+
+      return false
+    })
+  }
 
   // ---------------------------------------------------------------------------
   // Actions — Reads (offline-first, stale-while-revalidate)
@@ -285,6 +390,9 @@ export const useCategoriesStore = defineStore('categories', () => {
     incomeCategories,
     expenseCategories,
     parentCategories,
+    categoryTree,
+    // Functions
+    compatibleParentCategories,
     // Actions
     fetchCategories,
     fetchCategoryById,

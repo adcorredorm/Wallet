@@ -18,10 +18,16 @@ interface Option {
   disabled?: boolean
 }
 
+interface OptionGroup {
+  label: string
+  options: Option[]
+}
+
 interface Props {
   modelValue: string | number
   label?: string
-  options: Option[]
+  options?: Option[]
+  optionGroups?: OptionGroup[]
   placeholder?: string
   error?: string
   required?: boolean
@@ -67,14 +73,36 @@ function handleChange(event: Event) {
       <option v-if="placeholder" value="" disabled>
         {{ placeholder }}
       </option>
-      <option
-        v-for="option in options"
-        :key="option.value"
-        :value="option.value"
-        :disabled="option.disabled"
-      >
-        {{ option.label }}
-      </option>
+
+      <!-- Grouped options (when optionGroups is provided) -->
+      <template v-if="optionGroups && optionGroups.length > 0">
+        <optgroup
+          v-for="group in optionGroups"
+          :key="group.label"
+          :label="group.label"
+        >
+          <option
+            v-for="option in group.options"
+            :key="option.value"
+            :value="option.value"
+            :disabled="option.disabled"
+          >
+            {{ option.label }}
+          </option>
+        </optgroup>
+      </template>
+
+      <!-- Flat options (default, backward-compatible) -->
+      <template v-if="options && options.length > 0">
+        <option
+          v-for="option in options"
+          :key="option.value"
+          :value="option.value"
+          :disabled="option.disabled"
+        >
+          {{ option.label }}
+        </option>
+      </template>
     </select>
 
     <!-- Error message -->

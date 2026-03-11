@@ -5,7 +5,7 @@
  * Form to edit existing category
  */
 
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore, useUiStore } from '@/stores'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -35,12 +35,33 @@ const form = reactive({
   nombre: '',
   tipo: '' as CategoryType,
   icono: '',
-  color: '#3b82f6'
+  color: '#3b82f6',
+  categoria_padre_id: '' as string
 })
 
 const errors = reactive({
   nombre: '',
   tipo: ''
+})
+
+// Whether this category has subcategories (cannot become a child itself)
+const hasChildren = computed(() =>
+  categoriesStore.getSubcategories(categoryId).length > 0
+)
+
+// Eligible parent categories for the current tipo, excluding self and own children
+const parentOptions = computed(() => {
+  if (!form.tipo) return []
+  return categoriesStore.compatibleParentCategories(form.tipo as CategoryType, categoryId)
+    .map(cat => ({
+      value: cat.id,
+      label: `${cat.icono ?? ''} ${cat.nombre}`.trim()
+    }))
+})
+
+// Reset parent when tipo changes
+watch(() => form.tipo, () => {
+  form.categoria_padre_id = ''
 })
 
 onMounted(async () => {
@@ -59,6 +80,7 @@ onMounted(async () => {
     form.tipo = category.value.tipo
     form.icono = category.value.icono || ''
     form.color = category.value.color || '#3b82f6'
+    form.categoria_padre_id = category.value.categoria_padre_id ?? ''
   }
 })
 
@@ -87,11 +109,20 @@ async function handleSubmit() {
   if (!validateForm()) return
 
   try {
+    // For edit: always include categoria_padre_id.
+    // Empty string clears the parent (unparents); a value sets it.
+    // The store will persist this to IndexedDB and the mutation queue.
     const data: UpdateCategoryDto = {
       nombre: form.nombre.trim(),
       tipo: form.tipo,
       icono: form.icono || undefined,
-      color: form.color || undefined
+      color: form.color || undefined,
+      categoria_padre_id: form.categoria_padre_id || undefined
+    }
+    // When user explicitly selected "no parent", we need to clear it
+    // in IndexedDB. We pass empty string which the offline layer stores.
+    if (!form.categoria_padre_id && category.value?.categoria_padre_id) {
+      (data as Record<string, unknown>).categoria_padre_id = ''
     }
 
     await categoriesStore.updateCategory(categoryId, data)
@@ -150,6 +181,25 @@ async function confirmDelete() {
           :error="errors.tipo"
           required
         />
+
+        <!-- Categoría padre -->
+        <div>
+          <BaseSelect
+            v-model="form.categoria_padre_id"
+            label="Categoría padre (opcional)"
+            :options="[
+              { value: '', label: 'Ninguna (categoría raíz)' },
+              ...parentOptions
+            ]"
+            :disabled="!form.tipo || hasChildren"
+          />
+          <p v-if="!form.tipo" class="mt-1 text-xs text-dark-text-secondary">
+            Selecciona un tipo primero
+          </p>
+          <p v-else-if="hasChildren" class="mt-1 text-xs text-dark-text-secondary">
+            Esta categoría tiene subcategorías y no puede convertirse en subcategoría
+          </p>
+        </div>
 
         <!-- Icono -->
         <div>
