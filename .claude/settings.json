@@ -3,24 +3,9 @@
     "superpowers@claude-plugins-official": true
   },
   "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/telegram.py stop" }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/telegram.py post_tool" }
-        ]
-      }
-    ],
     "Notification": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/telegram.py notification" },
           { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/notify_sound.py" }
         ]
       }
