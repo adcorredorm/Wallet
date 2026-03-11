@@ -13,4 +13,4 @@ try:
 except Exception:
     pass
 
-os.system("afplay /System/Library/Sounds/Glass.aiff")
+os.system("afplay /System/Library/Sounds/Hero.aiff")
