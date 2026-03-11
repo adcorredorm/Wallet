@@ -3,6 +3,20 @@
     "superpowers@claude-plugins-official": true
   },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/notify_sound.py" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 /Users/angelcorredor/Code/Wallet/.claude/hooks/notify_sound.py" }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
