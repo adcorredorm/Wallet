@@ -137,11 +137,19 @@ Write each approved plan into the body of the corresponding Notion sub-ticket.
 
 Use `superpowers:using-git-worktrees` to set up an isolated workspace before starting implementation.
 
-For each sub-task, launch the corresponding agent referencing its approved plan:
+For each sub-task, launch the corresponding agent referencing its approved plan and its Notion sub-ticket ID:
 - `Backend` → `backend-architect`
 - `Frontend` → `nico-front`
 - `DevOps` → `docker-manager`
 - `User` → pause, inform the user what needs to be done manually, and wait for confirmation before continuing
+
+Each agent prompt **must** include these Notion responsibilities:
+
+> "**Notion ticket**: [sub-ticket page URL]
+>
+> At the start of your work, update this ticket's Status to `In Progress` using `mcp__notion__notion-update-page`.
+> When you finish, update the Status to `Done`.
+> Throughout your work, add relevant notes to the ticket body (decisions made, blockers encountered, deviations from the plan, or anything useful for future reference) using `mcp__notion__notion-update-page`."
 
 ### Parallelism rules
 
@@ -160,7 +168,7 @@ If an agent fails, returns incomplete work, or gets blocked:
 2. Re-launch with: the original approved plan + the full error or incomplete output + explicit instruction: "Continue from [last completed step]. Do not redo previous steps."
 3. If the agent fails a second time, pause and report to the user with a clear description of what failed and what was attempted
 
-As each sub-task starts, update its Notion Status to `In Progress`. When it completes, update to `Done`. **Do not rely on the agent to update Notion — always update from the orchestrator** using the page IDs saved in Phase 2.
+Each agent is responsible for updating its own Notion ticket status (`In Progress` → `Done`) and adding notes. The orchestrator should verify after each agent completes — if a ticket was not updated by the agent, update it from here using the page IDs saved in Phase 2.
 
 ---
 
