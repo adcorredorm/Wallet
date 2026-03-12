@@ -150,56 +150,6 @@ const sortedCurrencies = computed(() => {
           {{ isNegative ? '📉' : '📈' }}
         </p>
 
-        <!-- Per-currency breakdown ────────────────────────────────────────
-          Always rendered.  Purpose:
-            - Shows the raw per-currency amounts so the user understands
-              where the converted total comes from.
-            - Acts as the sole display when no rates are cached (null total).
-          Layout: flex-wrap so it collapses cleanly on narrow mobile screens.
-          Separator "·" between items is purely presentational (aria-hidden).
-        -->
-        <div
-          v-if="balancesByCurrency.size > 0"
-          class="mt-3 flex flex-wrap justify-center gap-x-1 gap-y-1 text-xs text-dark-text-secondary"
-        >
-          <template
-            v-for="(currency, index) in sortedCurrencies"
-            :key="currency"
-          >
-            <!-- Separator between items, hidden from assistive tech -->
-            <span
-              v-if="index > 0"
-              aria-hidden="true"
-              class="select-none"
-            >·</span>
-
-            <!-- Currency + amount -->
-            <span class="inline-flex items-center gap-0.5">
-              <span class="font-medium text-dark-text-primary">{{ currency }}:</span>
-              <!-- Why formatCurrency here instead of CurrencyDisplay?
-                   The breakdown uses xs text in a single line. CurrencyDisplay
-                   is a block-level span with size classes (text-sm through
-                   text-2xl) that would break the inline layout. formatCurrency
-                   returns a plain string we can embed directly. -->
-              <span>{{ formatCurrency(balancesByCurrency.get(currency) ?? 0, currency) }}</span>
-
-              <!-- Missing-rate warning icon ─────────────────────────────
-                Why title="" for the tooltip?
-                The <title> attribute is the lightest-weight accessible
-                tooltip: zero dependencies, supported on all browsers, read
-                by screen readers as the accessible name when there is no
-                other text. A full tooltip component would be overkill here.
-              -->
-              <span
-                v-if="currenciesWithMissingRates.includes(currency)"
-                title="Tasa de cambio no disponible"
-                aria-label="Tasa de cambio no disponible"
-                class="text-warning cursor-help"
-              >⚠</span>
-            </span>
-          </template>
-        </div>
-
         <!-- No-rates notice: only when rates are absent AND there is more
              than one currency (a single currency needs no rate). -->
         <p
