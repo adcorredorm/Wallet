@@ -12,7 +12,10 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { ACCOUNT_TYPES, CURRENCIES } from '@/utils/constants'
 import { required, minLength, maxLength, currencyCode } from '@/utils/validators'
+import { useSettingsStore } from '@/stores/settings'
 import type { Account, CreateAccountDto, UpdateAccountDto, AccountType } from '@/types'
+
+const settingsStore = useSettingsStore()
 
 interface Props {
   account?: Account
@@ -30,7 +33,7 @@ const emit = defineEmits<{
 const form = reactive({
   name: props.account?.name || '',
   type: props.account?.type || '' as AccountType,
-  currency: props.account?.currency || 'USD',
+  currency: props.account?.currency || settingsStore.primaryCurrency,
   description: props.account?.description || '',
   tags: props.account?.tags?.join(', ') || ''
 })
