@@ -137,6 +137,8 @@ Write each approved plan into the body of the corresponding Notion sub-ticket.
 
 Use `superpowers:using-git-worktrees` to set up an isolated workspace before starting implementation.
 
+Use `superpowers:subagent-driven-development` to coordinate the execution of all sub-tasks in this phase.
+
 For each sub-task, launch the corresponding agent referencing its approved plan and its Notion sub-ticket ID:
 - `Backend` → `backend-architect`
 - `Frontend` → `nico-front`
