@@ -192,9 +192,11 @@ const chartData = computed(() => {
         },
         fill: true,
         borderWidth: 2,
-        // Show dots only for 1S (7 daily points) — cleaner on mobile for other ranges
-        pointRadius: points.length <= 7 ? 3 : 0,
-        pointHoverRadius: 5,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#1e293b',  // dark-bg-secondary — creates ring effect
+        pointBorderColor: COLOR_LINE,
+        pointBorderWidth: 2,
         tension: 0.3, // slight curve for a smoother line
       }
     ]
