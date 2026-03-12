@@ -243,6 +243,13 @@ export const useTransactionsStore = defineStore('transactions', () => {
     const tempId = generateTempId()
     const now = new Date().toISOString()
 
+    // Compute base_rate: how many primaryCurrency units equal 1 unit of this
+    // account's currency at the moment of creation. null when offline with no cache.
+    const txAccount = accountsStore.accounts.find(a => a.id === data.account_id)
+    const txRate = txAccount
+      ? exchangeRatesStore.getRate(txAccount.currency, settingsStore.primaryCurrency)
+      : null
+
     // Build the full local transaction record.
     // tags defaults to an empty array when not provided by the caller, which
     // matches the Transaction interface requirement (tags: string[], not optional).
@@ -262,7 +269,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
       created_at: now,
       updated_at: now,
       _sync_status: 'pending',
-      _local_updated_at: now
+      _local_updated_at: now,
+      base_rate: txRate ?? null
     }
 
     loading.value = true
@@ -289,7 +297,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         entity_type: 'transaction',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, client_id: tempId }
+        payload: { ...data, base_rate: txRate ?? null, client_id: tempId }
       })
 
       return localTransaction
@@ -304,12 +312,24 @@ export const useTransactionsStore = defineStore('transactions', () => {
   async function updateTransaction(id: string, data: UpdateTransactionDto) {
     const localUpdatedAt = new Date().toISOString()
 
+    // Recompute base_rate using the effective account after this update.
+    const effectiveAccountId = data.account_id ?? (
+      transactions.value.find(t => t.id === id)?.account_id
+    )
+    const updateAccount = effectiveAccountId
+      ? accountsStore.accounts.find(a => a.id === effectiveAccountId)
+      : undefined
+    const updateRate = updateAccount
+      ? exchangeRatesStore.getRate(updateAccount.currency, settingsStore.primaryCurrency)
+      : null
+
     loading.value = true
     error.value = null
     try {
       // Step 1 — Partial IndexedDB update.
       await db.transactions.update(id, {
         ...data,
+        base_rate: updateRate ?? null,
         _sync_status: 'pending',
         _local_updated_at: localUpdatedAt
       })
@@ -321,6 +341,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         transactions.value[idx] = {
           ...old,
           ...data,
+          base_rate: updateRate ?? null,
           _sync_status: 'pending',
           _local_updated_at: localUpdatedAt
         }

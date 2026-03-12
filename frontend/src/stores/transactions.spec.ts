@@ -128,8 +128,11 @@ describe('useTransactionsStore — base_rate population', () => {
     await store.updateTransaction('tx-1', { amount: 200 })
 
     const updateCall = vi.mocked(db.transactions.update).mock.calls[0]
-    // updateCall[0] is the id, updateCall[1] is the partial update object
-    expect(updateCall[1].base_rate).toBe(4300)
+    // updateCall[0] is the id, updateCall[1] is the partial update object.
+    // Cast to Record to access dynamic fields — Dexie's UpdateSpec type does not
+    // expose nullable fields as plain property access.
+    const updatePayload = updateCall[1] as Record<string, unknown>
+    expect(updatePayload['base_rate']).toBe(4300)
   })
 
   it('sets base_rate to null on updateTransaction when account not found', async () => {
@@ -160,6 +163,7 @@ describe('useTransactionsStore — base_rate population', () => {
     await store.updateTransaction('tx-2', { amount: 75 })
 
     const updateCall = vi.mocked(db.transactions.update).mock.calls[0]
-    expect(updateCall[1].base_rate).toBeNull()
+    const updatePayload = updateCall[1] as Record<string, unknown>
+    expect(updatePayload['base_rate']).toBeNull()
   })
 })
