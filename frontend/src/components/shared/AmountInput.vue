@@ -50,10 +50,18 @@ const decimals = computed(() =>
   CRYPTO_CURRENCIES.has(props.currency?.toUpperCase() ?? '') ? 8 : 2
 )
 
+// Format a number for display, trimming trailing zeros after the decimal
+function formatForDisplay(value: number): string {
+  const formatted = formatNumber(value, decimals.value)
+  // Strip trailing zeros after decimal comma (Spanish format uses ',')
+  // "1,00000000" → "1", "0,00100000" → "0,001", "1,50" → "1,5"
+  return formatted.replace(/,(\d*?)0+$/, (_, digits) => digits ? `,${digits}` : '').replace(/,$/, '')
+}
+
 // Initialize display value
 watch(() => props.modelValue, (value) => {
   if (value !== parseFormattedNumber(displayValue.value)) {
-    displayValue.value = value ? formatNumber(value, decimals.value) : ''
+    displayValue.value = value ? formatForDisplay(value) : ''
   }
 }, { immediate: true })
 
@@ -75,10 +83,9 @@ function handleInput(event: Event) {
 }
 
 function handleBlur() {
-  // Format on blur with currency-appropriate decimals
   const numericValue = parseFormattedNumber(displayValue.value)
   if (!isNaN(numericValue)) {
-    displayValue.value = formatNumber(numericValue, decimals.value)
+    displayValue.value = formatForDisplay(numericValue)
   }
 }
 </script>
