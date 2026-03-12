@@ -5,7 +5,7 @@ Transaction Pydantic schemas for validation and serialization.
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date as DateType
 from decimal import Decimal
 from enum import Enum
 
@@ -49,7 +49,7 @@ class TransactionCreate(BaseModel):
 
     type: TransactionType
     amount: Decimal = Field(..., gt=0)
-    date: date
+    date: DateType
     account_id: UUID
     category_id: UUID
     title: Optional[str] = Field(None, max_length=100)
@@ -134,7 +134,7 @@ class TransactionUpdate(BaseModel):
 
     type: Optional[TransactionType] = None
     amount: Optional[Decimal] = Field(None, gt=0)
-    date: Optional[date] = None
+    date: Optional[DateType] = None
     account_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     title: Optional[str] = Field(None, max_length=100)
@@ -233,7 +233,7 @@ class TransactionResponse(BaseModel):
     id: UUID
     type: TransactionType
     amount: Decimal
-    date: date
+    date: DateType
     account_id: UUID
     category_id: UUID
     title: Optional[str]
@@ -277,8 +277,8 @@ class TransactionFilters(BaseModel):
     account_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     type: Optional[TransactionType] = None
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[DateType] = None
+    date_to: Optional[DateType] = None
     tags: Optional[list[str]] = None
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
