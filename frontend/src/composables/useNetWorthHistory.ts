@@ -80,12 +80,14 @@ export interface UseNetWorthHistoryReturn {
 
 /**
  * Auto-select granularity from range size.
- * ≤90 days → day, ≤365 → week, ≤1095 (3y) → month, >1095 → year
+ * Targets ~7-15 data points for mobile readability.
+ * ≤30 days → day (~7-30 pts), ≤180 → week (~4-26 pts),
+ * ≤730 → month (~6-24 pts), >730 → year
  */
 function selectGranularity(days: number): Granularity {
-  if (days <= 90) return 'day'
-  if (days <= 365) return 'week'
-  if (days <= 1095) return 'month'
+  if (days <= 30) return 'day'
+  if (days <= 180) return 'week'
+  if (days <= 730) return 'month'
   return 'year'
 }
 

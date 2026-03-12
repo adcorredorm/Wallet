@@ -193,8 +193,8 @@ const chartData = computed(() => {
         },
         fill: true,
         borderWidth: 2,
-        // Hide individual point dots on dense data (>60 points) for readability
-        pointRadius: points.length > 60 ? 0 : 3,
+        // Show dots only on very short ranges (≤10 pts) — hides clutter on mobile
+        pointRadius: points.length <= 10 ? 3 : 0,
         pointHoverRadius: 5,
         tension: 0.3, // slight curve for a smoother line
       }
