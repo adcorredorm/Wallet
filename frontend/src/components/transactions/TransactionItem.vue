@@ -72,7 +72,7 @@ const formattedExchangeRate = computed(() => {
   if (!('exchange_rate' in props.transaction)) return ''
   const local = props.transaction as LocalTransaction
   if (!local.exchange_rate) return ''
-  return parseFloat(local.exchange_rate.toFixed(10)).toString()
+  return parseFloat(Number(local.exchange_rate).toFixed(10)).toString()
 })
 </script>
 
