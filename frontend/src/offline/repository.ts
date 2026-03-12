@@ -165,7 +165,7 @@ export async function fetchAllWithRevalidation<
         // no longer returns AND are not pending local changes. These are stale
         // records (e.g. deleted server-side, or left over from test data).
         const serverIds = new Set(localMapped.map((item) => item.id))
-        const orphanedIds = (await table.where('_sync_status').equals('synced').primaryKeys())
+        const orphanedIds = (await table.where('_sync_status').anyOf(['synced', 'error']).primaryKeys())
           .filter((id) => !serverIds.has(id as string))
         if (orphanedIds.length > 0) await table.bulkDelete(orphanedIds)
 
