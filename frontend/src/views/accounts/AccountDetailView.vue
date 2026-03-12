@@ -8,6 +8,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
@@ -21,6 +23,8 @@ const router = useRouter()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const uiStore = useUiStore()
+const exchangeRatesStore = useExchangeRatesStore()
+const settingsStore = useSettingsStore()
 
 const accountId = route.params.id as string
 const showDeleteDialog = ref(false)
@@ -99,6 +103,17 @@ function goToTransaction(transaction: any) {
             :currency="account.currency"
             size="xl"
           />
+          <div
+            v-if="account.currency !== settingsStore.primaryCurrency && exchangeRatesStore.rates.length > 0"
+            class="text-sm text-dark-text-secondary mt-1"
+          >
+            ≈ <CurrencyDisplay
+              :amount="exchangeRatesStore.convert(balance, account.currency, settingsStore.primaryCurrency)"
+              :currency="settingsStore.primaryCurrency"
+              size="md"
+              compact
+            />
+          </div>
         </div>
 
         <div class="divider"></div>
