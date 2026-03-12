@@ -299,12 +299,15 @@ export class SyncManager {
           }
 
           // Mark the entity as synced in IndexedDB (status → 'synced',
-          // server_id populated).
-          await this.markSynced(
-            mutation.entity_type,
-            mutation.entity_id,
-            result as { id: string; updated_at: string }
-          )
+          // server_id populated). Skip for deletes — the entity was already
+          // removed from IndexedDB when the user triggered the delete.
+          if (mutation.operation !== 'delete') {
+            await this.markSynced(
+              mutation.entity_type,
+              mutation.entity_id,
+              result as { id: string; updated_at: string }
+            )
+          }
 
           // Remove the mutation from the queue — it has been successfully
           // sent to the server.

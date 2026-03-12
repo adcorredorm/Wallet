@@ -401,10 +401,10 @@ export const useAccountsStore = defineStore('accounts', () => {
         return
       }
 
-      // The entity exists on the server. Update sync status so the UI can
-      // show a "pending deletion" indicator if needed, remove from the
-      // reactive list optimistically, then enqueue the DELETE.
-      await db.accounts.update(id, { _sync_status: 'pending' })
+      // The entity exists on the server. Delete from IndexedDB immediately
+      // so stale-while-revalidate reads don't restore the deleted account,
+      // then remove from reactive state and enqueue the DELETE for sync.
+      await db.accounts.delete(id)
       accounts.value = accounts.value.filter(a => a.id !== id)
       balances.value.delete(id)
       if (selectedAccountId.value === id) {
