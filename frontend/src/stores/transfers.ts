@@ -28,8 +28,16 @@ import type {
 import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransfer } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 
 export const useTransfersStore = defineStore('transfers', () => {
+  // Cross-store references — called at the top of the setup function so that
+  // Vue tracks reactive reads from these stores inside computed() bodies.
+  const accountsStore = useAccountsStore()
+  const exchangeRatesStore = useExchangeRatesStore()
+  const settingsStore = useSettingsStore()
+
   // State
   // Why LocalTransfer[] instead of Transfer[]?
   // LocalTransfer extends Transfer, so all consumers continue to work.
@@ -134,6 +142,14 @@ export const useTransfersStore = defineStore('transfers', () => {
     const tempId = generateTempId()
     const now = new Date().toISOString()
 
+    // Capture base_rate from the source account's currency at transfer creation time.
+    // Only the source account's rate is captured; the destination account's net worth
+    // effect is tracked via destination_amount which is already in destination currency.
+    const srcAccount = accountsStore.accounts.find(a => a.id === data.source_account_id)
+    const srcRate = srcAccount
+      ? exchangeRatesStore.getRate(srcAccount.currency, settingsStore.primaryCurrency)
+      : null
+
     // Build the full local transfer record.
     // tags defaults to [] because the Transfer interface requires string[]
     // (not optional), while CreateTransferDto.tags is optional.
@@ -157,7 +173,8 @@ export const useTransfersStore = defineStore('transfers', () => {
       // recomputeBalancesFromTransactions() can use destination_amount on reload.
       destination_amount: data.destination_amount,
       exchange_rate: data.exchange_rate,
-      destination_currency: data.destination_currency
+      destination_currency: data.destination_currency,
+      base_rate: srcRate ?? null
     }
 
     loading.value = true
@@ -175,7 +192,6 @@ export const useTransfersStore = defineStore('transfers', () => {
       // Destination gains `destination_amount` when set (cross-currency FX transfer)
       // or falls back to `amount` for same-currency transfers where destination_amount
       // is undefined. The ?? operator handles both cases cleanly.
-      const accountsStore = useAccountsStore()
       accountsStore.adjustBalance(data.source_account_id, -Number(data.amount))
       accountsStore.adjustBalance(
         data.destination_account_id,
@@ -189,7 +205,7 @@ export const useTransfersStore = defineStore('transfers', () => {
         entity_type: 'transfer',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, client_id: tempId }
+        payload: { ...data, base_rate: srcRate ?? null, client_id: tempId }
       })
 
       return localTransfer
@@ -204,12 +220,24 @@ export const useTransfersStore = defineStore('transfers', () => {
   async function updateTransfer(id: string, data: UpdateTransferDto) {
     const localUpdatedAt = new Date().toISOString()
 
+    // Recompute base_rate using the effective source account after this update.
+    const effectiveSrcId = data.source_account_id ?? (
+      transfers.value.find(t => t.id === id)?.source_account_id
+    )
+    const updateSrcAccount = effectiveSrcId
+      ? accountsStore.accounts.find(a => a.id === effectiveSrcId)
+      : undefined
+    const updateSrcRate = updateSrcAccount
+      ? exchangeRatesStore.getRate(updateSrcAccount.currency, settingsStore.primaryCurrency)
+      : null
+
     loading.value = true
     error.value = null
     try {
       // Step 1 — Partial IndexedDB update.
       await db.transfers.update(id, {
         ...data,
+        base_rate: updateSrcRate ?? null,
         _sync_status: 'pending',
         _local_updated_at: localUpdatedAt
       })
@@ -221,6 +249,7 @@ export const useTransfersStore = defineStore('transfers', () => {
         transfers.value[idx] = {
           ...old,
           ...data,
+          base_rate: updateSrcRate ?? null,
           _sync_status: 'pending',
           _local_updated_at: localUpdatedAt
         }
@@ -230,7 +259,6 @@ export const useTransfersStore = defineStore('transfers', () => {
         // For the destination reversal we use destination_amount ?? amount so a
         // cross-currency transfer is undone at the correct received amount, not
         // the source amount.
-        const accountsStore = useAccountsStore()
         accountsStore.adjustBalance(old.source_account_id, Number(old.amount))
         accountsStore.adjustBalance(
           old.destination_account_id,
@@ -287,7 +315,6 @@ export const useTransfersStore = defineStore('transfers', () => {
         if (transfer) {
           // Restore source by adding back `amount`; restore destination by
           // removing `destination_amount ?? amount` — mirroring the create logic.
-          const accountsStore = useAccountsStore()
           accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
           accountsStore.adjustBalance(
             transfer.destination_account_id,
@@ -302,7 +329,6 @@ export const useTransfersStore = defineStore('transfers', () => {
       transfers.value = transfers.value.filter(t => t.id !== id)
       if (transfer) {
         // Same reversal logic as the pending-CREATE path above.
-        const accountsStore = useAccountsStore()
         accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
         accountsStore.adjustBalance(
           transfer.destination_account_id,
