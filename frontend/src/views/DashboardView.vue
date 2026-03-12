@@ -26,6 +26,7 @@ import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
 // Note: NetWorthCard is now self-contained — it reads its own stores internally.
 // DashboardView only passes the `loading` flag it already controls.
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
+import NetWorthChart from '@/components/dashboard/NetWorthChart.vue'
 import AccountsOverview from '@/components/dashboard/AccountsOverview.vue'
 import RecentActivity from '@/components/dashboard/RecentActivity.vue'
 import FloatingActionButton from '@/components/ui/FloatingActionButton.vue'
@@ -82,6 +83,9 @@ function goToTransaction(transaction: Transaction) {
   <div class="space-y-6">
     <!-- Net Worth Card -->
     <NetWorthCard :loading="loading" />
+
+    <!-- Net Worth Evolution Chart -->
+    <NetWorthChart />
 
     <!-- Main content grid -->
     <div class="grid gap-6 md:grid-cols-2">
