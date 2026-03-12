@@ -18,7 +18,7 @@ export interface Transaction {
   title?: string
   description?: string
   tags: string[]
-  base_rate?: number | null  // Units of primaryCurrency per 1 unit of account.currency at transaction time
+  base_rate?: number  // Units of primaryCurrency per 1 unit of account.currency at transaction time
   created_at: string
   updated_at: string
   // Populated relations (optional, depends on API response)
@@ -46,7 +46,7 @@ export interface CreateTransactionDto {
   original_amount?: number | null
   original_currency?: string | null
   exchange_rate?: number | null
-  base_rate?: number | null  // Captured at write time; null when offline with no cached rates
+  base_rate?: number  // Captured at write time; null when offline with no cached rates
 }
 
 export interface UpdateTransactionDto {
@@ -62,7 +62,7 @@ export interface UpdateTransactionDto {
   original_amount?: number | null
   original_currency?: string | null
   exchange_rate?: number | null
-  base_rate?: number | null
+  base_rate?: number
 }
 
 export interface TransactionFilters {

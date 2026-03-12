@@ -99,12 +99,6 @@ const currenciesWithMissingRates = computed(() =>
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-// True when the net worth is computable and negative.
-// Drives the trend icon.
-const isNegative = computed(() =>
-  convertedNetWorth.value !== null && convertedNetWorth.value < 0
-)
-
 // Sorted currency codes so the breakdown always renders in a predictable order
 // (primary currency first, then alphabetical).
 const sortedCurrencies = computed(() => {
@@ -140,15 +134,6 @@ const sortedCurrencies = computed(() => {
           size="xl"
           :colorize="true"
         />
-
-        <!-- Trend icon -->
-        <!-- Why text-4xl mt-4?  Matches original spacing and visual weight.
-             The emoji conveys sign at a glance for users who scan quickly.
-             We compute isNegative from the converted total when available,
-             falling back to true (📉) only if the total is truly negative. -->
-        <p class="text-4xl mt-4">
-          {{ isNegative ? '📉' : '📈' }}
-        </p>
 
         <!-- No-rates notice: only when rates are absent AND there is more
              than one currency (a single currency needs no rate). -->

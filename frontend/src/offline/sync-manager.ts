@@ -1143,14 +1143,14 @@ export class SyncManager {
           )
       ),
       this.syncEntityTable(
-        () => transactionsApi.getAll(),
+        () => transactionsApi.getAll({ limit: 10000 } as any),
         (items) =>
           db.transactions.bulkPut(
             items.map((item) => toLocalItem(item, item.id) as LocalTransaction)
           )
       ),
       this.syncEntityTable(
-        () => transfersApi.getAll(),
+        () => transfersApi.getAll({ limit: 10000 } as any),
         (items) =>
           db.transfers.bulkPut(
             items.map((item) => toLocalItem(item, item.id) as LocalTransfer)

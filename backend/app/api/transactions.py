@@ -78,7 +78,7 @@ def list_transactions():
             "date_to": request.args.get("date_to"),
             "tags": request.args.get("tags", "").split(",") if request.args.get("tags") else None,
             "page": int(request.args.get("page", 1)),
-            "limit": min(int(request.args.get("limit", 20)), 100),
+            "limit": min(int(request.args.get("limit", 20)), 10000),
         }
 
         # Validate filters

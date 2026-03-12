@@ -18,7 +18,7 @@ export interface Transfer {
   destination_amount?: number   // Amount credited to the destination account
   exchange_rate?: number        // FX rate applied at transfer time
   destination_currency?: string // ISO 4217 code of the destination account's currency
-  base_rate?: number | null     // Units of primaryCurrency per 1 unit of source_account.currency at transfer time
+  base_rate?: number     // Units of primaryCurrency per 1 unit of source_account.currency at transfer time
   // Populated relations (optional, depends on API response)
   source_account?: {
     name: string
@@ -42,7 +42,7 @@ export interface CreateTransferDto {
   destination_amount?: number   // Amount received in the destination account (may differ due to FX)
   exchange_rate?: number        // FX rate applied at the time of the transfer
   destination_currency?: string // ISO 4217 code of the destination account's currency
-  base_rate?: number | null
+  base_rate?: number
 }
 
 export interface UpdateTransferDto {
@@ -57,7 +57,7 @@ export interface UpdateTransferDto {
   destination_amount?: number
   exchange_rate?: number
   destination_currency?: string
-  base_rate?: number | null
+  base_rate?: number
 }
 
 export interface TransferFilters {

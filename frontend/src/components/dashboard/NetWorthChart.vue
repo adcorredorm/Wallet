@@ -12,14 +12,21 @@
  * our dark-mode palette colors as hex values so the chart always matches the
  * app's dark theme without a runtime CSS variable lookup.
  *
- * Segmented control:
- * Four granularity options (Día/Sem/Mes/Año) each map to a preset range and
- * override the auto-selected granularity of useNetWorthHistory. Selecting a
- * segment also sets the corresponding range so the chart always shows a
- * sensible window.
+ * Range presets (stock-app style):
+ * Seven presets (1D / 1S / 1M / 1A / YTD / 5A / Todo) each compute a
+ * rangeDays value that is fed into useNetWorthHistory. The composable's own
+ * selectGranularity() function then auto-selects the appropriate granularity
+ * (day / week / month / year) based on that range — no override is passed from
+ * this component. Default preset on mount: 1M (30 days).
+ *
+ * "Todo" preset:
+ * Requires an async IndexedDB query on mount to discover the oldest
+ * transaction or transfer date. Until that query resolves, the "Todo" button
+ * uses a temporary fallback of 1825 days (≈5 years) so the chart is never
+ * blank if the user clicks it before the query finishes.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -33,9 +40,15 @@ import {
   type ChartOptions,
   type TooltipItem,
 } from 'chart.js'
-import { useNetWorthHistory, type Granularity } from '@/composables/useNetWorthHistory'
+import {
+  differenceInDays,
+  startOfYear,
+  parseISO,
+} from 'date-fns'
+import { useNetWorthHistory } from '@/composables/useNetWorthHistory'
 import { useSettingsStore } from '@/stores/settings'
 import { formatCurrency } from '@/utils/formatters'
+import { db } from '@/offline'
 
 // Register only the Chart.js components we use — tree-shaking the rest.
 // CategoryScale: maps our date strings to x-axis positions
@@ -61,34 +74,103 @@ const COLOR_TICK = '#94a3b8'               // slate-400
 const COLOR_TOOLTIP_BG = '#1e293b'         // dark-bg-secondary
 const COLOR_TOOLTIP_TEXT = '#f1f5f9'       // dark-text-primary
 
-// ── Granularity control ────────────────────────────────────────────────────
-interface GranularityOption {
+// ── Range presets ──────────────────────────────────────────────────────────
+// Each preset is identified by its label (used as the selection key).
+// rangeDays is the number of calendar days to show ending at today; the
+// composable computes startDate = subDays(today, rangeDays - 1) internally.
+//
+// Dynamic presets (YTD, Todo) store null as a placeholder and are resolved
+// at mount time. A reactive ref (rangeDaysForPreset) holds the resolved value
+// for each dynamic preset so the chart can react if the user switches to them
+// after the async resolution completes.
+interface RangePreset {
   label: string
-  value: Granularity
-  rangeDays: number
+  // Static number of days, or null if the value is resolved async / dynamically.
+  staticDays: number | null
 }
 
-const GRANULARITY_OPTIONS: GranularityOption[] = [
-  { label: 'Día', value: 'day', rangeDays: 30 },
-  { label: 'Sem', value: 'week', rangeDays: 90 },
-  { label: 'Mes', value: 'month', rangeDays: 365 },
-  { label: 'Año', value: 'year', rangeDays: 1825 },
+const PRESETS: RangePreset[] = [
+  { label: '1D',   staticDays: 1    },
+  { label: '1S',   staticDays: 7    },
+  { label: '1M',   staticDays: 30   },   // default
+  { label: '1A',   staticDays: 365  },
+  { label: 'YTD',  staticDays: null },   // resolved at mount: Jan 1 → today
+  { label: '5A',   staticDays: 1825 },
+  { label: 'Todo', staticDays: null },   // resolved at mount: oldest record → today
 ]
 
-const selectedOption = ref<GranularityOption>(GRANULARITY_OPTIONS[0])
-const rangeDays = ref(30)
+// Resolved day counts for the two dynamic presets.
+// Fallbacks keep the chart functional even if the user clicks before mount resolves.
+const ytdDays = ref<number>(computeYtdDays())
+const todoDays = ref<number>(1825) // fallback ≈5 years until DB query resolves
 
-const settingsStore = useSettingsStore()
+function computeYtdDays(): number {
+  const today = new Date()
+  const jan1 = startOfYear(today)
+  // +1 so the range is inclusive: Jan 1 itself is the opening data point
+  return differenceInDays(today, jan1) + 1
+}
 
-const { dataPoints, loading, isEmpty } = useNetWorthHistory({
-  rangeDays,
-  granularity: computed(() => selectedOption.value.value),
+// Resolve the "Todo" range by finding the oldest date across all transactions
+// and transfers in IndexedDB. Both tables are indexed on 'date' so orderBy()
+// is efficient (uses the index, no full table scan).
+async function resolveOldestDate(): Promise<void> {
+  const [oldestTx, oldestTr] = await Promise.all([
+    db.transactions.orderBy('date').first(),
+    db.transfers.orderBy('date').first(),
+  ])
+
+  const dates: string[] = []
+  if (oldestTx?.date) dates.push(oldestTx.date)
+  if (oldestTr?.date) dates.push(oldestTr.date)
+
+  if (dates.length === 0) return // no records yet — keep fallback
+
+  const oldestDateStr = dates.sort()[0]  // lexicographic sort is correct for YYYY-MM-DD
+  const oldestDate = parseISO(oldestDateStr)
+  const today = new Date()
+  // +1 for an inclusive range that includes the oldest date itself as a boundary
+  todoDays.value = differenceInDays(today, oldestDate) + 1
+}
+
+onMounted(() => {
+  // YTD is a pure calculation — no async needed, but we refresh it on mount
+  // in case the component is kept alive across a date boundary (e.g. midnight).
+  ytdDays.value = computeYtdDays()
+  // "Todo" requires an IndexedDB query to find the oldest financial event.
+  void resolveOldestDate()
 })
 
-function selectGranularity(option: GranularityOption) {
-  selectedOption.value = option
-  rangeDays.value = option.rangeDays
+// ── Preset selection ───────────────────────────────────────────────────────
+const selectedLabel = ref<string>('1M') // default preset
+
+// Derive the effective rangeDays from the selected preset.
+// Static presets resolve immediately; dynamic ones use their reactive refs.
+const rangeDays = computed<number>(() => {
+  const preset = PRESETS.find(p => p.label === selectedLabel.value)
+  if (!preset) return 30
+  if (preset.staticDays !== null) return preset.staticDays
+  if (preset.label === 'YTD') return ytdDays.value
+  if (preset.label === 'Todo') return todoDays.value
+  return 30
+})
+
+function selectPreset(preset: RangePreset): void {
+  selectedLabel.value = preset.label
 }
+
+// ── Composable ─────────────────────────────────────────────────────────────
+const settingsStore = useSettingsStore()
+
+// We pass only rangeDays with no granularity override.
+// useNetWorthHistory's selectGranularity() auto-selects:
+//   ≤90 days   → day   (covers 1D, 1S, 1M)
+//   ≤365 days  → week  (covers 1A; YTD when <1 year)
+//   ≤1095 days → month (covers 5A; YTD if multi-year edge; Todo for medium history)
+//   >1095 days → year  (covers Todo for long histories)
+const { dataPoints, loading, isEmpty } = useNetWorthHistory({
+  rangeDays,
+})
 
 // ── Chart data ─────────────────────────────────────────────────────────────
 const chartData = computed(() => {
@@ -168,37 +250,39 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
   },
   animation: { duration: 200 },
 }))
+
 </script>
 
 <template>
   <div class="card p-4 space-y-3">
-    <!-- Header row: title + segmented granularity control -->
-    <div class="flex items-center justify-between">
-      <h2 class="text-sm font-medium text-dark-text-secondary">
+    <!-- Header row: title + range preset selector -->
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="text-sm font-medium text-dark-text-secondary shrink-0">
         Evolución del Patrimonio
       </h2>
 
-      <!-- Segmented control -->
-      <!-- min-h-[32px] on each button ensures touch targets remain accessible
-           while the outer group uses p-0.5 for a compact pill appearance -->
+      <!-- Range preset pill group — stock-app style (1D / 1S / 1M / 1A / YTD / 5A / Todo) -->
+      <!-- The outer div uses overflow-x-auto so on very narrow screens the pills
+           can scroll horizontally rather than wrapping, which would push the chart
+           down and consume vertical space. -->
       <div
-        class="flex bg-dark-bg-tertiary rounded-lg p-0.5"
+        class="flex bg-dark-bg-tertiary rounded-lg p-0.5 overflow-x-auto"
         role="group"
-        aria-label="Seleccionar granularidad del gráfico"
+        aria-label="Seleccionar rango del gráfico"
       >
         <button
-          v-for="option in GRANULARITY_OPTIONS"
-          :key="option.value"
-          class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 min-w-[44px] min-h-[32px]"
+          v-for="preset in PRESETS"
+          :key="preset.label"
+          class="px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 whitespace-nowrap min-h-[32px]"
           :class="
-            selectedOption.value === option.value
+            selectedLabel === preset.label
               ? 'bg-blue-500 text-white'
               : 'text-dark-text-secondary hover:text-dark-text-primary'
           "
-          :aria-pressed="selectedOption.value === option.value"
-          @click="selectGranularity(option)"
+          :aria-pressed="selectedLabel === preset.label"
+          @click="selectPreset(preset)"
         >
-          {{ option.label }}
+          {{ preset.label }}
         </button>
       </div>
     </div>

@@ -270,7 +270,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       updated_at: now,
       _sync_status: 'pending',
       _local_updated_at: now,
-      base_rate: txRate ?? null
+      base_rate: txRate ?? undefined
     }
 
     loading.value = true
@@ -297,7 +297,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         entity_type: 'transaction',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, base_rate: txRate ?? null, client_id: tempId }
+        payload: { ...data, base_rate: txRate ?? undefined, client_id: tempId }
       })
 
       return localTransaction
@@ -329,10 +329,10 @@ export const useTransactionsStore = defineStore('transactions', () => {
       // Step 1 — Partial IndexedDB update.
       await db.transactions.update(id, {
         ...data,
-        base_rate: updateRate ?? null,
+        base_rate: updateRate ?? undefined,
         _sync_status: 'pending',
         _local_updated_at: localUpdatedAt
-      })
+      } as Parameters<typeof db.transactions.update>[1])
 
       // Step 2 — Reactive ref update + optimistic balance adjustment.
       const idx = transactions.value.findIndex(t => t.id === id)
@@ -341,10 +341,10 @@ export const useTransactionsStore = defineStore('transactions', () => {
         transactions.value[idx] = {
           ...old,
           ...data,
-          base_rate: updateRate ?? null,
+          base_rate: updateRate ?? undefined,
           _sync_status: 'pending',
           _local_updated_at: localUpdatedAt
-        }
+        } as LocalTransaction
 
         // Compute how this update changes the account balance.
         // If account_id changed, reverse the old account's effect and apply
