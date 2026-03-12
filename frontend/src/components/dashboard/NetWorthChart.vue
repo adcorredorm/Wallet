@@ -94,7 +94,6 @@ const PRESETS: RangePreset[] = [
   { label: '1M',   staticDays: 30   },   // default
   { label: '1A',   staticDays: 365  },
   { label: 'YTD',  staticDays: null },   // resolved at mount: Jan 1 → today
-  { label: '5A',   staticDays: 1825 },
   { label: 'Todo', staticDays: null },   // resolved at mount: oldest record → today
 ]
 
