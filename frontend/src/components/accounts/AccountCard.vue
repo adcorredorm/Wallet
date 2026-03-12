@@ -189,6 +189,7 @@ const convertedBalance = computed<number | null>(() => {
             :amount="convertedBalance"
             :currency="settingsStore.primaryCurrency"
             size="sm"
+            compact
           />
         </div>
       </div>
