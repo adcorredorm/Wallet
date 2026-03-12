@@ -21,7 +21,7 @@ Personal finance tracker for managing accounts, transactions, transfers, and cat
 
 - Balances are always computed dynamically — never stored in the database
 - Frontend IndexedDB is the source of truth; backend is a sync backup
-- Amounts are always positive — transaction `tipo` (ingreso/gasto) determines the sign
+- Amounts are always positive — transaction `type` (income/expense) determines the sign
 - All primary keys are UUIDs
 
 ## Testing

@@ -10,7 +10,7 @@
  * Writes go to IndexedDB and the mutation queue immediately; the UI updates
  * optimistically. The SyncManager (Phase 4) will flush to the server.
  *
- * Important: cuenta_origen_id and cuenta_destino_id in transfer payloads
+ * Important: source_account_id and destination_account_id in transfer payloads
  * may be temporary IDs if either account was created offline. The IDs are
  * preserved verbatim in the mutation payload. The SyncManager resolves
  * temp IDs to real server UUIDs before sending the mutation, relying on
@@ -116,7 +116,7 @@ export const useTransfersStore = defineStore('transfers', () => {
       // This mirrors the existing getTransfersByAccount() logic and ensures
       // the UI shows relevant-only data even before revalidation completes.
       transfers.value = localData.filter(t =>
-        t.cuenta_origen_id === accountId || t.cuenta_destino_id === accountId
+        t.source_account_id === accountId || t.destination_account_id === accountId
       )
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencias de la cuenta'
@@ -137,16 +137,16 @@ export const useTransfersStore = defineStore('transfers', () => {
     // Build the full local transfer record.
     // tags defaults to [] because the Transfer interface requires string[]
     // (not optional), while CreateTransferDto.tags is optional.
-    // cuenta_origen_id and cuenta_destino_id are kept verbatim — they may
+    // source_account_id and destination_account_id are kept verbatim — they may
     // be temp-* IDs if either account was created offline in the same session.
     const localTransfer: LocalTransfer = {
       id: tempId,
-      cuenta_origen_id: data.cuenta_origen_id,
-      cuenta_destino_id: data.cuenta_destino_id,
-      monto: data.monto,
-      fecha: data.fecha,
-      titulo: data.titulo,
-      descripcion: data.descripcion,
+      source_account_id: data.source_account_id,
+      destination_account_id: data.destination_account_id,
+      amount: data.amount,
+      date: data.date,
+      title: data.title,
+      description: data.description,
       tags: data.tags ?? [],
       created_at: now,
       updated_at: now,
@@ -166,12 +166,12 @@ export const useTransfersStore = defineStore('transfers', () => {
 
       // Adjust both account balances immediately so the UI is accurate offline.
       const accountsStore = useAccountsStore()
-      accountsStore.adjustBalance(data.cuenta_origen_id, -Number(data.monto))
-      accountsStore.adjustBalance(data.cuenta_destino_id, Number(data.monto))
+      accountsStore.adjustBalance(data.source_account_id, -Number(data.amount))
+      accountsStore.adjustBalance(data.destination_account_id, Number(data.amount))
 
       // Step 3 — Enqueue CREATE mutation.
       // client_id enables server-side idempotency on retries.
-      // cuenta_origen_id / cuenta_destino_id may be temp IDs.
+      // source_account_id / destination_account_id may be temp IDs.
       await mutationQueue.enqueue({
         entity_type: 'transfer',
         entity_id: tempId,
@@ -215,13 +215,13 @@ export const useTransfersStore = defineStore('transfers', () => {
         // Reverse the old transfer's effect, then apply the updated values.
         // This handles all cases: amount change, account change, or both.
         const accountsStore = useAccountsStore()
-        accountsStore.adjustBalance(old.cuenta_origen_id, Number(old.monto))
-        accountsStore.adjustBalance(old.cuenta_destino_id, -Number(old.monto))
-        const newOrigenId = data.cuenta_origen_id ?? old.cuenta_origen_id
-        const newDestinoId = data.cuenta_destino_id ?? old.cuenta_destino_id
-        const newMonto = data.monto ?? old.monto
-        accountsStore.adjustBalance(newOrigenId, -Number(newMonto))
-        accountsStore.adjustBalance(newDestinoId, Number(newMonto))
+        accountsStore.adjustBalance(old.source_account_id, Number(old.amount))
+        accountsStore.adjustBalance(old.destination_account_id, -Number(old.amount))
+        const newSourceId = data.source_account_id ?? old.source_account_id
+        const newDestinationId = data.destination_account_id ?? old.destination_account_id
+        const newAmount = data.amount ?? old.amount
+        accountsStore.adjustBalance(newSourceId, -Number(newAmount))
+        accountsStore.adjustBalance(newDestinationId, Number(newAmount))
       }
 
       // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE.
@@ -263,8 +263,8 @@ export const useTransfersStore = defineStore('transfers', () => {
         transfers.value = transfers.value.filter(t => t.id !== id)
         if (transfer) {
           const accountsStore = useAccountsStore()
-          accountsStore.adjustBalance(transfer.cuenta_origen_id, Number(transfer.monto))
-          accountsStore.adjustBalance(transfer.cuenta_destino_id, -Number(transfer.monto))
+          accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
+          accountsStore.adjustBalance(transfer.destination_account_id, -Number(transfer.amount))
         }
         return
       }
@@ -274,8 +274,8 @@ export const useTransfersStore = defineStore('transfers', () => {
       transfers.value = transfers.value.filter(t => t.id !== id)
       if (transfer) {
         const accountsStore = useAccountsStore()
-        accountsStore.adjustBalance(transfer.cuenta_origen_id, Number(transfer.monto))
-        accountsStore.adjustBalance(transfer.cuenta_destino_id, -Number(transfer.monto))
+        accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
+        accountsStore.adjustBalance(transfer.destination_account_id, -Number(transfer.amount))
       }
 
       await mutationQueue.enqueue({
@@ -302,13 +302,13 @@ export const useTransfersStore = defineStore('transfers', () => {
 
   function getTransfersByAccount(accountId: string): LocalTransfer[] {
     return transfers.value.filter(t =>
-      t.cuenta_origen_id === accountId || t.cuenta_destino_id === accountId
+      t.source_account_id === accountId || t.destination_account_id === accountId
     )
   }
 
   async function refreshFromDB() {
     const data = await db.transfers.toArray()
-    transfers.value = [...data].sort((a, b) => b.fecha.localeCompare(a.fecha))
+    transfers.value = [...data].sort((a, b) => b.date.localeCompare(a.date))
   }
 
   return {

@@ -3,15 +3,15 @@
  *
  * Manages transaction categories with hierarchy support
  * - Parent/child category relationships
- * - Filter by type (ingreso, gasto, ambos)
+ * - Filter by type (income, expense, both)
  * - CRUD operations
  *
  * Phase 3 change: write actions now follow the offline-first pattern.
  * Writes go to IndexedDB and the mutation queue immediately; the UI updates
  * optimistically. The SyncManager (Phase 4) will flush to the server.
  *
- * Note on categoria_padre_id: if a user creates a parent category offline and
- * then creates a child category in the same session, categoria_padre_id in the
+ * Note on parent_category_id: if a user creates a parent category offline and
+ * then creates a child category in the same session, parent_category_id in the
  * child's payload will be a temp-* ID. The SyncManager resolves it before the
  * network call, in FIFO order so the parent is created on the server first.
  */
@@ -44,31 +44,31 @@ export const useCategoriesStore = defineStore('categories', () => {
   // Computed
   const incomeCategories = computed(() =>
     categories.value.filter(cat =>
-      cat.tipo === 'ingreso' || cat.tipo === 'ambos'
+      cat.type === 'income' || cat.type === 'both'
     )
   )
 
   const expenseCategories = computed(() =>
     categories.value.filter(cat =>
-      cat.tipo === 'gasto' || cat.tipo === 'ambos'
+      cat.type === 'expense' || cat.type === 'both'
     )
   )
 
   const parentCategories = computed(() =>
-    categories.value.filter(cat => !cat.categoria_padre_id)
+    categories.value.filter(cat => !cat.parent_category_id)
   )
 
   // Helper to get subcategories of a parent
   const getSubcategories = (parentId: string) =>
-    categories.value.filter(cat => cat.categoria_padre_id === parentId)
+    categories.value.filter(cat => cat.parent_category_id === parentId)
 
   /**
    * categoryTree — groups all categories into a 2-level hierarchy.
    *
    * Each CategoryGroup has a parent and its direct children.
-   * Sorting: groups with children come first (alphabetical by nombre),
-   * then standalone categories (no children, alphabetical by nombre).
-   * Orphaned children (padre_id set but parent not in store) are treated
+   * Sorting: groups with children come first (alphabetical by name),
+   * then standalone categories (no children, alphabetical by name).
+   * Orphaned children (parent_id set but parent not in store) are treated
    * as standalone root entries.
    */
   const categoryTree = computed<CategoryGroup[]>(() => {
@@ -77,17 +77,17 @@ export const useCategoriesStore = defineStore('categories', () => {
       byId.set(cat.id, cat)
     }
 
-    // Identify root categories: no padre_id, or padre_id not found in store
+    // Identify root categories: no parent_category_id, or parent_category_id not found in store
     const roots: LocalCategory[] = []
     const childrenMap = new Map<string, LocalCategory[]>()
 
     for (const cat of categories.value) {
-      if (!cat.categoria_padre_id || !byId.has(cat.categoria_padre_id)) {
+      if (!cat.parent_category_id || !byId.has(cat.parent_category_id)) {
         // This is a root (or an orphan treated as root)
         roots.push(cat)
       } else {
         // This is a valid child
-        const parentId = cat.categoria_padre_id
+        const parentId = cat.parent_category_id
         if (!childrenMap.has(parentId)) {
           childrenMap.set(parentId, [])
         }
@@ -99,58 +99,58 @@ export const useCategoriesStore = defineStore('categories', () => {
     const groups: CategoryGroup[] = roots.map(root => ({
       parent: root,
       children: (childrenMap.get(root.id) ?? []).sort((a, b) =>
-        a.nombre.localeCompare(b.nombre)
+        a.name.localeCompare(b.name)
       )
     }))
 
     // Sort: groups with children first (alpha), then standalone (alpha)
     const withChildren = groups
       .filter(g => g.children.length > 0)
-      .sort((a, b) => a.parent.nombre.localeCompare(b.parent.nombre))
+      .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
     const standalone = groups
       .filter(g => g.children.length === 0)
-      .sort((a, b) => a.parent.nombre.localeCompare(b.parent.nombre))
+      .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
 
     return [...withChildren, ...standalone]
   })
 
   /**
    * compatibleParentCategories — returns root categories eligible as parents
-   * for a category of the given tipo.
+   * for a category of the given type.
    *
    * Rules:
-   * - Only root categories can be parents (no categoria_padre_id).
+   * - Only root categories can be parents (no parent_category_id).
    *   This enforces the 2-level limit: a child cannot itself become a parent.
    * - A root category that already has children CAN still accept more children.
-   * - Type compatibility: ingreso -> ingreso|ambos, gasto -> gasto|ambos, ambos -> ambos only
+   * - Type compatibility: income -> income|both, expense -> expense|both, both -> both only
    * - Excludes excludeId (self) and its children (prevents circular references)
    */
-  function compatibleParentCategories(tipo: CategoryType, excludeId?: string): LocalCategory[] {
+  function compatibleParentCategories(type: CategoryType, excludeId?: string): LocalCategory[] {
     return categories.value.filter(cat => {
       // Must be root (no parent) — this is the 2-level limit:
       // a category that already has a parent cannot itself become a parent
-      if (cat.categoria_padre_id) return false
+      if (cat.parent_category_id) return false
 
       // Exclude self
       if (excludeId && cat.id === excludeId) return false
 
       // Exclude children of the excluded category (prevents circular)
-      if (excludeId && cat.categoria_padre_id === excludeId) return false
+      if (excludeId && cat.parent_category_id === excludeId) return false
 
       // Type compatibility:
-      // ingreso child -> parent must be ingreso or ambos
-      // gasto child   -> parent must be gasto or ambos
-      // ambos child   -> parent must be ambos
-      const t = tipo as string
-      const ct = cat.tipo as string
-      if (t === 'ingreso') {
-        return ct === 'ingreso' || ct === 'ambos'
+      // income child -> parent must be income or both
+      // expense child -> parent must be expense or both
+      // both child   -> parent must be both
+      const t = type as string
+      const ct = cat.type as string
+      if (t === 'income') {
+        return ct === 'income' || ct === 'both'
       }
-      if (t === 'gasto') {
-        return ct === 'gasto' || ct === 'ambos'
+      if (t === 'expense') {
+        return ct === 'expense' || ct === 'both'
       }
-      if (t === 'ambos') {
-        return ct === 'ambos'
+      if (t === 'both') {
+        return ct === 'both'
       }
 
       return false
@@ -161,7 +161,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   // Actions — Reads (offline-first, stale-while-revalidate)
   // ---------------------------------------------------------------------------
 
-  async function fetchCategories(tipo?: CategoryType) {
+  async function fetchCategories(type?: CategoryType) {
     // Reset error state at the start of each fetch.
     // This ensures previous errors don't block new attempts.
     error.value = null
@@ -173,13 +173,13 @@ export const useCategoriesStore = defineStore('categories', () => {
       // preserve that behaviour here.
       //
       // fetchAllWithRevalidation will:
-      //   - Serve local cache immediately (even if tipo filter can't be
+      //   - Serve local cache immediately (even if type filter can't be
       //     applied locally — we filter client-side below as a fallback).
-      //   - Revalidate with the API in the background with the proper tipo
+      //   - Revalidate with the API in the background with the proper type
       //     filter applied server-side.
       const localData = await fetchAllWithRevalidation(
         db.categories,
-        () => categoriesApi.getAll(tipo),
+        () => categoriesApi.getAll(type),
         (freshItems) => {
           // Background revalidation succeeded — replace with correctly
           // filtered server data.
@@ -189,8 +189,8 @@ export const useCategoriesStore = defineStore('categories', () => {
 
       // Apply client-side filter on the stale local data so the UI shows
       // only the requested category type while waiting for the network.
-      categories.value = tipo
-        ? localData.filter(cat => cat.tipo === tipo || cat.tipo === 'ambos')
+      categories.value = type
+        ? localData.filter(cat => cat.type === type || cat.type === 'both')
         : localData
 
       return categories.value
@@ -249,16 +249,16 @@ export const useCategoriesStore = defineStore('categories', () => {
     const now = new Date().toISOString()
 
     // Build the full local category record.
-    // categoria_padre_id is optional in both Category and CreateCategoryDto —
+    // parent_category_id is optional in both Category and CreateCategoryDto —
     // we carry it through as-is. If the parent was created offline its value
     // will be a temp-* ID; the SyncManager resolves it before the network call.
     const localCategory: LocalCategory = {
       id: tempId,
-      nombre: data.nombre,
-      tipo: data.tipo,
-      icono: data.icono,
+      name: data.name,
+      type: data.type,
+      icon: data.icon,
       color: data.color,
-      categoria_padre_id: data.categoria_padre_id,
+      parent_category_id: data.parent_category_id,
       created_at: now,
       updated_at: now,
       _sync_status: 'pending',

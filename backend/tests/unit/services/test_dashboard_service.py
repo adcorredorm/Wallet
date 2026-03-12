@@ -89,27 +89,27 @@ def dashboard_service(
 # HELPERS
 # ============================================================================
 
-def _make_mock_transaction(tipo: TransactionType = TransactionType.GASTO) -> Mock:
+def _make_mock_transaction(type: TransactionType = TransactionType.EXPENSE) -> Mock:
     """
     Build a Transaction mock suitable for get_recent_activity.
 
-    The service accesses trans.categoria.nombre and trans.cuenta.nombre when
+    The service accesses trans.category.name and trans.account.name when
     formatting recent activity, so those nested attributes must exist.
     """
     trans = MagicMock()
     trans.id = uuid4()
-    trans.tipo = tipo
-    trans.monto = Decimal("100.00")
-    trans.fecha = date(2026, 3, 1)
-    trans.titulo = None  # triggers the fallback description path
+    trans.type = type
+    trans.amount = Decimal("100.00")
+    trans.date = date(2026, 3, 1)
+    trans.title = None  # triggers the fallback description path
 
-    categoria = Mock()
-    categoria.nombre = "Categoría test"
-    trans.categoria = categoria
+    category = Mock()
+    category.name = "Categoría test"
+    trans.category = category
 
-    cuenta = Mock()
-    cuenta.nombre = "Cuenta test"
-    trans.cuenta = cuenta
+    account = Mock()
+    account.name = "Cuenta test"
+    trans.account = account
 
     return trans
 
@@ -118,22 +118,22 @@ def _make_mock_transfer() -> Mock:
     """
     Build a Transfer mock suitable for get_recent_activity.
 
-    The service accesses transfer.cuenta_origen.nombre and
-    transfer.cuenta_destino.nombre when formatting recent activity.
+    The service accesses transfer.source_account.name and
+    transfer.destination_account.name when formatting recent activity.
     """
     transfer = MagicMock()
     transfer.id = uuid4()
-    transfer.monto = Decimal("200.00")
-    transfer.fecha = date(2026, 3, 1)
-    transfer.descripcion = None  # triggers the fallback description path
+    transfer.amount = Decimal("200.00")
+    transfer.date = date(2026, 3, 1)
+    transfer.description = None  # triggers the fallback description path
 
-    cuenta_origen = Mock()
-    cuenta_origen.nombre = "Origen test"
-    transfer.cuenta_origen = cuenta_origen
+    source_account = Mock()
+    source_account.name = "Origen test"
+    transfer.source_account = source_account
 
-    cuenta_destino = Mock()
-    cuenta_destino.nombre = "Destino test"
-    transfer.cuenta_destino = cuenta_destino
+    destination_account = Mock()
+    destination_account.name = "Destino test"
+    transfer.destination_account = destination_account
 
     return transfer
 
@@ -151,15 +151,15 @@ class TestGetNetWorth:
         """Should group account balances by currency and sum them correctly."""
         account_mxn_1 = MagicMock()
         account_mxn_1.id = uuid4()
-        account_mxn_1.divisa = "MXN"
+        account_mxn_1.currency = "MXN"
 
         account_mxn_2 = MagicMock()
         account_mxn_2.id = uuid4()
-        account_mxn_2.divisa = "MXN"
+        account_mxn_2.currency = "MXN"
 
         account_usd = MagicMock()
         account_usd.id = uuid4()
-        account_usd.divisa = "USD"
+        account_usd.currency = "USD"
 
         mock_account_repo.get_all_active.return_value = [
             account_mxn_1, account_mxn_2, account_usd
@@ -172,10 +172,10 @@ class TestGetNetWorth:
 
         result = dashboard_service.get_net_worth()
 
-        balances = {b["divisa"]: b["total"] for b in result["balances"]}
+        balances = {b["currency"]: b["total"] for b in result["balances"]}
         assert balances["MXN"] == 1500.0  # 1000 + 500
         assert balances["USD"] == 200.0
-        assert "fecha_calculo" in result
+        assert "calculation_date" in result
 
     def test_get_net_worth_empty_accounts_returns_empty_balances(
         self, dashboard_service, mock_account_repo
@@ -186,13 +186,13 @@ class TestGetNetWorth:
         result = dashboard_service.get_net_worth()
 
         assert result["balances"] == []
-        assert "fecha_calculo" in result
+        assert "calculation_date" in result
 
     def test_get_net_worth_calls_calculate_balance_for_each_account(
         self, dashboard_service, mock_account_repo
     ):
         """Should call calculate_balance once per active account."""
-        accounts = [Mock(spec=Account, id=uuid4(), divisa="MXN") for _ in range(3)]
+        accounts = [Mock(spec=Account, id=uuid4(), currency="MXN") for _ in range(3)]
         mock_account_repo.get_all_active.return_value = accounts
         mock_account_repo.calculate_balance.return_value = Decimal("100.00")
 
@@ -208,35 +208,35 @@ class TestGetMonthlySummary:
         self, dashboard_service, mock_db
     ):
         """Should return a dict with all required keys for a given month/year."""
-        result = dashboard_service.get_monthly_summary(mes=3, anio=2026)
+        result = dashboard_service.get_monthly_summary(month=3, year=2026)
 
-        assert "mes" in result
-        assert "anio" in result
-        assert "total_ingresos" in result
-        assert "total_gastos" in result
-        assert "neto" in result
-        assert "top_categorias_gasto" in result
-        assert "top_categorias_ingreso" in result
-        assert result["mes"] == 3
-        assert result["anio"] == 2026
+        assert "month" in result
+        assert "year" in result
+        assert "total_income" in result
+        assert "total_expenses" in result
+        assert "net" in result
+        assert "top_expense_categories" in result
+        assert "top_income_categories" in result
+        assert result["month"] == 3
+        assert result["year"] == 2026
 
-    def test_get_monthly_summary_neto_is_ingresos_minus_gastos(
+    def test_get_monthly_summary_net_is_income_minus_expenses(
         self, dashboard_service, mock_db
     ):
-        """neto must equal total_ingresos minus total_gastos."""
-        # mock_db scalar returns Decimal("0") → ingresos=0, gastos=0, neto=0
-        result = dashboard_service.get_monthly_summary(mes=1, anio=2026)
+        """net must equal total_income minus total_expenses."""
+        # mock_db scalar returns Decimal("0") → income=0, expenses=0, net=0
+        result = dashboard_service.get_monthly_summary(month=1, year=2026)
 
-        assert result["neto"] == result["total_ingresos"] - result["total_gastos"]
+        assert result["net"] == result["total_income"] - result["total_expenses"]
 
-    def test_get_monthly_summary_top_categorias_are_lists(
+    def test_get_monthly_summary_top_categories_are_lists(
         self, dashboard_service, mock_db
     ):
-        """top_categorias_gasto and top_categorias_ingreso should be lists."""
-        result = dashboard_service.get_monthly_summary(mes=6, anio=2025)
+        """top_expense_categories and top_income_categories should be lists."""
+        result = dashboard_service.get_monthly_summary(month=6, year=2025)
 
-        assert isinstance(result["top_categorias_gasto"], list)
-        assert isinstance(result["top_categorias_ingreso"], list)
+        assert isinstance(result["top_expense_categories"], list)
+        assert isinstance(result["top_income_categories"], list)
 
 
 class TestGetRecentActivity:
@@ -252,9 +252,9 @@ class TestGetRecentActivity:
         result = dashboard_service.get_recent_activity(limit=10)
 
         # At least one of each type should appear
-        tipos = {item["tipo"] for item in result}
-        assert "transaccion" in tipos
-        assert "transferencia" in tipos
+        types = {item["type"] for item in result}
+        assert "transaction" in types
+        assert "transfer" in types
 
     def test_get_recent_activity_empty_repos(
         self, dashboard_service, mock_transaction_repo, mock_transfer_repo
@@ -275,7 +275,7 @@ class TestGetDashboardData:
         self, dashboard_service, mock_account_repo, mock_transaction_repo,
         mock_transfer_repo, mock_db
     ):
-        """Should default mes/anio to the current month/year when not provided."""
+        """Should default month/year to the current month/year when not provided."""
         mock_account_repo.get_all_active.return_value = []
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
@@ -283,34 +283,34 @@ class TestGetDashboardData:
         result = dashboard_service.get_dashboard_data()
 
         today = date.today()
-        assert result["resumen_mensual"]["mes"] == today.month
-        assert result["resumen_mensual"]["anio"] == today.year
+        assert result["monthly_summary"]["month"] == today.month
+        assert result["monthly_summary"]["year"] == today.year
 
     def test_get_dashboard_data_response_contains_all_sections(
         self, dashboard_service, mock_account_repo, mock_transaction_repo,
         mock_transfer_repo, mock_db
     ):
-        """Should return a dict with patrimonio_neto, resumen_mensual, actividad_reciente."""
+        """Should return a dict with net_worth, monthly_summary, recent_activity."""
         mock_account_repo.get_all_active.return_value = []
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_dashboard_data(mes=3, anio=2026)
+        result = dashboard_service.get_dashboard_data(month=3, year=2026)
 
-        assert "patrimonio_neto" in result
-        assert "resumen_mensual" in result
-        assert "actividad_reciente" in result
+        assert "net_worth" in result
+        assert "monthly_summary" in result
+        assert "recent_activity" in result
 
     def test_get_dashboard_data_passes_explicit_month_year(
         self, dashboard_service, mock_account_repo, mock_transaction_repo,
         mock_transfer_repo, mock_db
     ):
-        """Should use the explicitly provided mes/anio rather than today."""
+        """Should use the explicitly provided month/year rather than today."""
         mock_account_repo.get_all_active.return_value = []
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_dashboard_data(mes=6, anio=2025)
+        result = dashboard_service.get_dashboard_data(month=6, year=2025)
 
-        assert result["resumen_mensual"]["mes"] == 6
-        assert result["resumen_mensual"]["anio"] == 2025
+        assert result["monthly_summary"]["month"] == 6
+        assert result["monthly_summary"]["year"] == 2025

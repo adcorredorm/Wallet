@@ -40,11 +40,11 @@ class TransactionService:
 
     def get_filtered(
         self,
-        cuenta_id: UUID | None = None,
-        categoria_id: UUID | None = None,
-        tipo: str | None = None,
-        fecha_desde: date | None = None,
-        fecha_hasta: date | None = None,
+        account_id: UUID | None = None,
+        category_id: UUID | None = None,
+        type: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         tags: list[str] | None = None,
         page: int = 1,
         limit: int = 20,
@@ -53,11 +53,11 @@ class TransactionService:
         Get transactions with filters and pagination.
 
         Args:
-            cuenta_id: Filter by account
-            categoria_id: Filter by category
-            tipo: Filter by transaction type
-            fecha_desde: Filter by start date
-            fecha_hasta: Filter by end date
+            account_id: Filter by account
+            category_id: Filter by category
+            type: Filter by transaction type
+            date_from: Filter by start date
+            date_to: Filter by end date
             tags: Filter by tags
             page: Page number (1-indexed)
             limit: Items per page
@@ -65,15 +65,15 @@ class TransactionService:
         Returns:
             Tuple of (list of transactions, total count)
         """
-        tipo_enum = TransactionType(tipo) if tipo else None
+        type_enum = TransactionType(type) if type else None
         offset = (page - 1) * limit
 
         return self.repository.get_filtered(
-            cuenta_id=cuenta_id,
-            categoria_id=categoria_id,
-            tipo=tipo_enum,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
+            account_id=account_id,
+            category_id=category_id,
+            type=type_enum,
+            date_from=date_from,
+            date_to=date_to,
             tags=tags,
             limit=limit,
             offset=offset,
@@ -81,13 +81,13 @@ class TransactionService:
 
     def create(
         self,
-        tipo: str,
-        monto: Decimal,
-        fecha: date,
-        cuenta_id: UUID,
-        categoria_id: UUID,
-        titulo: str | None = None,
-        descripcion: str | None = None,
+        type: str,
+        amount: Decimal,
+        date: date,
+        account_id: UUID,
+        category_id: UUID,
+        title: str | None = None,
+        description: str | None = None,
         tags: list[str] | None = None,
         client_id: str | None = None,
     ) -> Transaction:
@@ -99,13 +99,13 @@ class TransactionService:
         inserting a duplicate row (offline-first idempotency).
 
         Args:
-            tipo: Transaction type (ingreso or gasto)
-            monto: Transaction amount
-            fecha: Transaction date
-            cuenta_id: Account ID
-            categoria_id: Category ID
-            titulo: Optional title
-            descripcion: Optional description
+            type: Transaction type (income or expense)
+            amount: Transaction amount
+            date: Transaction date
+            account_id: Account ID
+            category_id: Category ID
+            title: Optional title
+            description: Optional description
             tags: Optional tags
             client_id: Optional client-generated idempotency key
 
@@ -122,23 +122,23 @@ class TransactionService:
                 return existing
 
         # Validate account exists
-        account = self.account_repository.get_by_id_or_fail(cuenta_id)
+        account = self.account_repository.get_by_id_or_fail(account_id)
 
         # Validate category exists
-        category = self.category_repository.get_by_id_or_fail(categoria_id)
+        category = self.category_repository.get_by_id_or_fail(category_id)
 
         # Validate category type compatibility
-        tipo_enum = TransactionType(tipo)
-        self._validate_category_type(tipo_enum, category.tipo)
+        type_enum = TransactionType(type)
+        self._validate_category_type(type_enum, category.type)
 
         return self.repository.create(
-            tipo=tipo_enum,
-            monto=monto,
-            fecha=fecha,
-            cuenta_id=cuenta_id,
-            categoria_id=categoria_id,
-            titulo=titulo,
-            descripcion=descripcion,
+            type=type_enum,
+            amount=amount,
+            date=date,
+            account_id=account_id,
+            category_id=category_id,
+            title=title,
+            description=description,
             tags=tags or [],
             client_id=client_id,
         )
@@ -146,13 +146,13 @@ class TransactionService:
     def update(
         self,
         transaction_id: UUID,
-        tipo: str | None = None,
-        monto: Decimal | None = None,
-        fecha: date | None = None,
-        cuenta_id: UUID | None = None,
-        categoria_id: UUID | None = None,
-        titulo: str | None = None,
-        descripcion: str | None = None,
+        type: str | None = None,
+        amount: Decimal | None = None,
+        date: date | None = None,
+        account_id: UUID | None = None,
+        category_id: UUID | None = None,
+        title: str | None = None,
+        description: str | None = None,
         tags: list[str] | None = None,
     ) -> Transaction:
         """
@@ -160,13 +160,13 @@ class TransactionService:
 
         Args:
             transaction_id: Transaction UUID
-            tipo: New transaction type
-            monto: New amount
-            fecha: New date
-            cuenta_id: New account ID
-            categoria_id: New category ID
-            titulo: New title
-            descripcion: New description
+            type: New transaction type
+            amount: New amount
+            date: New date
+            account_id: New account ID
+            category_id: New category ID
+            title: New title
+            description: New description
             tags: New tags
 
         Returns:
@@ -179,32 +179,32 @@ class TransactionService:
         transaction = self.repository.get_by_id_or_fail(transaction_id)
 
         # Validate account if changing
-        if cuenta_id:
-            self.account_repository.get_by_id_or_fail(cuenta_id)
+        if account_id:
+            self.account_repository.get_by_id_or_fail(account_id)
 
         # Validate category and type compatibility if changing
-        if categoria_id or tipo:
-            effective_tipo = TransactionType(tipo) if tipo else transaction.tipo
-            effective_categoria_id = categoria_id if categoria_id else transaction.categoria_id
+        if category_id or type:
+            effective_type = TransactionType(type) if type else transaction.type
+            effective_category_id = category_id if category_id else transaction.category_id
 
-            category = self.category_repository.get_by_id_or_fail(effective_categoria_id)
-            self._validate_category_type(effective_tipo, category.tipo)
+            category = self.category_repository.get_by_id_or_fail(effective_category_id)
+            self._validate_category_type(effective_type, category.type)
 
         update_data = {}
-        if tipo is not None:
-            update_data["tipo"] = TransactionType(tipo)
-        if monto is not None:
-            update_data["monto"] = monto
-        if fecha is not None:
-            update_data["fecha"] = fecha
-        if cuenta_id is not None:
-            update_data["cuenta_id"] = cuenta_id
-        if categoria_id is not None:
-            update_data["categoria_id"] = categoria_id
-        if titulo is not None:
-            update_data["titulo"] = titulo
-        if descripcion is not None:
-            update_data["descripcion"] = descripcion
+        if type is not None:
+            update_data["type"] = TransactionType(type)
+        if amount is not None:
+            update_data["amount"] = amount
+        if date is not None:
+            update_data["date"] = date
+        if account_id is not None:
+            update_data["account_id"] = account_id
+        if category_id is not None:
+            update_data["category_id"] = category_id
+        if title is not None:
+            update_data["title"] = title
+        if description is not None:
+            update_data["description"] = description
         if tags is not None:
             update_data["tags"] = tags
 
@@ -230,20 +230,20 @@ class TransactionService:
         Validate that category type is compatible with transaction type.
 
         Args:
-            transaction_type: Transaction type (INGRESO or GASTO)
-            category_type: Category type (INGRESO, GASTO, or AMBOS)
+            transaction_type: Transaction type (INCOME or EXPENSE)
+            category_type: Category type (INCOME, EXPENSE, or BOTH)
 
         Raises:
             BusinessRuleError: If types are incompatible
         """
-        if category_type == CategoryType.AMBOS:
-            return  # AMBOS is compatible with both transaction types
+        if category_type == CategoryType.BOTH:
+            return  # BOTH is compatible with both transaction types
 
         # Map transaction type to category type
         expected_category_type = (
-            CategoryType.INGRESO
-            if transaction_type == TransactionType.INGRESO
-            else CategoryType.GASTO
+            CategoryType.INCOME
+            if transaction_type == TransactionType.INCOME
+            else CategoryType.EXPENSE
         )
 
         if category_type != expected_category_type:

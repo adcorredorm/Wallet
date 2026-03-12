@@ -17,8 +17,8 @@ def get_dashboard():
     Get complete dashboard data.
 
     Query Parameters:
-        mes (int): Month for summary (1-12, defaults to current month)
-        anio (int): Year for summary (defaults to current year)
+        month (int): Month for summary (1-12, defaults to current month)
+        year (int): Year for summary (defaults to current year)
 
     Returns:
         200: Complete dashboard data (net worth, monthly summary, recent activity)
@@ -27,15 +27,15 @@ def get_dashboard():
     """
     try:
         # Parse query parameters
-        mes = request.args.get("mes", type=int)
-        anio = request.args.get("anio", type=int)
+        month = request.args.get("month", type=int)
+        year = request.args.get("year", type=int)
 
         # Validate month if provided
-        if mes and (mes < 1 or mes > 12):
+        if month and (month < 1 or month > 12):
             return error_response("Mes debe estar entre 1 y 12", status_code=400)
 
         # Get dashboard data
-        data = dashboard_service.get_dashboard_data(mes=mes, anio=anio)
+        data = dashboard_service.get_dashboard_data(month=month, year=year)
 
         return success_response(data=data)
 
@@ -66,8 +66,8 @@ def get_monthly_summary():
     Get monthly summary of income and expenses.
 
     Query Parameters:
-        mes (int): Month (1-12, defaults to current month)
-        anio (int): Year (defaults to current year)
+        month (int): Month (1-12, defaults to current month)
+        year (int): Year (defaults to current year)
 
     Returns:
         200: Monthly summary data
@@ -79,15 +79,15 @@ def get_monthly_summary():
 
         # Parse query parameters
         today = date.today()
-        mes = request.args.get("mes", type=int, default=today.month)
-        anio = request.args.get("anio", type=int, default=today.year)
+        month = request.args.get("month", type=int, default=today.month)
+        year = request.args.get("year", type=int, default=today.year)
 
         # Validate month
-        if mes < 1 or mes > 12:
+        if month < 1 or month > 12:
             return error_response("Mes debe estar entre 1 y 12", status_code=400)
 
         # Get monthly summary
-        data = dashboard_service.get_monthly_summary(mes=mes, anio=anio)
+        data = dashboard_service.get_monthly_summary(month=month, year=year)
 
         return success_response(data=data)
 

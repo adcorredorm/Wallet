@@ -19,8 +19,7 @@
  *
  * Version strategy:
  * - Version 1 is the initial schema for Phase 2.
- * - Future phases (e.g., Phase 3 adding conflict tracking) will add version 2
- *   with an upgrade function, leaving existing data intact.
+ * - Version 2 renames Spanish field names to English to match the new backend API.
  */
 
 import Dexie, { type Table } from 'dexie'
@@ -45,19 +44,28 @@ class WalletDB extends Dexie {
     super('WalletDB')
 
     this.version(1).stores({
-      // Accounts: filter by type, active flag, and sync status
+      // Version 1 schema (Spanish field names — kept for migration path)
       accounts: 'id, server_id, tipo, activa, _sync_status',
-
-      // Transactions: the most-queried table — indexed by account (cuenta_id),
-      // category, transaction type, date, and sync status
       transactions: 'id, server_id, cuenta_id, categoria_id, tipo, fecha, _sync_status',
+      transfers: 'id, server_id, cuenta_origen_id, cuenta_destino_id, fecha, _sync_status',
+      categories: 'id, server_id, tipo, categoria_padre_id, _sync_status',
+      pendingMutations: '++id, entity_type, entity_id, operation, queued_at'
+    })
+
+    this.version(2).stores({
+      // Accounts: filter by type, active flag, and sync status
+      accounts: 'id, server_id, type, active, _sync_status',
+
+      // Transactions: the most-queried table — indexed by account (account_id),
+      // category, transaction type, date, and sync status
+      transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
 
       // Transfers: both origin and destination accounts are valid filter keys
-      transfers: 'id, server_id, cuenta_origen_id, cuenta_destino_id, fecha, _sync_status',
+      transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
 
-      // Categories: filtered by tipo (ingreso/gasto/ambos) and parent for
+      // Categories: filtered by type (income/expense/both) and parent for
       // hierarchy traversal
-      categories: 'id, server_id, tipo, categoria_padre_id, _sync_status',
+      categories: 'id, server_id, type, parent_category_id, _sync_status',
 
       // PendingMutations: auto-increment PK ensures FIFO insertion order;
       // queued_at is indexed for explicit ordering queries in Phase 3

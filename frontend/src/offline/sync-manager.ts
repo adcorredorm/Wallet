@@ -140,9 +140,9 @@ const MAX_DELAY_MS = 30_000
 // ---------------------------------------------------------------------------
 const DEPENDENCY_FIELDS: Record<PendingMutation['entity_type'], string[]> = {
   account: [],
-  transaction: ['cuenta_id', 'categoria_id'],
-  transfer: ['cuenta_origen_id', 'cuenta_destino_id'],
-  category: ['categoria_padre_id']
+  transaction: ['account_id', 'category_id'],
+  transfer: ['source_account_id', 'destination_account_id'],
+  category: ['parent_category_id']
 }
 
 // ---------------------------------------------------------------------------
@@ -636,35 +636,35 @@ export class SyncManager {
       case 'account':
         // Transactions that reference this account
         await db.transactions
-          .where('cuenta_id')
+          .where('account_id')
           .equals(tempId)
-          .modify({ cuenta_id: realId })
+          .modify({ account_id: realId })
 
         // Transfers that use this account as origin
         await db.transfers
-          .where('cuenta_origen_id')
+          .where('source_account_id')
           .equals(tempId)
-          .modify({ cuenta_origen_id: realId })
+          .modify({ source_account_id: realId })
 
         // Transfers that use this account as destination
         await db.transfers
-          .where('cuenta_destino_id')
+          .where('destination_account_id')
           .equals(tempId)
-          .modify({ cuenta_destino_id: realId })
+          .modify({ destination_account_id: realId })
         break
 
       case 'category':
         // Transactions that reference this category
         await db.transactions
-          .where('categoria_id')
+          .where('category_id')
           .equals(tempId)
-          .modify({ categoria_id: realId })
+          .modify({ category_id: realId })
 
         // Sub-categories whose parent is this category
         await db.categories
-          .where('categoria_padre_id')
+          .where('parent_category_id')
           .equals(tempId)
-          .modify({ categoria_padre_id: realId })
+          .modify({ parent_category_id: realId })
         break
 
       case 'transaction':

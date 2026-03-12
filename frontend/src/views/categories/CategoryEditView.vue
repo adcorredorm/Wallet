@@ -32,16 +32,16 @@ const category = computed(() =>
 )
 
 const form = reactive({
-  nombre: '',
-  tipo: '' as CategoryType,
-  icono: '',
+  name: '',
+  type: '' as CategoryType,
+  icon: '',
   color: '#3b82f6',
-  categoria_padre_id: '' as string
+  parent_category_id: '' as string
 })
 
 const errors = reactive({
-  nombre: '',
-  tipo: ''
+  name: '',
+  type: ''
 })
 
 // Whether this category has subcategories (cannot become a child itself)
@@ -49,19 +49,19 @@ const hasChildren = computed(() =>
   categoriesStore.getSubcategories(categoryId).length > 0
 )
 
-// Eligible parent categories for the current tipo, excluding self and own children
+// Eligible parent categories for the current type, excluding self and own children
 const parentOptions = computed(() => {
-  if (!form.tipo) return []
-  return categoriesStore.compatibleParentCategories(form.tipo as CategoryType, categoryId)
+  if (!form.type) return []
+  return categoriesStore.compatibleParentCategories(form.type as CategoryType, categoryId)
     .map(cat => ({
       value: cat.id,
-      label: `${cat.icono ?? ''} ${cat.nombre}`.trim()
+      label: `${cat.icon ?? ''} ${cat.name}`.trim()
     }))
 })
 
-// Reset parent when tipo changes
-watch(() => form.tipo, () => {
-  form.categoria_padre_id = ''
+// Reset parent when type changes
+watch(() => form.type, () => {
+  form.parent_category_id = ''
 })
 
 onMounted(async () => {
@@ -76,30 +76,30 @@ onMounted(async () => {
   }
 
   if (category.value) {
-    form.nombre = category.value.nombre
-    form.tipo = category.value.tipo
-    form.icono = category.value.icono || ''
+    form.name = category.value.name
+    form.type = category.value.type
+    form.icon = category.value.icon || ''
     form.color = category.value.color || '#3b82f6'
-    form.categoria_padre_id = category.value.categoria_padre_id ?? ''
+    form.parent_category_id = category.value.parent_category_id ?? ''
   }
 })
 
 function validateForm(): boolean {
   let isValid = true
 
-  const nombreValidation = required(form.nombre) && minLength(2)(form.nombre) && maxLength(50)(form.nombre)
-  if (nombreValidation !== true) {
-    errors.nombre = nombreValidation as string
+  const nameValidation = required(form.name) && minLength(2)(form.name) && maxLength(50)(form.name)
+  if (nameValidation !== true) {
+    errors.name = nameValidation as string
     isValid = false
   } else {
-    errors.nombre = ''
+    errors.name = ''
   }
 
-  if (!form.tipo) {
-    errors.tipo = 'Debes seleccionar un tipo'
+  if (!form.type) {
+    errors.type = 'Debes seleccionar un tipo'
     isValid = false
   } else {
-    errors.tipo = ''
+    errors.type = ''
   }
 
   return isValid
@@ -109,20 +109,20 @@ async function handleSubmit() {
   if (!validateForm()) return
 
   try {
-    // For edit: always include categoria_padre_id.
+    // For edit: always include parent_category_id.
     // Empty string clears the parent (unparents); a value sets it.
     // The store will persist this to IndexedDB and the mutation queue.
     const data: UpdateCategoryDto = {
-      nombre: form.nombre.trim(),
-      tipo: form.tipo,
-      icono: form.icono || undefined,
+      name: form.name.trim(),
+      type: form.type,
+      icon: form.icon || undefined,
       color: form.color || undefined,
-      categoria_padre_id: form.categoria_padre_id || undefined
+      parent_category_id: form.parent_category_id || undefined
     }
     // When user explicitly selected "no parent", we need to clear it
     // in IndexedDB. We pass empty string which the offline layer stores.
-    if (!form.categoria_padre_id && category.value?.categoria_padre_id) {
-      (data as Record<string, unknown>).categoria_padre_id = ''
+    if (!form.parent_category_id && category.value?.parent_category_id) {
+      (data as Record<string, unknown>).parent_category_id = ''
     }
 
     await categoriesStore.updateCategory(categoryId, data)
@@ -166,34 +166,34 @@ async function confirmDelete() {
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Nombre -->
         <BaseInput
-          v-model="form.nombre"
+          v-model="form.name"
           label="Nombre"
           placeholder="Ej: Alimentación"
-          :error="errors.nombre"
+          :error="errors.name"
           required
         />
 
         <!-- Tipo -->
         <BaseSelect
-          v-model="form.tipo"
+          v-model="form.type"
           label="Tipo"
           :options="CATEGORY_TYPES"
-          :error="errors.tipo"
+          :error="errors.type"
           required
         />
 
         <!-- Categoría padre -->
         <div>
           <BaseSelect
-            v-model="form.categoria_padre_id"
+            v-model="form.parent_category_id"
             label="Categoría padre (opcional)"
             :options="[
               { value: '', label: 'Ninguna (categoría raíz)' },
               ...parentOptions
             ]"
-            :disabled="!form.tipo || hasChildren"
+            :disabled="!form.type || hasChildren"
           />
-          <p v-if="!form.tipo" class="mt-1 text-xs text-dark-text-secondary">
+          <p v-if="!form.type" class="mt-1 text-xs text-dark-text-secondary">
             Selecciona un tipo primero
           </p>
           <p v-else-if="hasChildren" class="mt-1 text-xs text-dark-text-secondary">
@@ -211,9 +211,9 @@ async function confirmDelete() {
               type="button"
               :class="[
                 'p-2 rounded-lg text-2xl hover:bg-dark-bg-tertiary transition-colors',
-                form.icono === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
+                form.icon === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
               ]"
-              @click="form.icono = icon"
+              @click="form.icon = icon"
             >
               {{ icon }}
             </button>
@@ -265,7 +265,7 @@ async function confirmDelete() {
     <ConfirmDialog
       :show="showDeleteDialog"
       title="Eliminar categoría"
-      :message="`¿Estás seguro de que deseas eliminar la categoría '${category.nombre}'? Esta acción no se puede deshacer.`"
+      :message="`¿Estás seguro de que deseas eliminar la categoría '${category.name}'? Esta acción no se puede deshacer.`"
       confirm-text="Eliminar"
       :loading="deleting"
       @confirm="confirmDelete"

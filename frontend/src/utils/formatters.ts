@@ -154,9 +154,9 @@ export function getInitials(name: string): string {
  */
 export function formatAccountType(type: string): string {
   const labels: Record<string, string> = {
-    'debito': 'Débito',
-    'credito': 'Crédito',
-    'efectivo': 'Efectivo'
+    'debit': 'Débito',
+    'credit': 'Crédito',
+    'cash': 'Efectivo'
   }
   return labels[type] || type
 }
@@ -166,9 +166,9 @@ export function formatAccountType(type: string): string {
  */
 export function formatCategoryType(type: string): string {
   const labels: Record<string, string> = {
-    'ingreso': 'Ingreso',
-    'gasto': 'Gasto',
-    'ambos': 'Ambos'
+    'income': 'Ingreso',
+    'expense': 'Gasto',
+    'both': 'Ambos'
   }
   return labels[type] || type
 }

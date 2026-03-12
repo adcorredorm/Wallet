@@ -118,11 +118,11 @@ vi.mock('@/api/accounts', () => ({
 function makeAccount(overrides: Partial<LocalAccount> = {}): LocalAccount {
   return {
     id: 'acc-1',
-    nombre: 'Cuenta Principal',
-    tipo: AccountType.DEBITO,
-    divisa: 'EUR',
+    name: 'Cuenta Principal',
+    type: AccountType.DEBIT,
+    currency: 'EUR',
     tags: [],
-    activa: true,
+    active: true,
     balance: 100,
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
@@ -149,9 +149,9 @@ describe('useAccountsStore — activeAccounts', () => {
   it('returns only accounts where activa is true', () => {
     const store = setup()
     store.accounts = [
-      makeAccount({ id: 'a1', activa: true }),
-      makeAccount({ id: 'a2', activa: false }),
-      makeAccount({ id: 'a3', activa: true }),
+      makeAccount({ id: 'a1', active: true }),
+      makeAccount({ id: 'a2', active: false }),
+      makeAccount({ id: 'a3', active: true }),
     ]
     expect(store.activeAccounts).toHaveLength(2)
     expect(store.activeAccounts.map(a => a.id)).toEqual(['a1', 'a3'])
@@ -159,7 +159,7 @@ describe('useAccountsStore — activeAccounts', () => {
 
   it('returns an empty array when all accounts are inactive', () => {
     const store = setup()
-    store.accounts = [makeAccount({ activa: false })]
+    store.accounts = [makeAccount({ active: false })]
     expect(store.activeAccounts).toHaveLength(0)
   })
 
@@ -279,13 +279,13 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
   it('adds ingreso transactions to the account balance', async () => {
     const { db } = await import('@/offline')
     ;(db.transactions.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { cuenta_id: 'acc-1', tipo: 'ingreso', monto: '100' },
-      { cuenta_id: 'acc-1', tipo: 'ingreso', monto: '50' },
+      { account_id: 'acc-1', type: 'income', amount: '100' },
+      { account_id: 'acc-1', type: 'income', amount: '50' },
     ])
     ;(db.transfers.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
     const store = setup()
-    store.accounts = [makeAccount({ id: 'acc-1', divisa: 'EUR', balance: 0 })]
+    store.accounts = [makeAccount({ id: 'acc-1', currency: 'EUR', balance: 0 })]
     await store.recomputeBalancesFromTransactions()
 
     expect(store.balances.get('acc-1')!.balance).toBe(150)
@@ -294,12 +294,12 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
   it('subtracts gasto transactions from the account balance', async () => {
     const { db } = await import('@/offline')
     ;(db.transactions.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { cuenta_id: 'acc-1', tipo: 'gasto', monto: '40' },
+      { account_id: 'acc-1', type: 'expense', amount: '40' },
     ])
     ;(db.transfers.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
     const store = setup()
-    store.accounts = [makeAccount({ id: 'acc-1', divisa: 'EUR', balance: 0 })]
+    store.accounts = [makeAccount({ id: 'acc-1', currency: 'EUR', balance: 0 })]
     await store.recomputeBalancesFromTransactions()
 
     expect(store.balances.get('acc-1')!.balance).toBe(-40)
@@ -309,13 +309,13 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
     const { db } = await import('@/offline')
     ;(db.transactions.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
     ;(db.transfers.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { cuenta_origen_id: 'acc-origin', cuenta_destino_id: 'acc-dest', monto: '75' },
+      { source_account_id: 'acc-origin', destination_account_id: 'acc-dest', amount: '75' },
     ])
 
     const store = setup()
     store.accounts = [
-      makeAccount({ id: 'acc-origin', divisa: 'EUR', balance: 0 }),
-      makeAccount({ id: 'acc-dest', divisa: 'EUR', balance: 0 }),
+      makeAccount({ id: 'acc-origin', currency: 'EUR', balance: 0 }),
+      makeAccount({ id: 'acc-dest', currency: 'EUR', balance: 0 }),
     ]
     await store.recomputeBalancesFromTransactions()
 
@@ -326,12 +326,12 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
   it('updates accounts.value[idx].balance with the recomputed value', async () => {
     const { db } = await import('@/offline')
     ;(db.transactions.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { cuenta_id: 'acc-1', tipo: 'ingreso', monto: '200' },
+      { account_id: 'acc-1', type: 'income', amount: '200' },
     ])
     ;(db.transfers.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
     const store = setup()
-    store.accounts = [makeAccount({ id: 'acc-1', divisa: 'EUR', balance: 0 })]
+    store.accounts = [makeAccount({ id: 'acc-1', currency: 'EUR', balance: 0 })]
     await store.recomputeBalancesFromTransactions()
 
     expect(store.accounts[0].balance).toBe(200)
@@ -340,12 +340,12 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
   it('assigns the account divisa as the currency in the balances map', async () => {
     const { db } = await import('@/offline')
     ;(db.transactions.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      { cuenta_id: 'acc-1', tipo: 'ingreso', monto: '10' },
+      { account_id: 'acc-1', type: 'income', amount: '10' },
     ])
     ;(db.transfers.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
     const store = setup()
-    store.accounts = [makeAccount({ id: 'acc-1', divisa: 'GBP', balance: 0 })]
+    store.accounts = [makeAccount({ id: 'acc-1', currency: 'GBP', balance: 0 })]
     await store.recomputeBalancesFromTransactions()
 
     expect(store.balances.get('acc-1')!.currency).toBe('GBP')

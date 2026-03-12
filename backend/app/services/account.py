@@ -83,10 +83,10 @@ class AccountService:
 
     def create(
         self,
-        nombre: str,
-        tipo: str,
-        divisa: str,
-        descripcion: str | None = None,
+        name: str,
+        type: str,
+        currency: str,
+        description: str | None = None,
         tags: list[str] | None = None,
         client_id: str | None = None,
     ) -> Account:
@@ -98,10 +98,10 @@ class AccountService:
         inserting a duplicate row (offline-first idempotency).
 
         Args:
-            nombre: Account name
-            tipo: Account type
-            divisa: Currency code (ISO 4217)
-            descripcion: Optional description
+            name: Account name
+            type: Account type
+            currency: Currency code (ISO 4217)
+            description: Optional description
             tags: Optional list of tags
             client_id: Optional client-generated idempotency key
 
@@ -116,10 +116,10 @@ class AccountService:
                 return existing
 
         return self.repository.create(
-            nombre=nombre,
-            tipo=AccountType(tipo),
-            divisa=divisa.upper(),
-            descripcion=descripcion,
+            name=name,
+            type=AccountType(type),
+            currency=currency.upper(),
+            description=description,
             tags=tags or [],
             client_id=client_id,
         )
@@ -127,24 +127,24 @@ class AccountService:
     def update(
         self,
         account_id: UUID,
-        nombre: str | None = None,
-        tipo: str | None = None,
-        divisa: str | None = None,
-        descripcion: str | None = None,
+        name: str | None = None,
+        type: str | None = None,
+        currency: str | None = None,
+        description: str | None = None,
         tags: list[str] | None = None,
-        activa: bool | None = None,
+        active: bool | None = None,
     ) -> Account:
         """
         Update an existing account.
 
         Args:
             account_id: Account UUID
-            nombre: New account name
-            tipo: New account type
-            divisa: New currency code
-            descripcion: New description
+            name: New account name
+            type: New account type
+            currency: New currency code
+            description: New description
             tags: New tags list
-            activa: New active status
+            active: New active status
 
         Returns:
             Updated account instance
@@ -157,18 +157,18 @@ class AccountService:
         account = self.repository.get_by_id_or_fail(account_id)
 
         update_data = {}
-        if nombre is not None:
-            update_data["nombre"] = nombre
-        if tipo is not None:
-            update_data["tipo"] = AccountType(tipo)
-        if divisa is not None:
-            update_data["divisa"] = divisa.upper()
-        if descripcion is not None:
-            update_data["descripcion"] = descripcion
+        if name is not None:
+            update_data["name"] = name
+        if type is not None:
+            update_data["type"] = AccountType(type)
+        if currency is not None:
+            update_data["currency"] = currency.upper()
+        if description is not None:
+            update_data["description"] = description
         if tags is not None:
             update_data["tags"] = tags
-        if activa is not None:
-            update_data["activa"] = activa
+        if active is not None:
+            update_data["active"] = active
 
         return self.repository.update(account, **update_data)
 
@@ -201,7 +201,7 @@ class AccountService:
         account = self.repository.get_by_id_or_fail(account_id)
 
         # Check if account has transactions
-        if account.transacciones.count() > 0:
+        if account.transactions.count() > 0:
             raise BusinessRuleError(
                 "No se puede eliminar una cuenta con transacciones. "
                 "Use archivar en su lugar."
@@ -209,8 +209,8 @@ class AccountService:
 
         # Check if account has transfers
         if (
-            account.transferencias_origen.count() > 0
-            or account.transferencias_destino.count() > 0
+            account.transfers_source.count() > 0
+            or account.transfers_destination.count() > 0
         ):
             raise BusinessRuleError(
                 "No se puede eliminar una cuenta con transferencias. "

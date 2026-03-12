@@ -36,10 +36,10 @@ def test_accounts():
     """Test account endpoints."""
     # Create account
     account_data = {
-        "nombre": "Test Checking Account",
-        "tipo": "debito",
-        "divisa": "MXN",
-        "descripcion": "Test account for API testing",
+        "name": "Test Checking Account",
+        "type": "debit",
+        "currency": "MXN",
+        "description": "Test account for API testing",
         "tags": ["test", "checking"]
     }
     response = requests.post(f"{BASE_URL}/accounts", json=account_data)
@@ -61,7 +61,7 @@ def test_accounts():
 
     # Update account
     update_data = {
-        "descripcion": "Updated test account"
+        "description": "Updated test account"
     }
     response = requests.put(f"{BASE_URL}/accounts/{account_id}", json=update_data)
     print_response("UPDATE ACCOUNT", response)
@@ -73,9 +73,9 @@ def test_categories():
     """Test category endpoints."""
     # Create parent category
     category_data = {
-        "nombre": "Test Expenses",
-        "tipo": "gasto",
-        "icono": "shopping-cart",
+        "name": "Test Expenses",
+        "type": "expense",
+        "icon": "shopping-cart",
         "color": "#EF4444"
     }
     response = requests.post(f"{BASE_URL}/categories", json=category_data)
@@ -89,10 +89,10 @@ def test_categories():
 
     # Create subcategory
     subcategory_data = {
-        "nombre": "Test Groceries",
-        "tipo": "gasto",
-        "icono": "shopping-bag",
-        "categoria_padre_id": category_id
+        "name": "Test Groceries",
+        "type": "expense",
+        "icon": "shopping-bag",
+        "parent_category_id": category_id
     }
     response = requests.post(f"{BASE_URL}/categories", json=subcategory_data)
     print_response("CREATE SUBCATEGORY", response)
@@ -116,13 +116,13 @@ def test_transactions(account_id, category_id):
 
     # Create expense transaction
     transaction_data = {
-        "tipo": "gasto",
-        "monto": 150.75,
-        "fecha": str(date.today()),
-        "cuenta_id": account_id,
-        "categoria_id": category_id,
-        "titulo": "Test Grocery Shopping",
-        "descripcion": "Weekly groceries",
+        "type": "expense",
+        "amount": 150.75,
+        "date": str(date.today()),
+        "account_id": account_id,
+        "category_id": category_id,
+        "title": "Test Grocery Shopping",
+        "description": "Weekly groceries",
         "tags": ["food", "weekly"]
     }
     response = requests.post(f"{BASE_URL}/transactions", json=transaction_data)
@@ -136,13 +136,13 @@ def test_transactions(account_id, category_id):
 
     # Create income transaction
     income_data = {
-        "tipo": "ingreso",
-        "monto": 5000.00,
-        "fecha": str(date.today() - timedelta(days=1)),
-        "cuenta_id": account_id,
-        "categoria_id": category_id,  # This should fail if category is expense-only
-        "titulo": "Test Salary",
-        "descripcion": "Monthly salary"
+        "type": "income",
+        "amount": 5000.00,
+        "date": str(date.today() - timedelta(days=1)),
+        "account_id": account_id,
+        "category_id": category_id,  # This should fail if category is expense-only
+        "title": "Test Salary",
+        "description": "Monthly salary"
     }
     response = requests.post(f"{BASE_URL}/transactions", json=income_data)
     print_response("CREATE TRANSACTION (INCOME - may fail)", response)
@@ -153,8 +153,8 @@ def test_transactions(account_id, category_id):
 
     # List with filters
     params = {
-        "cuenta_id": account_id,
-        "tipo": "gasto",
+        "account_id": account_id,
+        "type": "expense",
         "page": 1,
         "limit": 10
     }
@@ -163,8 +163,8 @@ def test_transactions(account_id, category_id):
 
     # Update transaction
     update_data = {
-        "monto": 175.00,
-        "descripcion": "Weekly groceries (updated)"
+        "amount": 175.00,
+        "description": "Weekly groceries (updated)"
     }
     response = requests.put(f"{BASE_URL}/transactions/{transaction_id}", json=update_data)
     print_response("UPDATE TRANSACTION", response)
@@ -180,10 +180,10 @@ def test_transfers(account_id):
 
     # Create second account for transfer
     account_data = {
-        "nombre": "Test Savings Account",
-        "tipo": "debito",
-        "divisa": "MXN",
-        "descripcion": "Savings account for transfers"
+        "name": "Test Savings Account",
+        "type": "debit",
+        "currency": "MXN",
+        "description": "Savings account for transfers"
     }
     response = requests.post(f"{BASE_URL}/accounts", json=account_data)
 
@@ -195,11 +195,11 @@ def test_transfers(account_id):
 
     # Create transfer
     transfer_data = {
-        "cuenta_origen_id": account_id,
-        "cuenta_destino_id": account2_id,
-        "monto": 500.00,
-        "fecha": str(date.today()),
-        "descripcion": "Test transfer",
+        "source_account_id": account_id,
+        "destination_account_id": account2_id,
+        "amount": 500.00,
+        "date": str(date.today()),
+        "description": "Test transfer",
         "tags": ["savings"]
     }
     response = requests.post(f"{BASE_URL}/transfers", json=transfer_data)
@@ -217,8 +217,8 @@ def test_transfers(account_id):
 
     # Update transfer
     update_data = {
-        "monto": 600.00,
-        "descripcion": "Updated test transfer"
+        "amount": 600.00,
+        "description": "Updated test transfer"
     }
     response = requests.put(f"{BASE_URL}/transfers/{transfer_id}", json=update_data)
     print_response("UPDATE TRANSFER", response)
@@ -238,8 +238,8 @@ def test_dashboard():
 
     # Get monthly summary
     params = {
-        "mes": date.today().month,
-        "anio": date.today().year
+        "month": date.today().month,
+        "year": date.today().year
     }
     response = requests.get(f"{BASE_URL}/dashboard/summary", params=params)
     print_response("GET MONTHLY SUMMARY", response)

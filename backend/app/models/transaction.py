@@ -23,8 +23,8 @@ if TYPE_CHECKING:
 class TransactionType(enum.Enum):
     """Enumeration of transaction types."""
 
-    INGRESO = "ingreso"
-    GASTO = "gasto"
+    INCOME = "income"
+    EXPENSE = "expense"
 
 
 class Transaction(BaseModel):
@@ -32,55 +32,55 @@ class Transaction(BaseModel):
     Transaction model for income and expense records.
 
     Attributes:
-        tipo: Transaction type (income or expense)
-        monto: Transaction amount (positive decimal with 2 decimal places)
-        fecha: Transaction date
-        cuenta_id: Associated account ID
-        categoria_id: Associated category ID
-        titulo: Optional transaction title
-        descripcion: Optional transaction description
+        type: Transaction type (income or expense)
+        amount: Transaction amount (positive decimal with 2 decimal places)
+        date: Transaction date
+        account_id: Associated account ID
+        category_id: Associated category ID
+        title: Optional transaction title
+        description: Optional transaction description
         tags: List of tags for categorization
-        cuenta: Related account
-        categoria: Related category
+        account: Related account
+        category: Related category
     """
 
-    __tablename__ = "transacciones"
+    __tablename__ = "transactions"
 
-    tipo = Column(Enum(TransactionType), nullable=False)
-    monto = Column(Numeric(15, 2), nullable=False)
-    fecha = Column(Date, nullable=False)
-    cuenta_id = Column(
+    type = Column(Enum(TransactionType), nullable=False)
+    amount = Column(Numeric(15, 2), nullable=False)
+    date = Column(Date, nullable=False)
+    account_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("cuentas.id"),
+        ForeignKey("accounts.id"),
         nullable=False,
     )
-    categoria_id = Column(
+    category_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("categorias.id"),
+        ForeignKey("categories.id"),
         nullable=False,
     )
-    titulo = Column(String(100), nullable=True)
-    descripcion = Column(String(500), nullable=True)
+    title = Column(String(100), nullable=True)
+    description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
 
     # Relationships
-    cuenta = relationship(
+    account = relationship(
         "Account",
-        back_populates="transacciones",
+        back_populates="transactions",
     )
-    categoria = relationship(
+    category = relationship(
         "Category",
-        back_populates="transacciones",
+        back_populates="transactions",
     )
 
     # Indexes for performance
     __table_args__ = (
-        Index("idx_transacciones_cuenta_fecha", "cuenta_id", "fecha"),
-        Index("idx_transacciones_cuenta_tipo", "cuenta_id", "tipo"),
-        Index("idx_transacciones_categoria", "categoria_id"),
-        Index("idx_transacciones_fecha", "fecha"),
+        Index("idx_transactions_account_date", "account_id", "date"),
+        Index("idx_transactions_account_type", "account_id", "type"),
+        Index("idx_transactions_category", "category_id"),
+        Index("idx_transactions_date", "date"),
     )
 
     def __repr__(self) -> str:
         """String representation of the transaction."""
-        return f"<Transaction {self.tipo.value} {self.monto} on {self.fecha}>"
+        return f"<Transaction {self.type.value} {self.amount} on {self.date}>"

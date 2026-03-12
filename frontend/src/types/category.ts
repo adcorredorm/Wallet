@@ -4,34 +4,34 @@
  */
 
 export enum CategoryType {
-  INGRESO = 'ingreso',
-  GASTO = 'gasto',
-  AMBOS = 'ambos'
+  INCOME = 'income',
+  EXPENSE = 'expense',
+  BOTH = 'both'
 }
 
 export interface Category {
   id: string
-  nombre: string
-  tipo: CategoryType
-  icono?: string
+  name: string
+  type: CategoryType
+  icon?: string
   color?: string  // Hex color code (#RRGGBB)
-  categoria_padre_id?: string
+  parent_category_id?: string
   created_at: string
   updated_at: string
 }
 
 export interface CreateCategoryDto {
-  nombre: string
-  tipo: CategoryType
-  icono?: string
+  name: string
+  type: CategoryType
+  icon?: string
   color?: string
-  categoria_padre_id?: string
+  parent_category_id?: string
 }
 
 export interface UpdateCategoryDto {
-  nombre?: string
-  tipo?: CategoryType
-  icono?: string
+  name?: string
+  type?: CategoryType
+  icon?: string
   color?: string
-  categoria_padre_id?: string
+  parent_category_id?: string
 }

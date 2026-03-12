@@ -28,18 +28,18 @@ const emit = defineEmits<{
 
 // Form data
 const form = reactive({
-  nombre: props.account?.nombre || '',
-  tipo: props.account?.tipo || '' as AccountType,
-  divisa: props.account?.divisa || 'USD',
-  descripcion: props.account?.descripcion || '',
+  name: props.account?.name || '',
+  type: props.account?.type || '' as AccountType,
+  currency: props.account?.currency || 'USD',
+  description: props.account?.description || '',
   tags: props.account?.tags?.join(', ') || ''
 })
 
 // Validation errors
 const errors = reactive({
-  nombre: '',
-  tipo: '',
-  divisa: ''
+  name: '',
+  type: '',
+  currency: ''
 })
 
 const isEditMode = computed(() => !!props.account)
@@ -47,30 +47,30 @@ const isEditMode = computed(() => !!props.account)
 function validateForm(): boolean {
   let isValid = true
 
-  // Validate nombre
-  const nombreValidation = required(form.nombre) && minLength(2)(form.nombre) && maxLength(100)(form.nombre)
-  if (nombreValidation !== true) {
-    errors.nombre = nombreValidation as string
+  // Validate name
+  const nameValidation = required(form.name) && minLength(2)(form.name) && maxLength(100)(form.name)
+  if (nameValidation !== true) {
+    errors.name = nameValidation as string
     isValid = false
   } else {
-    errors.nombre = ''
+    errors.name = ''
   }
 
-  // Validate tipo
-  if (!form.tipo) {
-    errors.tipo = 'Debes seleccionar un tipo de cuenta'
+  // Validate type
+  if (!form.type) {
+    errors.type = 'Debes seleccionar un tipo de cuenta'
     isValid = false
   } else {
-    errors.tipo = ''
+    errors.type = ''
   }
 
-  // Validate divisa
-  const divisaValidation = currencyCode(form.divisa)
-  if (divisaValidation !== true) {
-    errors.divisa = divisaValidation as string
+  // Validate currency
+  const currencyValidation = currencyCode(form.currency)
+  if (currencyValidation !== true) {
+    errors.currency = currencyValidation as string
     isValid = false
   } else {
-    errors.divisa = ''
+    errors.currency = ''
   }
 
   return isValid
@@ -80,10 +80,10 @@ function handleSubmit() {
   if (!validateForm()) return
 
   const data: CreateAccountDto | UpdateAccountDto = {
-    nombre: form.nombre.trim(),
-    tipo: form.tipo,
-    divisa: form.divisa.toUpperCase(),
-    descripcion: form.descripcion.trim() || undefined,
+    name: form.name.trim(),
+    type: form.type,
+    currency: form.currency.toUpperCase(),
+    description: form.description.trim() || undefined,
     tags: form.tags
       ? form.tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
       : []
@@ -97,35 +97,35 @@ function handleSubmit() {
   <form @submit.prevent="handleSubmit" class="space-y-4">
     <!-- Nombre -->
     <BaseInput
-      v-model="form.nombre"
+      v-model="form.name"
       label="Nombre de la cuenta"
       placeholder="Ej: Cuenta Corriente"
-      :error="errors.nombre"
+      :error="errors.name"
       required
     />
 
     <!-- Tipo -->
     <BaseSelect
-      v-model="form.tipo"
+      v-model="form.type"
       label="Tipo de cuenta"
       :options="ACCOUNT_TYPES"
       placeholder="Selecciona un tipo"
-      :error="errors.tipo"
+      :error="errors.type"
       required
     />
 
     <!-- Divisa -->
     <BaseSelect
-      v-model="form.divisa"
+      v-model="form.currency"
       label="Divisa"
       :options="CURRENCIES"
-      :error="errors.divisa"
+      :error="errors.currency"
       required
     />
 
     <!-- Descripción -->
     <BaseInput
-      v-model="form.descripcion"
+      v-model="form.description"
       label="Descripción (opcional)"
       placeholder="Información adicional sobre la cuenta"
       type="text"

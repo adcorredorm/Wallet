@@ -77,7 +77,7 @@ function goToTransaction(transaction: any) {
   <div v-if="account" class="space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">{{ account.nombre }}</h1>
+      <h1 class="text-2xl font-bold">{{ account.name }}</h1>
       <div class="flex gap-2">
         <BaseButton variant="secondary" size="sm" @click="editAccount">
           Editar
@@ -96,7 +96,7 @@ function goToTransaction(transaction: any) {
           <p class="text-sm text-dark-text-secondary mb-2">Balance actual</p>
           <CurrencyDisplay
             :amount="balance"
-            :currency="account.divisa"
+            :currency="account.currency"
             size="xl"
           />
         </div>
@@ -107,18 +107,18 @@ function goToTransaction(transaction: any) {
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p class="text-dark-text-secondary">Tipo</p>
-            <p class="font-medium">{{ formatAccountType(account.tipo) }}</p>
+            <p class="font-medium">{{ formatAccountType(account.type) }}</p>
           </div>
           <div>
             <p class="text-dark-text-secondary">Divisa</p>
-            <p class="font-medium">{{ account.divisa }}</p>
+            <p class="font-medium">{{ account.currency }}</p>
           </div>
         </div>
 
         <!-- Description -->
-        <div v-if="account.descripcion" class="text-sm">
+        <div v-if="account.description" class="text-sm">
           <p class="text-dark-text-secondary">Descripción</p>
-          <p>{{ account.descripcion }}</p>
+          <p>{{ account.description }}</p>
         </div>
 
         <!-- Tags -->
@@ -152,7 +152,7 @@ function goToTransaction(transaction: any) {
     <ConfirmDialog
       :show="showDeleteDialog"
       title="Eliminar cuenta"
-      :message="`¿Estás seguro de que deseas eliminar la cuenta '${account.nombre}'? Esta acción no se puede deshacer.`"
+      :message="`¿Estás seguro de que deseas eliminar la cuenta '${account.name}'? Esta acción no se puede deshacer.`"
       confirm-text="Eliminar"
       :loading="deleting"
       @confirm="confirmDelete"

@@ -27,24 +27,24 @@ class AccountRepository(BaseRepository[Account]):
             List of active accounts
         """
         return (
-            db.session.execute(db.select(Account).where(Account.activa == True))
+            db.session.execute(db.select(Account).where(Account.active == True))
             .scalars()
             .all()
         )
 
-    def get_by_currency(self, divisa: str) -> list[Account]:
+    def get_by_currency(self, currency: str) -> list[Account]:
         """
         Get all accounts with a specific currency.
 
         Args:
-            divisa: Currency code (ISO 4217)
+            currency: Currency code (ISO 4217)
 
         Returns:
             List of accounts with the specified currency
         """
         return (
             db.session.execute(
-                db.select(Account).where(Account.divisa == divisa.upper())
+                db.select(Account).where(Account.currency == currency.upper())
             )
             .scalars()
             .all()
@@ -68,35 +68,35 @@ class AccountRepository(BaseRepository[Account]):
         """
         # Sum of income transactions
         income = (
-            db.session.query(func.coalesce(func.sum(Transaction.monto), 0))
+            db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
-                Transaction.cuenta_id == account_id,
-                Transaction.tipo == TransactionType.INGRESO,
+                Transaction.account_id == account_id,
+                Transaction.type == TransactionType.INCOME,
             )
             .scalar()
         )
 
         # Sum of expense transactions
         expenses = (
-            db.session.query(func.coalesce(func.sum(Transaction.monto), 0))
+            db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
-                Transaction.cuenta_id == account_id,
-                Transaction.tipo == TransactionType.GASTO,
+                Transaction.account_id == account_id,
+                Transaction.type == TransactionType.EXPENSE,
             )
             .scalar()
         )
 
         # Sum of incoming transfers
         transfers_in = (
-            db.session.query(func.coalesce(func.sum(Transfer.monto), 0))
-            .filter(Transfer.cuenta_destino_id == account_id)
+            db.session.query(func.coalesce(func.sum(Transfer.amount), 0))
+            .filter(Transfer.destination_account_id == account_id)
             .scalar()
         )
 
         # Sum of outgoing transfers
         transfers_out = (
-            db.session.query(func.coalesce(func.sum(Transfer.monto), 0))
-            .filter(Transfer.cuenta_origen_id == account_id)
+            db.session.query(func.coalesce(func.sum(Transfer.amount), 0))
+            .filter(Transfer.source_account_id == account_id)
             .scalar()
         )
 
@@ -105,7 +105,7 @@ class AccountRepository(BaseRepository[Account]):
 
     def soft_delete(self, account_id: UUID) -> Account:
         """
-        Soft delete an account by setting activa to False.
+        Soft delete an account by setting active to False.
 
         Args:
             account_id: Account UUID
@@ -114,7 +114,7 @@ class AccountRepository(BaseRepository[Account]):
             Updated account instance
         """
         account = self.get_by_id_or_fail(account_id)
-        account.activa = False
+        account.active = False
         db.session.commit()
         db.session.refresh(account)
         return account

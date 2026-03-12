@@ -26,17 +26,17 @@ export interface ApiError {
 
 // Dashboard specific types
 export interface DashboardData {
-  patrimonio_neto: number
-  cuentas: Array<{
+  net_worth: number
+  accounts: Array<{
     id: string
-    nombre: string
+    name: string
     balance: number
-    divisa: string
+    currency: string
   }>
-  transacciones_recientes: any[]
-  resumen_mensual?: {
-    ingresos: number
-    gastos: number
+  recent_transactions: any[]
+  monthly_summary?: {
+    income: number
+    expenses: number
     balance: number
   }
 }

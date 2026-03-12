@@ -54,11 +54,11 @@ def list_transactions():
     List transactions with filters and pagination.
 
     Query Parameters:
-        cuenta_id (UUID): Filter by account
-        categoria_id (UUID): Filter by category
-        tipo (str): Filter by type (ingreso, gasto)
-        fecha_desde (date): Filter by start date
-        fecha_hasta (date): Filter by end date
+        account_id (UUID): Filter by account
+        category_id (UUID): Filter by category
+        type (str): Filter by type (income, expense)
+        date_from (date): Filter by start date
+        date_to (date): Filter by end date
         tags (list[str]): Filter by tags (comma-separated)
         page (int): Page number (default: 1)
         limit (int): Items per page (default: 20, max: 100)
@@ -71,11 +71,11 @@ def list_transactions():
     try:
         # Parse query parameters
         filters_data = {
-            "cuenta_id": request.args.get("cuenta_id"),
-            "categoria_id": request.args.get("categoria_id"),
-            "tipo": request.args.get("tipo"),
-            "fecha_desde": request.args.get("fecha_desde"),
-            "fecha_hasta": request.args.get("fecha_hasta"),
+            "account_id": request.args.get("account_id"),
+            "category_id": request.args.get("category_id"),
+            "type": request.args.get("type"),
+            "date_from": request.args.get("date_from"),
+            "date_to": request.args.get("date_to"),
             "tags": request.args.get("tags", "").split(",") if request.args.get("tags") else None,
             "page": int(request.args.get("page", 1)),
             "limit": min(int(request.args.get("limit", 20)), 100),
@@ -86,11 +86,11 @@ def list_transactions():
 
         # Get filtered transactions
         transactions, total = transaction_service.get_filtered(
-            cuenta_id=filters.cuenta_id,
-            categoria_id=filters.categoria_id,
-            tipo=filters.tipo.value if filters.tipo else None,
-            fecha_desde=filters.fecha_desde,
-            fecha_hasta=filters.fecha_hasta,
+            account_id=filters.account_id,
+            category_id=filters.category_id,
+            type=filters.type.value if filters.type else None,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
             tags=filters.tags,
             page=filters.page,
             limit=filters.limit,
@@ -100,8 +100,8 @@ def list_transactions():
         items = []
         for trans in transactions:
             trans_data = TransactionResponse.model_validate(trans).model_dump(mode="json")
-            trans_data["cuenta"] = AccountResponse.model_validate(trans.cuenta).model_dump(mode="json")
-            trans_data["categoria"] = CategoryResponse.model_validate(trans.categoria).model_dump(mode="json")
+            trans_data["account"] = AccountResponse.model_validate(trans.account).model_dump(mode="json")
+            trans_data["category"] = CategoryResponse.model_validate(trans.category).model_dump(mode="json")
             items.append(trans_data)
 
         return paginated_response(
@@ -135,8 +135,8 @@ def get_transaction(transaction_id: UUID):
 
         # Format response with relations
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
-        data["cuenta"] = AccountResponse.model_validate(transaction.cuenta).model_dump(mode="json")
-        data["categoria"] = CategoryResponse.model_validate(transaction.categoria).model_dump(mode="json")
+        data["account"] = AccountResponse.model_validate(transaction.account).model_dump(mode="json")
+        data["category"] = CategoryResponse.model_validate(transaction.category).model_dump(mode="json")
 
         return success_response(data=data)
 
@@ -167,13 +167,13 @@ def create_transaction():
 
         # Create transaction (idempotent when client_id is present)
         transaction = transaction_service.create(
-            tipo=transaction_data.tipo.value,
-            monto=transaction_data.monto,
-            fecha=transaction_data.fecha,
-            cuenta_id=transaction_data.cuenta_id,
-            categoria_id=transaction_data.categoria_id,
-            titulo=transaction_data.titulo,
-            descripcion=transaction_data.descripcion,
+            type=transaction_data.type.value,
+            amount=transaction_data.amount,
+            date=transaction_data.date,
+            account_id=transaction_data.account_id,
+            category_id=transaction_data.category_id,
+            title=transaction_data.title,
+            description=transaction_data.description,
             tags=transaction_data.tags,
             client_id=transaction_data.client_id,
         )
@@ -248,13 +248,13 @@ def update_transaction(transaction_id: UUID):
         # Update transaction
         transaction = transaction_service.update(
             transaction_id=transaction_id,
-            tipo=transaction_data.tipo.value if transaction_data.tipo else None,
-            monto=transaction_data.monto,
-            fecha=transaction_data.fecha,
-            cuenta_id=transaction_data.cuenta_id,
-            categoria_id=transaction_data.categoria_id,
-            titulo=transaction_data.titulo,
-            descripcion=transaction_data.descripcion,
+            type=transaction_data.type.value if transaction_data.type else None,
+            amount=transaction_data.amount,
+            date=transaction_data.date,
+            account_id=transaction_data.account_id,
+            category_id=transaction_data.category_id,
+            title=transaction_data.title,
+            description=transaction_data.description,
             tags=transaction_data.tags,
         )
 

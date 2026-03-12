@@ -40,7 +40,7 @@ export const useAccountsStore = defineStore('accounts', () => {
 
   // Computed
   const activeAccounts = computed(() =>
-    accounts.value.filter(account => account.activa)
+    accounts.value.filter(account => account.active)
   )
 
   const selectedAccount = computed(() =>
@@ -199,16 +199,16 @@ export const useAccountsStore = defineStore('accounts', () => {
     const computed = new Map<string, number>()
 
     for (const tx of allTransactions) {
-      const current = computed.get(tx.cuenta_id) ?? 0
-      const delta = tx.tipo === 'ingreso' ? Number(tx.monto) : -Number(tx.monto)
-      computed.set(tx.cuenta_id, current + delta)
+      const current = computed.get(tx.account_id) ?? 0
+      const delta = tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount)
+      computed.set(tx.account_id, current + delta)
     }
 
     for (const t of allTransfers) {
-      const fromBal = computed.get(t.cuenta_origen_id) ?? 0
-      computed.set(t.cuenta_origen_id, fromBal - Number(t.monto))
-      const toBal = computed.get(t.cuenta_destino_id) ?? 0
-      computed.set(t.cuenta_destino_id, toBal + Number(t.monto))
+      const fromBal = computed.get(t.source_account_id) ?? 0
+      computed.set(t.source_account_id, fromBal - Number(t.amount))
+      const toBal = computed.get(t.destination_account_id) ?? 0
+      computed.set(t.destination_account_id, toBal + Number(t.amount))
     }
 
     for (const [accountId, balance] of computed) {
@@ -216,7 +216,7 @@ export const useAccountsStore = defineStore('accounts', () => {
       balances.value.set(accountId, {
         account_id: accountId,
         balance,
-        currency: account?.divisa ?? 'USD'
+        currency: account?.currency ?? 'USD'
       })
       const idx = accounts.value.findIndex(a => a.id === accountId)
       if (idx !== -1) {
@@ -256,18 +256,18 @@ export const useAccountsStore = defineStore('accounts', () => {
     // Required fields that the server would normally fill in are given sensible
     // defaults:
     //   - tags: CreateAccountDto.tags is optional, default to empty array.
-    //   - activa: new accounts are always active.
+    //   - active: new accounts are always active.
     //   - balance: 0 until the first transaction is recorded.
     //   - _sync_status: 'pending' signals that this record has an unsent mutation.
     //   - _local_updated_at: used for Last-Write-Wins conflict resolution.
     const localAccount: LocalAccount = {
       id: tempId,
-      nombre: data.nombre,
-      tipo: data.tipo,
-      divisa: data.divisa,
-      descripcion: data.descripcion,
+      name: data.name,
+      type: data.type,
+      currency: data.currency,
+      description: data.description,
       tags: data.tags ?? [],
-      activa: true,
+      active: true,
       balance: 0,
       created_at: now,
       updated_at: now,
@@ -291,7 +291,7 @@ export const useAccountsStore = defineStore('accounts', () => {
       balances.value.set(tempId, {
         account_id: tempId,
         balance: 0,
-        currency: data.divisa
+        currency: data.currency
       })
 
       // Step 3 — Enqueue the CREATE mutation.
@@ -448,7 +448,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     balances.value.set(accountId, {
       account_id: accountId,
       balance: newBalance,
-      currency: current?.currency ?? account?.divisa ?? 'USD'
+      currency: current?.currency ?? account?.currency ?? 'USD'
     })
 
     // Also update accounts.value[idx].balance so the fallback path and

@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 class CategoryType(enum.Enum):
     """Enumeration of category types."""
 
-    INGRESO = "ingreso"
-    GASTO = "gasto"
-    AMBOS = "ambos"
+    INCOME = "income"
+    EXPENSE = "expense"
+    BOTH = "both"
 
 
 class Category(BaseModel):
@@ -31,51 +31,51 @@ class Category(BaseModel):
     Category model for transaction classification.
 
     Attributes:
-        nombre: Category name (max 50 characters)
-        tipo: Category type (income, expense, or both)
-        icono: Optional icon identifier
+        name: Category name (max 50 characters)
+        type: Category type (income, expense, or both)
+        icon: Optional icon identifier
         color: Optional color in hex format (#RRGGBB)
-        categoria_padre_id: Optional parent category ID for subcategories
-        categoria_padre: Parent category relationship
-        subcategorias: Child categories relationship
-        transacciones: Related transactions
+        parent_category_id: Optional parent category ID for subcategories
+        parent_category: Parent category relationship
+        subcategories: Child categories relationship
+        transactions: Related transactions
     """
 
-    __tablename__ = "categorias"
+    __tablename__ = "categories"
 
-    nombre = Column(String(50), nullable=False)
-    tipo = Column(Enum(CategoryType), nullable=False)
-    icono = Column(String(50), nullable=True)
+    name = Column(String(50), nullable=False)
+    type = Column(Enum(CategoryType), nullable=False)
+    icon = Column(String(50), nullable=True)
     color = Column(String(7), nullable=True)  # #RRGGBB
-    categoria_padre_id = Column(
+    parent_category_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("categorias.id"),
+        ForeignKey("categories.id"),
         nullable=True,
     )
 
     # Relationships
-    categoria_padre = relationship(
+    parent_category = relationship(
         "Category",
         remote_side="Category.id",
-        back_populates="subcategorias",
+        back_populates="subcategories",
     )
-    subcategorias = relationship(
+    subcategories = relationship(
         "Category",
-        back_populates="categoria_padre",
+        back_populates="parent_category",
         lazy="dynamic",
     )
-    transacciones = relationship(
+    transactions = relationship(
         "Transaction",
-        back_populates="categoria",
+        back_populates="category",
         lazy="dynamic",
     )
 
     # Indexes
     __table_args__ = (
-        Index("idx_categorias_tipo", "tipo"),
-        Index("idx_categorias_padre", "categoria_padre_id"),
+        Index("idx_categories_type", "type"),
+        Index("idx_categories_parent", "parent_category_id"),
     )
 
     def __repr__(self) -> str:
         """String representation of the category."""
-        return f"<Category {self.nombre} ({self.tipo.value})>"
+        return f"<Category {self.name} ({self.type.value})>"

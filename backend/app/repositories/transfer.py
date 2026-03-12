@@ -34,13 +34,13 @@ class TransferRepository(BaseRepository[Transfer]):
         return db.session.execute(
             db.select(Transfer)
             .where(Transfer.id == transfer_id)
-            .options(selectinload(Transfer.cuenta_origen))
-            .options(selectinload(Transfer.cuenta_destino))
+            .options(selectinload(Transfer.source_account))
+            .options(selectinload(Transfer.destination_account))
         ).scalar_one_or_none()
 
     def get_by_account(
         self,
-        cuenta_id: UUID,
+        account_id: UUID,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> list[Transfer]:
@@ -48,7 +48,7 @@ class TransferRepository(BaseRepository[Transfer]):
         Get transfers involving a specific account (as source or destination).
 
         Args:
-            cuenta_id: Account UUID
+            account_id: Account UUID
             limit: Maximum number of results
             offset: Number of results to skip
 
@@ -59,11 +59,11 @@ class TransferRepository(BaseRepository[Transfer]):
             db.select(Transfer)
             .where(
                 or_(
-                    Transfer.cuenta_origen_id == cuenta_id,
-                    Transfer.cuenta_destino_id == cuenta_id,
+                    Transfer.source_account_id == account_id,
+                    Transfer.destination_account_id == account_id,
                 )
             )
-            .order_by(Transfer.fecha.desc())
+            .order_by(Transfer.date.desc())
         )
 
         if limit:
@@ -75,9 +75,9 @@ class TransferRepository(BaseRepository[Transfer]):
 
     def get_filtered(
         self,
-        cuenta_id: Optional[UUID] = None,
-        fecha_desde: Optional[date] = None,
-        fecha_hasta: Optional[date] = None,
+        account_id: Optional[UUID] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
         tags: Optional[list[str]] = None,
         limit: int = 20,
         offset: int = 0,
@@ -86,9 +86,9 @@ class TransferRepository(BaseRepository[Transfer]):
         Get transfers with filters and pagination.
 
         Args:
-            cuenta_id: Filter by account (source or destination)
-            fecha_desde: Filter by start date (inclusive)
-            fecha_hasta: Filter by end date (inclusive)
+            account_id: Filter by account (source or destination)
+            date_from: Filter by start date (inclusive)
+            date_to: Filter by end date (inclusive)
             tags: Filter by tags (any match)
             limit: Maximum results per page
             offset: Number of results to skip
@@ -99,17 +99,17 @@ class TransferRepository(BaseRepository[Transfer]):
         # Build filters
         filters = []
 
-        if cuenta_id:
+        if account_id:
             filters.append(
                 or_(
-                    Transfer.cuenta_origen_id == cuenta_id,
-                    Transfer.cuenta_destino_id == cuenta_id,
+                    Transfer.source_account_id == account_id,
+                    Transfer.destination_account_id == account_id,
                 )
             )
-        if fecha_desde:
-            filters.append(Transfer.fecha >= fecha_desde)
-        if fecha_hasta:
-            filters.append(Transfer.fecha <= fecha_hasta)
+        if date_from:
+            filters.append(Transfer.date >= date_from)
+        if date_to:
+            filters.append(Transfer.date <= date_to)
         if tags:
             # PostgreSQL array overlap operator
             filters.append(Transfer.tags.overlap(tags))
@@ -123,9 +123,9 @@ class TransferRepository(BaseRepository[Transfer]):
         # Get paginated results
         query = (
             db.select(Transfer)
-            .options(selectinload(Transfer.cuenta_origen))
-            .options(selectinload(Transfer.cuenta_destino))
-            .order_by(Transfer.fecha.desc(), Transfer.created_at.desc())
+            .options(selectinload(Transfer.source_account))
+            .options(selectinload(Transfer.destination_account))
+            .order_by(Transfer.date.desc(), Transfer.created_at.desc())
         )
 
         if filters:
@@ -149,9 +149,9 @@ class TransferRepository(BaseRepository[Transfer]):
         return (
             db.session.execute(
                 db.select(Transfer)
-                .options(selectinload(Transfer.cuenta_origen))
-                .options(selectinload(Transfer.cuenta_destino))
-                .order_by(Transfer.fecha.desc(), Transfer.created_at.desc())
+                .options(selectinload(Transfer.source_account))
+                .options(selectinload(Transfer.destination_account))
+                .order_by(Transfer.date.desc(), Transfer.created_at.desc())
                 .limit(limit)
             )
             .scalars()

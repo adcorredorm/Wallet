@@ -111,18 +111,18 @@ class TestCreate:
     ):
         """Should create and return a transfer when both accounts share the same currency."""
         origin = MagicMock()
-        origin.divisa = "MXN"
+        origin.currency = "MXN"
         destination = MagicMock()
-        destination.divisa = "MXN"
+        destination.currency = "MXN"
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
         mock_transfer_repo.create.return_value = mock_transfer
 
         result = transfer_service.create(
-            cuenta_origen_id=uuid4(),
-            cuenta_destino_id=uuid4(),
-            monto=Decimal("500.00"),
-            fecha=date(2026, 3, 1),
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 1),
         )
 
         assert result == mock_transfer
@@ -133,18 +133,18 @@ class TestCreate:
     ):
         """Should raise BusinessRuleError when the two accounts have different currencies."""
         origin = MagicMock()
-        origin.divisa = "MXN"
+        origin.currency = "MXN"
         destination = MagicMock()
-        destination.divisa = "USD"
+        destination.currency = "USD"
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
 
         with pytest.raises(BusinessRuleError) as exc_info:
             transfer_service.create(
-                cuenta_origen_id=uuid4(),
-                cuenta_destino_id=uuid4(),
-                monto=Decimal("500.00"),
-                fecha=date(2026, 3, 1),
+                source_account_id=uuid4(),
+                destination_account_id=uuid4(),
+                amount=Decimal("500.00"),
+                date=date(2026, 3, 1),
             )
 
         assert "divisas" in str(exc_info.value).lower()
@@ -157,10 +157,10 @@ class TestCreate:
         mock_transfer_repo.get_by_client_id.return_value = mock_transfer
 
         result = transfer_service.create(
-            cuenta_origen_id=uuid4(),
-            cuenta_destino_id=uuid4(),
-            monto=Decimal("500.00"),
-            fecha=date(2026, 3, 1),
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 1),
             client_id=client_id,
         )
 
@@ -179,10 +179,10 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transfer_service.create(
-                cuenta_origen_id=uuid4(),
-                cuenta_destino_id=uuid4(),
-                monto=Decimal("100.00"),
-                fecha=date(2026, 3, 1),
+                source_account_id=uuid4(),
+                destination_account_id=uuid4(),
+                amount=Decimal("100.00"),
+                date=date(2026, 3, 1),
             )
 
     def test_create_destination_account_not_found(
@@ -190,7 +190,7 @@ class TestCreate:
     ):
         """Should raise NotFoundError when the destination account does not exist."""
         origin = MagicMock()
-        origin.divisa = "MXN"
+        origin.currency = "MXN"
         mock_account_repo.get_by_id_or_fail.side_effect = [
             origin,
             NotFoundError("Account", str(uuid4())),
@@ -198,10 +198,10 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transfer_service.create(
-                cuenta_origen_id=uuid4(),
-                cuenta_destino_id=uuid4(),
-                monto=Decimal("100.00"),
-                fecha=date(2026, 3, 1),
+                source_account_id=uuid4(),
+                destination_account_id=uuid4(),
+                amount=Decimal("100.00"),
+                date=date(2026, 3, 1),
             )
 
 
@@ -217,13 +217,13 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
-            monto=Decimal("999.00"),
+            amount=Decimal("999.00"),
         )
 
         call_kwargs = mock_transfer_repo.update.call_args[1]
-        assert "monto" in call_kwargs
-        assert "fecha" not in call_kwargs
-        assert "descripcion" not in call_kwargs
+        assert "amount" in call_kwargs
+        assert "date" not in call_kwargs
+        assert "description" not in call_kwargs
 
     def test_update_cannot_change_accounts(
         self, transfer_service, mock_transfer_repo, mock_transfer
@@ -234,13 +234,13 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
-            descripcion="Updated description",
+            description="Updated description",
             tags=["new-tag"],
         )
 
         call_kwargs = mock_transfer_repo.update.call_args[1]
-        assert "cuenta_origen_id" not in call_kwargs
-        assert "cuenta_destino_id" not in call_kwargs
+        assert "source_account_id" not in call_kwargs
+        assert "destination_account_id" not in call_kwargs
 
     def test_update_all_allowed_fields(
         self, transfer_service, mock_transfer_repo, mock_transfer
@@ -251,16 +251,16 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
-            monto=Decimal("750.00"),
-            fecha=date(2026, 4, 1),
-            descripcion="Nueva descripción",
+            amount=Decimal("750.00"),
+            date=date(2026, 4, 1),
+            description="Nueva descripción",
             tags=["tag1", "tag2"],
         )
 
         call_kwargs = mock_transfer_repo.update.call_args[1]
-        assert call_kwargs["monto"] == Decimal("750.00")
-        assert call_kwargs["fecha"] == date(2026, 4, 1)
-        assert call_kwargs["descripcion"] == "Nueva descripción"
+        assert call_kwargs["amount"] == Decimal("750.00")
+        assert call_kwargs["date"] == date(2026, 4, 1)
+        assert call_kwargs["description"] == "Nueva descripción"
         assert call_kwargs["tags"] == ["tag1", "tag2"]
 
     def test_update_not_found(self, transfer_service, mock_transfer_repo):
@@ -270,7 +270,7 @@ class TestUpdate:
         )
 
         with pytest.raises(NotFoundError):
-            transfer_service.update(transfer_id=uuid4(), monto=Decimal("100.00"))
+            transfer_service.update(transfer_id=uuid4(), amount=Decimal("100.00"))
 
 
 class TestDelete:

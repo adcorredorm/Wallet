@@ -127,10 +127,10 @@ def create_account():
 
         # Create account (idempotent when client_id is present)
         account = account_service.create(
-            nombre=account_data.nombre,
-            tipo=account_data.tipo.value,
-            divisa=account_data.divisa,
-            descripcion=account_data.descripcion,
+            name=account_data.name,
+            type=account_data.type.value,
+            currency=account_data.currency,
+            description=account_data.description,
             tags=account_data.tags,
             client_id=account_data.client_id,
         )
@@ -204,12 +204,12 @@ def update_account(account_id: UUID):
         # Update account
         account = account_service.update(
             account_id=account_id,
-            nombre=account_data.nombre,
-            tipo=account_data.tipo.value if account_data.tipo else None,
-            divisa=account_data.divisa,
-            descripcion=account_data.descripcion,
+            name=account_data.name,
+            type=account_data.type.value if account_data.type else None,
+            currency=account_data.currency,
+            description=account_data.description,
             tags=account_data.tags,
-            activa=account_data.activa,
+            active=account_data.active,
         )
 
         data = AccountResponse.model_validate(account).model_dump(mode="json")

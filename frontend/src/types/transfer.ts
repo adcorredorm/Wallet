@@ -5,50 +5,50 @@
 
 export interface Transfer {
   id: string
-  cuenta_origen_id: string
-  cuenta_destino_id: string
-  monto: number
-  fecha: string  // ISO date string (YYYY-MM-DD)
-  titulo?: string
-  descripcion?: string
+  source_account_id: string
+  destination_account_id: string
+  amount: number
+  date: string  // ISO date string (YYYY-MM-DD)
+  title?: string
+  description?: string
   tags: string[]
   created_at: string
   updated_at: string
   // Populated relations (optional, depends on API response)
-  cuenta_origen?: {
-    nombre: string
-    divisa: string
+  source_account?: {
+    name: string
+    currency: string
   }
-  cuenta_destino?: {
-    nombre: string
-    divisa: string
+  destination_account?: {
+    name: string
+    currency: string
   }
 }
 
 export interface CreateTransferDto {
-  cuenta_origen_id: string
-  cuenta_destino_id: string
-  monto: number
-  fecha: string
-  titulo?: string
-  descripcion?: string
+  source_account_id: string
+  destination_account_id: string
+  amount: number
+  date: string
+  title?: string
+  description?: string
   tags?: string[]
 }
 
 export interface UpdateTransferDto {
-  cuenta_origen_id?: string
-  cuenta_destino_id?: string
-  monto?: number
-  fecha?: string
-  titulo?: string
-  descripcion?: string
+  source_account_id?: string
+  destination_account_id?: string
+  amount?: number
+  date?: string
+  title?: string
+  description?: string
   tags?: string[]
 }
 
 export interface TransferFilters {
-  cuenta_id?: string  // Filter by either source or destination
-  fecha_inicio?: string
-  fecha_fin?: string
+  account_id?: string  // Filter by either source or destination
+  date_from?: string
+  date_to?: string
   limit?: number
   offset?: number
 }

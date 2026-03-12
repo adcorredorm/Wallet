@@ -39,11 +39,11 @@ const options = computed(() => {
       if (props.filterOutAccountId && account.id === props.filterOutAccountId) {
         return false
       }
-      return account.activa
+      return account.active
     })
     .map(account => ({
       value: account.id,
-      label: `${account.nombre} (${account.divisa})`
+      label: `${account.name} (${account.currency})`
     }))
 })
 </script>

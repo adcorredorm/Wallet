@@ -27,13 +27,13 @@ const emit = defineEmits<{
   'account-click': [account: Account]
 }>()
 
-const accountIcon = (tipo: string) => {
+const accountIcon = (type: string) => {
   const icons: Record<string, string> = {
-    debito: '💳',
-    credito: '💳',
-    efectivo: '💵'
+    debit: '💳',
+    credit: '💳',
+    cash: '💵'
   }
-  return icons[tipo] || '💰'
+  return icons[type] || '💰'
 }
 </script>
 
@@ -66,17 +66,17 @@ const accountIcon = (tipo: string) => {
         <div class="flex items-center justify-between">
           <!-- Icon and name -->
           <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ accountIcon(account.tipo) }}</span>
+            <span class="text-2xl">{{ accountIcon(account.type) }}</span>
             <div>
-              <p class="font-medium">{{ account.nombre }}</p>
-              <p class="text-sm text-dark-text-secondary">{{ account.divisa }} - Balance: {{ account.balance }}</p>
+              <p class="font-medium">{{ account.name }}</p>
+              <p class="text-sm text-dark-text-secondary">{{ account.currency }} - Balance: {{ account.balance }}</p>
             </div>
           </div>
 
           <!-- Balance -->
           <CurrencyDisplay
             :amount="account.balance || 0"
-            :currency="account.divisa"
+            :currency="account.currency"
             size="md"
             compact
           />

@@ -110,14 +110,14 @@ const standaloneGroups = () =>
             ></div>
 
             <!-- Icon -->
-            <span class="text-xl flex-shrink-0">{{ group.parent.icono || '📁' }}</span>
+            <span class="text-xl flex-shrink-0">{{ group.parent.icon || '📁' }}</span>
 
             <!-- Name -->
-            <span class="font-medium truncate">{{ group.parent.nombre }}</span>
+            <span class="font-medium truncate">{{ group.parent.name }}</span>
 
             <!-- Tipo badge -->
             <span class="text-xs px-2 py-0.5 rounded-full bg-dark-bg-tertiary text-dark-text-secondary flex-shrink-0">
-              {{ formatCategoryType(group.parent.tipo) }}
+              {{ formatCategoryType(group.parent.type) }}
             </span>
           </div>
 
@@ -162,11 +162,11 @@ const standaloneGroups = () =>
               @click="goToCategory(child.id)"
             >
               <div class="flex items-center gap-2">
-                <span class="text-lg flex-shrink-0">{{ child.icono || '📁' }}</span>
+                <span class="text-lg flex-shrink-0">{{ child.icon || '📁' }}</span>
                 <div class="min-w-0">
-                  <p class="text-sm font-medium truncate">{{ child.nombre }}</p>
+                  <p class="text-sm font-medium truncate">{{ child.name }}</p>
                   <p class="text-xs text-dark-text-secondary">
-                    {{ formatCategoryType(child.tipo) }}
+                    {{ formatCategoryType(child.type) }}
                   </p>
                 </div>
               </div>
@@ -192,14 +192,14 @@ const standaloneGroups = () =>
         ></div>
 
         <!-- Icon -->
-        <span class="text-xl flex-shrink-0">{{ group.parent.icono || '📁' }}</span>
+        <span class="text-xl flex-shrink-0">{{ group.parent.icon || '📁' }}</span>
 
         <!-- Name -->
-        <span class="font-medium truncate flex-1 min-w-0">{{ group.parent.nombre }}</span>
+        <span class="font-medium truncate flex-1 min-w-0">{{ group.parent.name }}</span>
 
         <!-- Tipo badge -->
         <span class="text-xs px-2 py-0.5 rounded-full bg-dark-bg-tertiary text-dark-text-secondary flex-shrink-0">
-          {{ formatCategoryType(group.parent.tipo) }}
+          {{ formatCategoryType(group.parent.type) }}
         </span>
       </div>
     </div>

@@ -17,11 +17,11 @@ class TransferCreate(BaseModel):
     Schema for creating a new transfer.
 
     Args:
-        cuenta_origen_id: Source account ID
-        cuenta_destino_id: Destination account ID
-        monto: Transfer amount (must be positive, 2 decimal places)
-        fecha: Transfer date
-        descripcion: Optional description (max 500 characters)
+        source_account_id: Source account ID
+        destination_account_id: Destination account ID
+        amount: Transfer amount (must be positive, 2 decimal places)
+        date: Transfer date
+        description: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
@@ -31,24 +31,24 @@ class TransferCreate(BaseModel):
         ValueError: If source and destination accounts are the same
     """
 
-    cuenta_origen_id: UUID
-    cuenta_destino_id: UUID
-    monto: Decimal = Field(..., gt=0)
-    fecha: date
-    descripcion: Optional[str] = Field(None, max_length=500)
+    source_account_id: UUID
+    destination_account_id: UUID
+    amount: Decimal = Field(..., gt=0)
+    date: date
+    description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     client_id: Optional[str] = Field(None, max_length=100)
 
     @model_validator(mode="after")
     def validate_different_accounts(self) -> "TransferCreate":
         """Validate that source and destination accounts are different."""
-        if self.cuenta_origen_id == self.cuenta_destino_id:
+        if self.source_account_id == self.destination_account_id:
             raise ValueError("No se puede transferir a la misma cuenta")
         return self
 
-    @field_validator("monto")
+    @field_validator("amount")
     @classmethod
-    def validate_monto(cls, v: Decimal) -> Decimal:
+    def validate_amount(cls, v: Decimal) -> Decimal:
         """Validate amount is positive and round to 2 decimals."""
         if v <= 0:
             raise ValueError("El monto debe ser mayor a 0")
@@ -71,14 +71,14 @@ class TransferUpdate(BaseModel):
     Note: Cannot change source or destination accounts.
     """
 
-    monto: Optional[Decimal] = Field(None, gt=0)
-    fecha: Optional[date] = None
-    descripcion: Optional[str] = Field(None, max_length=500)
+    amount: Optional[Decimal] = Field(None, gt=0)
+    date: Optional[date] = None
+    description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
 
-    @field_validator("monto")
+    @field_validator("amount")
     @classmethod
-    def validate_monto(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def validate_amount(cls, v: Optional[Decimal]) -> Optional[Decimal]:
         """Validate amount is positive and round to 2 decimals if provided."""
         if v is None:
             return v
@@ -106,11 +106,11 @@ class TransferResponse(BaseModel):
     """
 
     id: UUID
-    cuenta_origen_id: UUID
-    cuenta_destino_id: UUID
-    monto: Decimal
-    fecha: date
-    descripcion: Optional[str]
+    source_account_id: UUID
+    destination_account_id: UUID
+    amount: Decimal
+    date: date
+    description: Optional[str]
     tags: list[str]
     created_at: datetime
     updated_at: datetime
@@ -125,8 +125,8 @@ class TransferWithRelations(TransferResponse):
     Extends TransferResponse with nested account objects.
     """
 
-    cuenta_origen: "AccountResponse"
-    cuenta_destino: "AccountResponse"
+    source_account: "AccountResponse"
+    destination_account: "AccountResponse"
 
 
 class TransferFilters(BaseModel):
@@ -134,25 +134,25 @@ class TransferFilters(BaseModel):
     Schema for transfer list filters.
 
     Args:
-        cuenta_id: Filter by either source or destination account
-        fecha_desde: Filter by start date (inclusive)
-        fecha_hasta: Filter by end date (inclusive)
+        account_id: Filter by either source or destination account
+        date_from: Filter by start date (inclusive)
+        date_to: Filter by end date (inclusive)
         tags: Filter by tags (any match)
         page: Page number (1-indexed)
         limit: Items per page (1-100)
     """
 
-    cuenta_id: Optional[UUID] = None
-    fecha_desde: Optional[date] = None
-    fecha_hasta: Optional[date] = None
+    account_id: Optional[UUID] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
     tags: Optional[list[str]] = None
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "TransferFilters":
-        """Validate that fecha_desde is before fecha_hasta."""
-        if self.fecha_desde and self.fecha_hasta:
-            if self.fecha_desde > self.fecha_hasta:
-                raise ValueError("fecha_desde debe ser anterior a fecha_hasta")
+        """Validate that date_from is before date_to."""
+        if self.date_from and self.date_to:
+            if self.date_from > self.date_to:
+                raise ValueError("date_from debe ser anterior a date_to")
         return self

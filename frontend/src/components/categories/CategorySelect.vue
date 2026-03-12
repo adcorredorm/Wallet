@@ -42,9 +42,9 @@ const categoriesStore = useCategoriesStore()
  * A category matches if no filter is set, or if its tipo equals the filter,
  * or if its tipo is 'ambos'.
  */
-function matchesFilter(tipo: CategoryType): boolean {
+function matchesFilter(type: CategoryType): boolean {
   if (!props.filterType) return true
-  return tipo === props.filterType || tipo === 'ambos'
+  return type === props.filterType || type === 'both'
 }
 
 /**
@@ -58,8 +58,8 @@ const optionGroups = computed(() => {
     if (group.children.length === 0) continue
 
     // Filter children
-    const filteredChildren = group.children.filter(c => matchesFilter(c.tipo))
-    const parentMatches = matchesFilter(group.parent.tipo)
+    const filteredChildren = group.children.filter(c => matchesFilter(c.type))
+    const parentMatches = matchesFilter(group.parent.type)
 
     // Skip entire group if neither parent nor any child matches
     if (!parentMatches && filteredChildren.length === 0) continue
@@ -70,7 +70,7 @@ const optionGroups = computed(() => {
     if (parentMatches) {
       groupOptions.push({
         value: group.parent.id,
-        label: `${group.parent.icono ?? ''} ${group.parent.nombre}`.trim()
+        label: `${group.parent.icon ?? ''} ${group.parent.name}`.trim()
       })
     }
 
@@ -78,13 +78,13 @@ const optionGroups = computed(() => {
     for (const child of filteredChildren) {
       groupOptions.push({
         value: child.id,
-        label: `${child.icono ?? ''} ${child.nombre}`.trim()
+        label: `${child.icon ?? ''} ${child.name}`.trim()
       })
     }
 
     if (groupOptions.length > 0) {
       groups.push({
-        label: `${group.parent.icono ?? ''} ${group.parent.nombre}`.trim(),
+        label: `${group.parent.icon ?? ''} ${group.parent.name}`.trim(),
         options: groupOptions
       })
     }
@@ -98,10 +98,10 @@ const optionGroups = computed(() => {
  */
 const flatOptions = computed(() => {
   return categoriesStore.categoryTree
-    .filter(group => group.children.length === 0 && matchesFilter(group.parent.tipo))
+    .filter(group => group.children.length === 0 && matchesFilter(group.parent.type))
     .map(group => ({
       value: group.parent.id,
-      label: `${group.parent.icono ?? ''} ${group.parent.nombre}`.trim()
+      label: `${group.parent.icon ?? ''} ${group.parent.name}`.trim()
     }))
 })
 </script>

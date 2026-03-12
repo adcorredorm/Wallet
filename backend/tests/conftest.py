@@ -111,21 +111,21 @@ def mock_account(mock_account_id):
     """
     account = Mock(spec=Account)
     account.id = mock_account_id
-    account.nombre = "Cuenta Test"
-    account.tipo = AccountType.DEBITO
-    account.divisa = "MXN"
-    account.descripcion = "Descripción de prueba"
+    account.name = "Cuenta Test"
+    account.type = AccountType.DEBIT
+    account.currency = "MXN"
+    account.description = "Descripción de prueba"
     account.tags = ["test", "mock"]
-    account.activa = True
+    account.active = True
 
     # Mock relationships (dynamic queries)
     # These are configured to not trigger lazy loading
-    account.transacciones = MagicMock()
-    account.transacciones.count.return_value = 0
-    account.transferencias_origen = MagicMock()
-    account.transferencias_origen.count.return_value = 0
-    account.transferencias_destino = MagicMock()
-    account.transferencias_destino.count.return_value = 0
+    account.transactions = MagicMock()
+    account.transactions.count.return_value = 0
+    account.transfers_source = MagicMock()
+    account.transfers_source.count.return_value = 0
+    account.transfers_destination = MagicMock()
+    account.transfers_destination.count.return_value = 0
 
     return account
 
@@ -138,7 +138,7 @@ def mock_account_with_transactions(mock_account):
     Returns:
         Mock Account instance with transaction count > 0
     """
-    mock_account.transacciones.count.return_value = 5
+    mock_account.transactions.count.return_value = 5
     return mock_account
 
 
@@ -150,8 +150,8 @@ def mock_account_with_transfers(mock_account):
     Returns:
         Mock Account instance with transfer counts > 0
     """
-    mock_account.transferencias_origen.count.return_value = 3
-    mock_account.transferencias_destino.count.return_value = 2
+    mock_account.transfers_source.count.return_value = 3
+    mock_account.transfers_destination.count.return_value = 2
     return mock_account
 
 
@@ -161,9 +161,9 @@ def mock_archived_account(mock_account):
     Create a mock archived Account.
 
     Returns:
-        Mock Account instance with activa=False
+        Mock Account instance with active=False
     """
-    mock_account.activa = False
+    mock_account.active = False
     return mock_account
 
 
@@ -177,26 +177,26 @@ def multiple_mock_accounts():
     """
     accounts = []
     for i, (currency, account_type) in enumerate([
-        ("MXN", AccountType.DEBITO),
-        ("USD", AccountType.CREDITO),
-        ("EUR", AccountType.EFECTIVO),
+        ("MXN", AccountType.DEBIT),
+        ("USD", AccountType.CREDIT),
+        ("EUR", AccountType.CASH),
     ]):
         account = Mock(spec=Account)
         account.id = uuid4()
-        account.nombre = f"Cuenta {i+1}"
-        account.tipo = account_type
-        account.divisa = currency
-        account.descripcion = f"Descripción {i+1}"
+        account.name = f"Cuenta {i+1}"
+        account.type = account_type
+        account.currency = currency
+        account.description = f"Descripción {i+1}"
         account.tags = [f"tag{i+1}"]
-        account.activa = True
+        account.active = True
 
         # Mock relationships
-        account.transacciones = MagicMock()
-        account.transacciones.count.return_value = 0
-        account.transferencias_origen = MagicMock()
-        account.transferencias_origen.count.return_value = 0
-        account.transferencias_destino = MagicMock()
-        account.transferencias_destino.count.return_value = 0
+        account.transactions = MagicMock()
+        account.transactions.count.return_value = 0
+        account.transfers_source = MagicMock()
+        account.transfers_source.count.return_value = 0
+        account.transfers_destination = MagicMock()
+        account.transfers_destination.count.return_value = 0
 
         accounts.append(account)
 
@@ -212,17 +212,17 @@ def mock_category():
     """Create a mock Category instance."""
     category = Mock(spec=Category)
     category.id = uuid4()
-    category.nombre = "Categoría Test"
-    category.tipo = CategoryType.GASTO
-    category.icono = "test-icon"
+    category.name = "Categoría Test"
+    category.type = CategoryType.EXPENSE
+    category.icon = "test-icon"
     category.color = "#FF5733"
-    category.categoria_padre_id = None
+    category.parent_category_id = None
 
     # Mock relationships
-    category.subcategorias = MagicMock()
-    category.subcategorias.count.return_value = 0
-    category.transacciones = MagicMock()
-    category.transacciones.count.return_value = 0
+    category.subcategories = MagicMock()
+    category.subcategories.count.return_value = 0
+    category.transactions = MagicMock()
+    category.transactions.count.return_value = 0
 
     return category
 
@@ -244,11 +244,11 @@ def mock_transfer():
 
     transfer = MagicMock()
     transfer.id = uuid4()
-    transfer.cuenta_origen_id = uuid4()
-    transfer.cuenta_destino_id = uuid4()
-    transfer.monto = Decimal("500.00")
-    transfer.fecha = date(2026, 3, 1)
-    transfer.descripcion = "Transferencia test"
+    transfer.source_account_id = uuid4()
+    transfer.destination_account_id = uuid4()
+    transfer.amount = Decimal("500.00")
+    transfer.date = date(2026, 3, 1)
+    transfer.description = "Transferencia test"
     transfer.tags = ["test"]
     transfer.client_id = None
     return transfer
@@ -270,14 +270,14 @@ def mock_transaction():
 
     transaction = MagicMock()
     transaction.id = uuid4()
-    transaction.tipo = TransactionType.GASTO
-    transaction.monto = Decimal("250.00")
+    transaction.type = TransactionType.EXPENSE
+    transaction.amount = Decimal("250.00")
     from datetime import date
-    transaction.fecha = date(2026, 3, 1)
-    transaction.cuenta_id = uuid4()
-    transaction.categoria_id = uuid4()
-    transaction.titulo = "Compra test"
-    transaction.descripcion = "Descripción test"
+    transaction.date = date(2026, 3, 1)
+    transaction.account_id = uuid4()
+    transaction.category_id = uuid4()
+    transaction.title = "Compra test"
+    transaction.description = "Descripción test"
     transaction.tags = ["test"]
     transaction.client_id = None
     return transaction
@@ -321,12 +321,12 @@ def create_mock_account(**overrides):
     """
     defaults = {
         'id': uuid4(),
-        'nombre': 'Test Account',
-        'tipo': AccountType.DEBITO,
-        'divisa': 'MXN',
-        'descripcion': 'Test description',
+        'name': 'Test Account',
+        'type': AccountType.DEBIT,
+        'currency': 'MXN',
+        'description': 'Test description',
         'tags': [],
-        'activa': True,
+        'active': True,
     }
     defaults.update(overrides)
 
@@ -335,11 +335,11 @@ def create_mock_account(**overrides):
         setattr(account, key, value)
 
     # Mock relationships
-    account.transacciones = MagicMock()
-    account.transacciones.count.return_value = 0
-    account.transferencias_origen = MagicMock()
-    account.transferencias_origen.count.return_value = 0
-    account.transferencias_destino = MagicMock()
-    account.transferencias_destino.count.return_value = 0
+    account.transactions = MagicMock()
+    account.transactions.count.return_value = 0
+    account.transfers_source = MagicMock()
+    account.transfers_source.count.return_value = 0
+    account.transfers_destination = MagicMock()
+    account.transfers_destination.count.return_value = 0
 
     return account

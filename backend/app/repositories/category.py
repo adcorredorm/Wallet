@@ -17,18 +17,18 @@ class CategoryRepository(BaseRepository[Category]):
         """Initialize category repository."""
         super().__init__(Category)
 
-    def get_by_type(self, tipo: CategoryType) -> list[Category]:
+    def get_by_type(self, type: CategoryType) -> list[Category]:
         """
         Get all categories of a specific type.
 
         Args:
-            tipo: Category type (INGRESO, GASTO, AMBOS)
+            type: Category type (INCOME, EXPENSE, BOTH)
 
         Returns:
             List of categories matching the type
         """
         return (
-            db.session.execute(db.select(Category).where(Category.tipo == tipo))
+            db.session.execute(db.select(Category).where(Category.type == type))
             .scalars()
             .all()
         )
@@ -42,7 +42,7 @@ class CategoryRepository(BaseRepository[Category]):
         """
         return (
             db.session.execute(
-                db.select(Category).where(Category.categoria_padre_id == None)
+                db.select(Category).where(Category.parent_category_id == None)
             )
             .scalars()
             .all()
@@ -60,7 +60,7 @@ class CategoryRepository(BaseRepository[Category]):
         """
         return (
             db.session.execute(
-                db.select(Category).where(Category.categoria_padre_id == parent_id)
+                db.select(Category).where(Category.parent_category_id == parent_id)
             )
             .scalars()
             .all()
@@ -81,7 +81,7 @@ class CategoryRepository(BaseRepository[Category]):
         return db.session.execute(
             db.select(Category)
             .where(Category.id == category_id)
-            .options(selectinload(Category.subcategorias))
+            .options(selectinload(Category.subcategories))
         ).scalar_one_or_none()
 
     def has_transactions(self, category_id: UUID) -> bool:
@@ -98,7 +98,7 @@ class CategoryRepository(BaseRepository[Category]):
 
         count = (
             db.session.query(Transaction)
-            .filter(Transaction.categoria_id == category_id)
+            .filter(Transaction.category_id == category_id)
             .count()
         )
         return count > 0

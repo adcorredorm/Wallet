@@ -11,8 +11,8 @@ export const categoriesApi = {
    * Get all categories
    * @param tipo - Filter by category type (optional)
    */
-  getAll(tipo?: CategoryType): Promise<Category[]> {
-    const params = tipo ? { tipo } : {}
+  getAll(type?: CategoryType): Promise<Category[]> {
+    const params = type ? { type } : {}
     return apiClient.get('/categories', { params })
   },
 
