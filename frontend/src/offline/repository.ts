@@ -152,11 +152,14 @@ export async function fetchAllWithRevalidation<
         const serverItems = await apiFetcher()
         const localMapped = serverItems.map(toLocalItem) as unknown as TLocal[]
 
-        // Only persist records that came from the server (synced state).
-        // We deliberately do NOT bulkPut pending/error items here — those are
-        // managed exclusively by the write actions and must not be overwritten
-        // by a stale server snapshot that does not yet know about them.
-        await table.bulkPut(localMapped)
+        // Skip records that are locally pending/error — those represent
+        // user changes the server has not yet received. Overwriting them with
+        // stale server data would silently discard the user's edits.
+        const pendingIds = new Set(
+          await table.where('_sync_status').anyOf(['pending', 'error']).primaryKeys()
+        )
+        const itemsToWrite = localMapped.filter((item) => !pendingIds.has(item.id as never))
+        await table.bulkPut(itemsToWrite)
 
         // Re-read the full table from IndexedDB after bulkPut.
         //
