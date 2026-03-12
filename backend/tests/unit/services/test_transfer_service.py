@@ -320,4 +320,63 @@ class TestDelete:
         with pytest.raises(NotFoundError):
             transfer_service.delete(uuid4())
 
+
+class TestCreateBaseRate:
+    """Tests that base_rate is accepted and forwarded by TransferService.create."""
+
+    def test_create_passes_base_rate_to_repo(
+        self,
+        transfer_service,
+        mock_transfer_repo,
+        mock_account_repo,
+    ):
+        """base_rate passed to create() must be forwarded to repository.create()."""
+        source_id = uuid4()
+        dest_id = uuid4()
+
+        mock_source = Mock()
+        mock_source.currency = "COP"
+        mock_dest = Mock()
+        mock_dest.currency = "COP"
+        mock_account_repo.get_by_id_or_fail.side_effect = [mock_source, mock_dest]
+
+        expected_transfer = Mock()
+        mock_transfer_repo.create.return_value = expected_transfer
+
+        result = transfer_service.create(
+            source_account_id=source_id,
+            destination_account_id=dest_id,
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 12),
+            base_rate=Decimal("4200.123456789"),
+        )
+
+        call_kwargs = mock_transfer_repo.create.call_args.kwargs
+        assert call_kwargs["base_rate"] == Decimal("4200.123456789")
+        assert result is expected_transfer
+
+    def test_create_base_rate_none_by_default(
+        self,
+        transfer_service,
+        mock_transfer_repo,
+        mock_account_repo,
+    ):
+        """base_rate defaults to None when not provided."""
+        mock_source = Mock()
+        mock_source.currency = "USD"
+        mock_dest = Mock()
+        mock_dest.currency = "USD"
+        mock_account_repo.get_by_id_or_fail.side_effect = [mock_source, mock_dest]
+        mock_transfer_repo.create.return_value = Mock()
+
+        transfer_service.create(
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 12),
+        )
+
+        call_kwargs = mock_transfer_repo.create.call_args.kwargs
+        assert call_kwargs.get("base_rate") is None
+
         mock_transfer_repo.delete.assert_not_called()

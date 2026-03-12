@@ -36,6 +36,9 @@ class Transfer(BaseModel):
             source_currency / destination_currency (NULL for same-currency transfers)
         destination_currency: ISO 4217 currency code of the destination account
             (NULL for same-currency transfers)
+        base_rate: Units of primaryCurrency per 1 unit of the source account's
+            native currency, snapshotted at transfer time. NULL when unavailable
+            offline.
         source_account: Source account relationship
         destination_account: Destination account relationship
     """
@@ -59,6 +62,7 @@ class Transfer(BaseModel):
     destination_amount = Column(Numeric(20, 8), nullable=True)
     exchange_rate = Column(Numeric(20, 10), nullable=True)
     destination_currency = Column(String(10), nullable=True)
+    base_rate = Column(Numeric(20, 10), nullable=True)
 
     # Relationships
     source_account = relationship(

@@ -46,6 +46,9 @@ class Transaction(BaseModel):
             (NULL for single-currency transactions)
         exchange_rate: Rate applied at transaction time, original currency /
             account currency (NULL for single-currency transactions)
+        base_rate: Units of primaryCurrency per 1 unit of the account's native
+            currency, snapshotted at transaction time. NULL when the rate was
+            unavailable offline.
         account: Related account
         category: Related category
     """
@@ -71,6 +74,7 @@ class Transaction(BaseModel):
     original_amount = Column(Numeric(20, 8), nullable=True)
     original_currency = Column(String(10), nullable=True)
     exchange_rate = Column(Numeric(20, 10), nullable=True)
+    base_rate = Column(Numeric(20, 10), nullable=True)
 
     # Relationships
     account = relationship(

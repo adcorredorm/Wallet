@@ -727,4 +727,76 @@ class TestDelete:
         with pytest.raises(NotFoundError):
             transaction_service.delete(uuid4())
 
+
+class TestCreateBaseRate:
+    """Tests that base_rate is accepted and forwarded by TransactionService.create."""
+
+    def test_create_passes_base_rate_to_repo(
+        self,
+        transaction_service,
+        mock_transaction_repo,
+        mock_account_repo,
+        mock_category_repo,
+    ):
+        """base_rate passed to create() must be forwarded to repository.create()."""
+        from app.models.category import CategoryType
+
+        account_id = uuid4()
+        category_id = uuid4()
+
+        mock_account = Mock()
+        mock_account.currency = "COP"
+        mock_account_repo.get_by_id_or_fail.return_value = mock_account
+
+        mock_category = Mock()
+        mock_category.type = CategoryType.EXPENSE
+        mock_category_repo.get_by_id_or_fail.return_value = mock_category
+
+        expected_tx = Mock()
+        mock_transaction_repo.create.return_value = expected_tx
+
+        result = transaction_service.create(
+            type="expense",
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 12),
+            account_id=account_id,
+            category_id=category_id,
+            base_rate=Decimal("4200.123456789"),
+        )
+
+        call_kwargs = mock_transaction_repo.create.call_args.kwargs
+        assert call_kwargs["base_rate"] == Decimal("4200.123456789")
+        assert result is expected_tx
+
+    def test_create_base_rate_none_by_default(
+        self,
+        transaction_service,
+        mock_transaction_repo,
+        mock_account_repo,
+        mock_category_repo,
+    ):
+        """base_rate defaults to None when not provided."""
+        from app.models.category import CategoryType
+
+        mock_account = Mock()
+        mock_account.currency = "COP"
+        mock_account_repo.get_by_id_or_fail.return_value = mock_account
+
+        mock_category = Mock()
+        mock_category.type = CategoryType.EXPENSE
+        mock_category_repo.get_by_id_or_fail.return_value = mock_category
+
+        mock_transaction_repo.create.return_value = Mock()
+
+        transaction_service.create(
+            type="expense",
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 12),
+            account_id=uuid4(),
+            category_id=uuid4(),
+        )
+
+        call_kwargs = mock_transaction_repo.create.call_args.kwargs
+        assert call_kwargs.get("base_rate") is None
+
         mock_transaction_repo.delete.assert_not_called()
