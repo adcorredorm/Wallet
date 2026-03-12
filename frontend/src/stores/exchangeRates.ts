@@ -72,7 +72,8 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
    * Look up a rate by ISO 4217 code. Returns undefined when not cached.
    * Used internally by convert(), getRate(), and getRateDisplay().
    */
-  function _findRate(currencyCode: string): LocalExchangeRate | undefined {
+  function _findRate(currencyCode: string | undefined | null): LocalExchangeRate | undefined {
+    if (!currencyCode) return undefined
     return rates.value.find(r => r.currency_code === currencyCode.toUpperCase())
   }
 
@@ -157,7 +158,8 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
    * @param fromCurrency - ISO 4217 source currency code (e.g. 'COP')
    * @param toCurrency   - ISO 4217 target currency code (e.g. 'USD')
    */
-  function convert(amount: number, fromCurrency: string, toCurrency: string): number {
+  function convert(amount: number, fromCurrency: string | undefined | null, toCurrency: string | undefined | null): number {
+    if (!fromCurrency || !toCurrency) return amount
     const from = fromCurrency.toUpperCase()
     const to = toCurrency.toUpperCase()
 
@@ -184,7 +186,8 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
    * Example: getRate('USD', 'COP') → 4200
    *          getRate('COP', 'USD') → 0.000238...
    */
-  function getRate(fromCurrency: string, toCurrency: string): number | null {
+  function getRate(fromCurrency: string | undefined | null, toCurrency: string | undefined | null): number | null {
+    if (!fromCurrency || !toCurrency) return null
     const from = fromCurrency.toUpperCase()
     const to = toCurrency.toUpperCase()
 
@@ -219,9 +222,10 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
    * Returns null if either currency is missing from the cache.
    */
   function getRateDisplay(
-    fromCurrency: string,
-    toCurrency: string
+    fromCurrency: string | undefined | null,
+    toCurrency: string | undefined | null
   ): { forward: string; inverse: string } | null {
+    if (!fromCurrency || !toCurrency) return null
     const from = fromCurrency.toUpperCase()
     const to = toCurrency.toUpperCase()
 
