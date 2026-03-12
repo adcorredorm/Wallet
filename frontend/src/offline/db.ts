@@ -20,6 +20,9 @@
  * Version strategy:
  * - Version 1 is the initial schema for Phase 2.
  * - Version 2 renames Spanish field names to English to match the new backend API.
+ * - Version 3 adds exchangeRates and settings tables for multi-currency support.
+ * - Version 4 introduces base_rate on transactions/transfers; clears all tables
+ *   (test data only) so no records exist without base_rate.
  */
 
 import Dexie, { type Table } from 'dexie'
@@ -94,7 +97,35 @@ class WalletDB extends Dexie {
       // _sync_status so the sync engine can query only dirty settings.
       settings: 'key, _sync_status'
     })
-    // No upgrade() function needed — both new tables start empty.
+
+    this.version(4)
+      .stores({
+        // Schema strings are identical to v3 — base_rate is not indexed.
+        // Dexie stores the full object regardless of what is listed here;
+        // only fields that need to be queried by must appear in the string.
+        accounts: 'id, server_id, type, active, _sync_status',
+        transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+        transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+        categories: 'id, server_id, type, parent_category_id, _sync_status',
+        pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+        exchangeRates: 'currency_code',
+        settings: 'key, _sync_status'
+      })
+      .upgrade(async (tx) => {
+        // Migration note: v4 introduces base_rate on transactions and transfers.
+        // Current data is test data only — clear all tables for a clean slate
+        // so no records exist without base_rate, which would produce incorrect
+        // historical net worth calculations in the chart composable.
+        await Promise.all([
+          tx.table('accounts').clear(),
+          tx.table('transactions').clear(),
+          tx.table('transfers').clear(),
+          tx.table('categories').clear(),
+          tx.table('pendingMutations').clear(),
+          tx.table('exchangeRates').clear(),
+          tx.table('settings').clear()
+        ])
+      })
   }
 }
 
