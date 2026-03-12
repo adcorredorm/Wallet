@@ -34,13 +34,13 @@ class TransactionRepository(BaseRepository[Transaction]):
         return db.session.execute(
             db.select(Transaction)
             .where(Transaction.id == transaction_id)
-            .options(selectinload(Transaction.cuenta))
-            .options(selectinload(Transaction.categoria))
+            .options(selectinload(Transaction.account))
+            .options(selectinload(Transaction.category))
         ).scalar_one_or_none()
 
     def get_by_account(
         self,
-        cuenta_id: UUID,
+        account_id: UUID,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> list[Transaction]:
@@ -48,7 +48,7 @@ class TransactionRepository(BaseRepository[Transaction]):
         Get transactions for a specific account.
 
         Args:
-            cuenta_id: Account UUID
+            account_id: Account UUID
             limit: Maximum number of results
             offset: Number of results to skip
 
@@ -57,8 +57,8 @@ class TransactionRepository(BaseRepository[Transaction]):
         """
         query = (
             db.select(Transaction)
-            .where(Transaction.cuenta_id == cuenta_id)
-            .order_by(Transaction.fecha.desc())
+            .where(Transaction.account_id == account_id)
+            .order_by(Transaction.date.desc())
         )
 
         if limit:
@@ -70,7 +70,7 @@ class TransactionRepository(BaseRepository[Transaction]):
 
     def get_by_category(
         self,
-        categoria_id: UUID,
+        category_id: UUID,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> list[Transaction]:
@@ -78,7 +78,7 @@ class TransactionRepository(BaseRepository[Transaction]):
         Get transactions for a specific category.
 
         Args:
-            categoria_id: Category UUID
+            category_id: Category UUID
             limit: Maximum number of results
             offset: Number of results to skip
 
@@ -87,8 +87,8 @@ class TransactionRepository(BaseRepository[Transaction]):
         """
         query = (
             db.select(Transaction)
-            .where(Transaction.categoria_id == categoria_id)
-            .order_by(Transaction.fecha.desc())
+            .where(Transaction.category_id == category_id)
+            .order_by(Transaction.date.desc())
         )
 
         if limit:
@@ -100,11 +100,11 @@ class TransactionRepository(BaseRepository[Transaction]):
 
     def get_filtered(
         self,
-        cuenta_id: Optional[UUID] = None,
-        categoria_id: Optional[UUID] = None,
-        tipo: Optional[TransactionType] = None,
-        fecha_desde: Optional[date] = None,
-        fecha_hasta: Optional[date] = None,
+        account_id: Optional[UUID] = None,
+        category_id: Optional[UUID] = None,
+        type: Optional[TransactionType] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
         tags: Optional[list[str]] = None,
         limit: int = 20,
         offset: int = 0,
@@ -113,11 +113,11 @@ class TransactionRepository(BaseRepository[Transaction]):
         Get transactions with filters and pagination.
 
         Args:
-            cuenta_id: Filter by account
-            categoria_id: Filter by category
-            tipo: Filter by transaction type
-            fecha_desde: Filter by start date (inclusive)
-            fecha_hasta: Filter by end date (inclusive)
+            account_id: Filter by account
+            category_id: Filter by category
+            type: Filter by transaction type
+            date_from: Filter by start date (inclusive)
+            date_to: Filter by end date (inclusive)
             tags: Filter by tags (any match)
             limit: Maximum results per page
             offset: Number of results to skip
@@ -128,16 +128,16 @@ class TransactionRepository(BaseRepository[Transaction]):
         # Build filters
         filters = []
 
-        if cuenta_id:
-            filters.append(Transaction.cuenta_id == cuenta_id)
-        if categoria_id:
-            filters.append(Transaction.categoria_id == categoria_id)
-        if tipo:
-            filters.append(Transaction.tipo == tipo)
-        if fecha_desde:
-            filters.append(Transaction.fecha >= fecha_desde)
-        if fecha_hasta:
-            filters.append(Transaction.fecha <= fecha_hasta)
+        if account_id:
+            filters.append(Transaction.account_id == account_id)
+        if category_id:
+            filters.append(Transaction.category_id == category_id)
+        if type:
+            filters.append(Transaction.type == type)
+        if date_from:
+            filters.append(Transaction.date >= date_from)
+        if date_to:
+            filters.append(Transaction.date <= date_to)
         if tags:
             # PostgreSQL array overlap operator
             filters.append(Transaction.tags.overlap(tags))
@@ -151,9 +151,9 @@ class TransactionRepository(BaseRepository[Transaction]):
         # Get paginated results
         query = (
             db.select(Transaction)
-            .options(selectinload(Transaction.cuenta))
-            .options(selectinload(Transaction.categoria))
-            .order_by(Transaction.fecha.desc(), Transaction.created_at.desc())
+            .options(selectinload(Transaction.account))
+            .options(selectinload(Transaction.category))
+            .order_by(Transaction.date.desc(), Transaction.created_at.desc())
         )
 
         if filters:
@@ -177,9 +177,9 @@ class TransactionRepository(BaseRepository[Transaction]):
         return (
             db.session.execute(
                 db.select(Transaction)
-                .options(selectinload(Transaction.cuenta))
-                .options(selectinload(Transaction.categoria))
-                .order_by(Transaction.fecha.desc(), Transaction.created_at.desc())
+                .options(selectinload(Transaction.account))
+                .options(selectinload(Transaction.category))
+                .order_by(Transaction.date.desc(), Transaction.created_at.desc())
                 .limit(limit)
             )
             .scalars()

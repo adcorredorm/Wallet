@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 class AccountType(enum.Enum):
     """Enumeration of supported account types."""
 
-    DEBITO = "debito"
-    CREDITO = "credito"
-    EFECTIVO = "efectivo"
+    DEBIT = "debit"
+    CREDIT = "credit"
+    CASH = "cash"
 
 
 class Account(BaseModel):
@@ -32,45 +32,45 @@ class Account(BaseModel):
     Financial account model.
 
     Attributes:
-        nombre: Account name (max 100 characters)
-        tipo: Account type (debit, credit, cash)
-        divisa: Currency code (ISO 4217, 3 characters)
-        descripcion: Optional account description
+        name: Account name (max 100 characters)
+        type: Account type (debit, credit, cash)
+        currency: Currency code (ISO 4217, 3 characters)
+        description: Optional account description
         tags: List of tags for categorization
-        activa: Whether the account is active (soft delete)
-        transacciones: Related transactions
-        transferencias_origen: Transfers where this is the source account
-        transferencias_destino: Transfers where this is the destination account
+        active: Whether the account is active (soft delete)
+        transactions: Related transactions
+        transfers_source: Transfers where this is the source account
+        transfers_destination: Transfers where this is the destination account
     """
 
-    __tablename__ = "cuentas"
+    __tablename__ = "accounts"
 
-    nombre = Column(String(100), nullable=False)
-    tipo = Column(Enum(AccountType), nullable=False)
-    divisa = Column(String(3), nullable=False)  # ISO 4217
-    descripcion = Column(String(500), nullable=True)
+    name = Column(String(100), nullable=False)
+    type = Column(Enum(AccountType), nullable=False)
+    currency = Column(String(3), nullable=False)  # ISO 4217
+    description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
-    activa = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
 
     # Relationships
-    transacciones = relationship(
+    transactions = relationship(
         "Transaction",
-        back_populates="cuenta",
+        back_populates="account",
         lazy="dynamic",
     )
-    transferencias_origen = relationship(
+    transfers_source = relationship(
         "Transfer",
-        foreign_keys="Transfer.cuenta_origen_id",
-        back_populates="cuenta_origen",
+        foreign_keys="Transfer.source_account_id",
+        back_populates="source_account",
         lazy="dynamic",
     )
-    transferencias_destino = relationship(
+    transfers_destination = relationship(
         "Transfer",
-        foreign_keys="Transfer.cuenta_destino_id",
-        back_populates="cuenta_destino",
+        foreign_keys="Transfer.destination_account_id",
+        back_populates="destination_account",
         lazy="dynamic",
     )
 
     def __repr__(self) -> str:
         """String representation of the account."""
-        return f"<Account {self.nombre} ({self.divisa})>"
+        return f"<Account {self.name} ({self.currency})>"

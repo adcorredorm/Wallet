@@ -53,9 +53,9 @@ def list_transfers():
     List transfers with filters and pagination.
 
     Query Parameters:
-        cuenta_id (UUID): Filter by account (source or destination)
-        fecha_desde (date): Filter by start date
-        fecha_hasta (date): Filter by end date
+        account_id (UUID): Filter by account (source or destination)
+        date_from (date): Filter by start date
+        date_to (date): Filter by end date
         tags (list[str]): Filter by tags (comma-separated)
         page (int): Page number (default: 1)
         limit (int): Items per page (default: 20, max: 100)
@@ -68,9 +68,9 @@ def list_transfers():
     try:
         # Parse query parameters
         filters_data = {
-            "cuenta_id": request.args.get("cuenta_id"),
-            "fecha_desde": request.args.get("fecha_desde"),
-            "fecha_hasta": request.args.get("fecha_hasta"),
+            "account_id": request.args.get("account_id"),
+            "date_from": request.args.get("date_from"),
+            "date_to": request.args.get("date_to"),
             "tags": request.args.get("tags", "").split(",") if request.args.get("tags") else None,
             "page": int(request.args.get("page", 1)),
             "limit": min(int(request.args.get("limit", 20)), 100),
@@ -81,9 +81,9 @@ def list_transfers():
 
         # Get filtered transfers
         transfers, total = transfer_service.get_filtered(
-            cuenta_id=filters.cuenta_id,
-            fecha_desde=filters.fecha_desde,
-            fecha_hasta=filters.fecha_hasta,
+            account_id=filters.account_id,
+            date_from=filters.date_from,
+            date_to=filters.date_to,
             tags=filters.tags,
             page=filters.page,
             limit=filters.limit,
@@ -93,8 +93,8 @@ def list_transfers():
         items = []
         for transfer in transfers:
             transfer_data = TransferResponse.model_validate(transfer).model_dump(mode="json")
-            transfer_data["cuenta_origen"] = AccountResponse.model_validate(transfer.cuenta_origen).model_dump(mode="json")
-            transfer_data["cuenta_destino"] = AccountResponse.model_validate(transfer.cuenta_destino).model_dump(mode="json")
+            transfer_data["source_account"] = AccountResponse.model_validate(transfer.source_account).model_dump(mode="json")
+            transfer_data["destination_account"] = AccountResponse.model_validate(transfer.destination_account).model_dump(mode="json")
             items.append(transfer_data)
 
         return paginated_response(
@@ -128,8 +128,8 @@ def get_transfer(transfer_id: UUID):
 
         # Format response with relations
         data = TransferResponse.model_validate(transfer).model_dump(mode="json")
-        data["cuenta_origen"] = AccountResponse.model_validate(transfer.cuenta_origen).model_dump(mode="json")
-        data["cuenta_destino"] = AccountResponse.model_validate(transfer.cuenta_destino).model_dump(mode="json")
+        data["source_account"] = AccountResponse.model_validate(transfer.source_account).model_dump(mode="json")
+        data["destination_account"] = AccountResponse.model_validate(transfer.destination_account).model_dump(mode="json")
 
         return success_response(data=data)
 
@@ -160,11 +160,11 @@ def create_transfer():
 
         # Create transfer (idempotent when client_id is present)
         transfer = transfer_service.create(
-            cuenta_origen_id=transfer_data.cuenta_origen_id,
-            cuenta_destino_id=transfer_data.cuenta_destino_id,
-            monto=transfer_data.monto,
-            fecha=transfer_data.fecha,
-            descripcion=transfer_data.descripcion,
+            source_account_id=transfer_data.source_account_id,
+            destination_account_id=transfer_data.destination_account_id,
+            amount=transfer_data.amount,
+            date=transfer_data.date,
+            description=transfer_data.description,
             tags=transfer_data.tags,
             client_id=transfer_data.client_id,
         )
@@ -240,9 +240,9 @@ def update_transfer(transfer_id: UUID):
         # Update transfer
         transfer = transfer_service.update(
             transfer_id=transfer_id,
-            monto=transfer_data.monto,
-            fecha=transfer_data.fecha,
-            descripcion=transfer_data.descripcion,
+            amount=transfer_data.amount,
+            date=transfer_data.date,
+            description=transfer_data.description,
             tags=transfer_data.tags,
         )
 

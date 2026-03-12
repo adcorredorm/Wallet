@@ -60,8 +60,8 @@ vi.mock('@/api/categories', () => ({
 function makeCat(overrides: Partial<LocalCategory> = {}): LocalCategory {
   return {
     id: 'cat-1',
-    nombre: 'Test Category',
-    tipo: CategoryType.GASTO,
+    name: 'Test Category',
+    type: CategoryType.EXPENSE,
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
     _sync_status: 'synced',
@@ -87,9 +87,9 @@ describe('useCategoriesStore — categoryTree', () => {
   it('groups parent-child relationships correctly', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'parent-1', nombre: 'Alimentación', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'child-1', nombre: 'Restaurantes', tipo: CategoryType.GASTO, categoria_padre_id: 'parent-1' }),
-      makeCat({ id: 'child-2', nombre: 'Supermercado', tipo: CategoryType.GASTO, categoria_padre_id: 'parent-1' }),
+      makeCat({ id: 'parent-1', name: 'Alimentación', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'child-1', name: 'Restaurantes', type: CategoryType.EXPENSE, parent_category_id: 'parent-1' }),
+      makeCat({ id: 'child-2', name: 'Supermercado', type: CategoryType.EXPENSE, parent_category_id: 'parent-1' }),
     ]
 
     const tree = store.categoryTree
@@ -102,28 +102,28 @@ describe('useCategoriesStore — categoryTree', () => {
   it('sorts groups with children first (alpha), then standalone (alpha)', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'standalone-z', nombre: 'Zzz Standalone' }),
-      makeCat({ id: 'standalone-a', nombre: 'Aaa Standalone' }),
-      makeCat({ id: 'parent-b', nombre: 'Bbb Parent' }),
-      makeCat({ id: 'child-b1', nombre: 'Child B1', categoria_padre_id: 'parent-b' }),
-      makeCat({ id: 'parent-a', nombre: 'Aaa Parent' }),
-      makeCat({ id: 'child-a1', nombre: 'Child A1', categoria_padre_id: 'parent-a' }),
+      makeCat({ id: 'standalone-z', name: 'Zzz Standalone' }),
+      makeCat({ id: 'standalone-a', name: 'Aaa Standalone' }),
+      makeCat({ id: 'parent-b', name: 'Bbb Parent' }),
+      makeCat({ id: 'child-b1', name: 'Child B1', parent_category_id: 'parent-b' }),
+      makeCat({ id: 'parent-a', name: 'Aaa Parent' }),
+      makeCat({ id: 'child-a1', name: 'Child A1', parent_category_id: 'parent-a' }),
     ]
 
     const tree = store.categoryTree
     // Groups with children first, alphabetically
-    expect(tree[0].parent.nombre).toBe('Aaa Parent')
-    expect(tree[1].parent.nombre).toBe('Bbb Parent')
+    expect(tree[0].parent.name).toBe('Aaa Parent')
+    expect(tree[1].parent.name).toBe('Bbb Parent')
     // Then standalone, alphabetically
-    expect(tree[2].parent.nombre).toBe('Aaa Standalone')
-    expect(tree[3].parent.nombre).toBe('Zzz Standalone')
+    expect(tree[2].parent.name).toBe('Aaa Standalone')
+    expect(tree[3].parent.name).toBe('Zzz Standalone')
   })
 
   it('treats orphaned children (parent not in store) as standalone roots', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'orphan-1', nombre: 'Orphan', categoria_padre_id: 'nonexistent-parent' }),
-      makeCat({ id: 'normal-1', nombre: 'Normal' }),
+      makeCat({ id: 'orphan-1', name: 'Orphan', parent_category_id: 'nonexistent-parent' }),
+      makeCat({ id: 'normal-1', name: 'Normal' }),
     ]
 
     const tree = store.categoryTree
@@ -131,8 +131,8 @@ describe('useCategoriesStore — categoryTree', () => {
     // Both should be standalone (no children)
     expect(tree.every(g => g.children.length === 0)).toBe(true)
     // Alphabetical: Normal before Orphan
-    expect(tree[0].parent.nombre).toBe('Normal')
-    expect(tree[1].parent.nombre).toBe('Orphan')
+    expect(tree[0].parent.name).toBe('Normal')
+    expect(tree[1].parent.name).toBe('Orphan')
   })
 
   it('returns empty array when categories is empty', () => {
@@ -142,17 +142,17 @@ describe('useCategoriesStore — categoryTree', () => {
     expect(store.categoryTree).toEqual([])
   })
 
-  it('sorts children within a group alphabetically by nombre', () => {
+  it('sorts children within a group alphabetically by name', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'parent', nombre: 'Parent' }),
-      makeCat({ id: 'child-z', nombre: 'Zzz', categoria_padre_id: 'parent' }),
-      makeCat({ id: 'child-a', nombre: 'Aaa', categoria_padre_id: 'parent' }),
-      makeCat({ id: 'child-m', nombre: 'Mmm', categoria_padre_id: 'parent' }),
+      makeCat({ id: 'parent', name: 'Parent' }),
+      makeCat({ id: 'child-z', name: 'Zzz', parent_category_id: 'parent' }),
+      makeCat({ id: 'child-a', name: 'Aaa', parent_category_id: 'parent' }),
+      makeCat({ id: 'child-m', name: 'Mmm', parent_category_id: 'parent' }),
     ]
 
     const tree = store.categoryTree
-    expect(tree[0].children.map(c => c.nombre)).toEqual(['Aaa', 'Mmm', 'Zzz'])
+    expect(tree[0].children.map(c => c.name)).toEqual(['Aaa', 'Mmm', 'Zzz'])
   })
 })
 
@@ -161,58 +161,58 @@ describe('useCategoriesStore — categoryTree', () => {
 // ---------------------------------------------------------------------------
 
 describe('useCategoriesStore — compatibleParentCategories', () => {
-  it('returns only gasto and ambos parents for tipo=gasto', () => {
+  it('returns only expense and both parents for type=expense', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'cat-gasto', nombre: 'Gasto Cat', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'cat-ingreso', nombre: 'Ingreso Cat', tipo: CategoryType.INGRESO }),
-      makeCat({ id: 'cat-ambos', nombre: 'Ambos Cat', tipo: CategoryType.AMBOS }),
+      makeCat({ id: 'cat-expense', name: 'Gasto Cat', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'cat-income', name: 'Ingreso Cat', type: CategoryType.INCOME }),
+      makeCat({ id: 'cat-both', name: 'Ambos Cat', type: CategoryType.BOTH }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.GASTO)
+    const result = store.compatibleParentCategories(CategoryType.EXPENSE)
     const ids = result.map(c => c.id)
-    expect(ids).toContain('cat-gasto')
-    expect(ids).toContain('cat-ambos')
-    expect(ids).not.toContain('cat-ingreso')
+    expect(ids).toContain('cat-expense')
+    expect(ids).toContain('cat-both')
+    expect(ids).not.toContain('cat-income')
   })
 
-  it('returns only ingreso and ambos parents for tipo=ingreso', () => {
+  it('returns only income and both parents for type=income', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'cat-gasto', nombre: 'Gasto Cat', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'cat-ingreso', nombre: 'Ingreso Cat', tipo: CategoryType.INGRESO }),
-      makeCat({ id: 'cat-ambos', nombre: 'Ambos Cat', tipo: CategoryType.AMBOS }),
+      makeCat({ id: 'cat-expense', name: 'Gasto Cat', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'cat-income', name: 'Ingreso Cat', type: CategoryType.INCOME }),
+      makeCat({ id: 'cat-both', name: 'Ambos Cat', type: CategoryType.BOTH }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.INGRESO)
+    const result = store.compatibleParentCategories(CategoryType.INCOME)
     const ids = result.map(c => c.id)
-    expect(ids).toContain('cat-ingreso')
-    expect(ids).toContain('cat-ambos')
-    expect(ids).not.toContain('cat-gasto')
+    expect(ids).toContain('cat-income')
+    expect(ids).toContain('cat-both')
+    expect(ids).not.toContain('cat-expense')
   })
 
-  it('returns only ambos parents for tipo=ambos', () => {
+  it('returns only both parents for type=both', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'cat-gasto', nombre: 'Gasto Cat', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'cat-ingreso', nombre: 'Ingreso Cat', tipo: CategoryType.INGRESO }),
-      makeCat({ id: 'cat-ambos', nombre: 'Ambos Cat', tipo: CategoryType.AMBOS }),
+      makeCat({ id: 'cat-expense', name: 'Gasto Cat', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'cat-income', name: 'Ingreso Cat', type: CategoryType.INCOME }),
+      makeCat({ id: 'cat-both', name: 'Ambos Cat', type: CategoryType.BOTH }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.AMBOS)
+    const result = store.compatibleParentCategories(CategoryType.BOTH)
     const ids = result.map(c => c.id)
-    expect(ids).toEqual(['cat-ambos'])
+    expect(ids).toEqual(['cat-both'])
   })
 
   it('excludes excludeId and its children from results', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'cat-a', nombre: 'Cat A', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'cat-b', nombre: 'Cat B', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'child-a', nombre: 'Child A', tipo: CategoryType.GASTO, categoria_padre_id: 'cat-a' }),
+      makeCat({ id: 'cat-a', name: 'Cat A', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'cat-b', name: 'Cat B', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'child-a', name: 'Child A', type: CategoryType.EXPENSE, parent_category_id: 'cat-a' }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.GASTO, 'cat-a')
+    const result = store.compatibleParentCategories(CategoryType.EXPENSE, 'cat-a')
     const ids = result.map(c => c.id)
     expect(ids).not.toContain('cat-a')
     // child-a is not root, so wouldn't be returned anyway
@@ -223,12 +223,12 @@ describe('useCategoriesStore — compatibleParentCategories', () => {
   it('includes root categories that already have children (they can accept more children)', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'parent-with-child', nombre: 'Has Child', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'child-1', nombre: 'Child', tipo: CategoryType.GASTO, categoria_padre_id: 'parent-with-child' }),
-      makeCat({ id: 'no-children', nombre: 'No Children', tipo: CategoryType.GASTO }),
+      makeCat({ id: 'parent-with-child', name: 'Has Child', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'child-1', name: 'Child', type: CategoryType.EXPENSE, parent_category_id: 'parent-with-child' }),
+      makeCat({ id: 'no-children', name: 'No Children', type: CategoryType.EXPENSE }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.GASTO)
+    const result = store.compatibleParentCategories(CategoryType.EXPENSE)
     const ids = result.map(c => c.id)
     // Both root categories are valid parents regardless of whether they already have children
     expect(ids).toContain('parent-with-child')
@@ -240,11 +240,11 @@ describe('useCategoriesStore — compatibleParentCategories', () => {
   it('only returns root categories — excludes categories that already have a parent (2-level limit)', () => {
     const store = setup()
     store.categories = [
-      makeCat({ id: 'root', nombre: 'Root', tipo: CategoryType.GASTO }),
-      makeCat({ id: 'child', nombre: 'Child', tipo: CategoryType.GASTO, categoria_padre_id: 'root' }),
+      makeCat({ id: 'root', name: 'Root', type: CategoryType.EXPENSE }),
+      makeCat({ id: 'child', name: 'Child', type: CategoryType.EXPENSE, parent_category_id: 'root' }),
     ]
 
-    const result = store.compatibleParentCategories(CategoryType.GASTO)
+    const result = store.compatibleParentCategories(CategoryType.EXPENSE)
     const ids = result.map(c => c.id)
     // child has a parent so cannot itself be a parent
     expect(ids).not.toContain('child')
@@ -256,7 +256,7 @@ describe('useCategoriesStore — compatibleParentCategories', () => {
     const store = setup()
     store.categories = []
 
-    const result = store.compatibleParentCategories(CategoryType.GASTO)
+    const result = store.compatibleParentCategories(CategoryType.EXPENSE)
     expect(result).toEqual([])
   })
 })

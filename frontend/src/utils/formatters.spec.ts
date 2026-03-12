@@ -250,16 +250,16 @@ describe('getInitials', () => {
 // formatAccountType
 // ---------------------------------------------------------------------------
 describe('formatAccountType', () => {
-  it('maps "debito" to "Débito"', () => {
-    expect(formatAccountType('debito')).toBe('Débito')
+  it('maps "debit" to "Débito"', () => {
+    expect(formatAccountType('debit')).toBe('Débito')
   })
 
-  it('maps "credito" to "Crédito"', () => {
-    expect(formatAccountType('credito')).toBe('Crédito')
+  it('maps "credit" to "Crédito"', () => {
+    expect(formatAccountType('credit')).toBe('Crédito')
   })
 
-  it('maps "efectivo" to "Efectivo"', () => {
-    expect(formatAccountType('efectivo')).toBe('Efectivo')
+  it('maps "cash" to "Efectivo"', () => {
+    expect(formatAccountType('cash')).toBe('Efectivo')
   })
 
   it('returns the raw value for an unknown type', () => {
@@ -271,16 +271,16 @@ describe('formatAccountType', () => {
 // formatCategoryType
 // ---------------------------------------------------------------------------
 describe('formatCategoryType', () => {
-  it('maps "ingreso" to "Ingreso"', () => {
-    expect(formatCategoryType('ingreso')).toBe('Ingreso')
+  it('maps "income" to "Ingreso"', () => {
+    expect(formatCategoryType('income')).toBe('Ingreso')
   })
 
-  it('maps "gasto" to "Gasto"', () => {
-    expect(formatCategoryType('gasto')).toBe('Gasto')
+  it('maps "expense" to "Gasto"', () => {
+    expect(formatCategoryType('expense')).toBe('Gasto')
   })
 
-  it('maps "ambos" to "Ambos"', () => {
-    expect(formatCategoryType('ambos')).toBe('Ambos')
+  it('maps "both" to "Ambos"', () => {
+    expect(formatCategoryType('both')).toBe('Ambos')
   })
 
   it('returns the raw value for an unknown type', () => {

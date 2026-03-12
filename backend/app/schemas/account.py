@@ -13,9 +13,9 @@ from enum import Enum
 class AccountType(str, Enum):
     """Account type enumeration."""
 
-    DEBITO = "debito"
-    CREDITO = "credito"
-    EFECTIVO = "efectivo"
+    DEBIT = "debit"
+    CREDIT = "credit"
+    CASH = "cash"
 
 
 # Supported currencies (ISO 4217)
@@ -28,24 +28,24 @@ class AccountCreate(BaseModel):
     Schema for creating a new account.
 
     Args:
-        nombre: Account name (1-100 characters)
-        tipo: Account type (debit, credit, cash)
-        divisa: Currency code (ISO 4217, 3 characters)
-        descripcion: Optional description (max 500 characters)
+        name: Account name (1-100 characters)
+        type: Account type (debit, credit, cash)
+        currency: Currency code (ISO 4217, 3 characters)
+        description: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
     """
 
-    nombre: str = Field(..., min_length=1, max_length=100)
-    tipo: AccountType
-    divisa: str = Field(..., min_length=3, max_length=3)
-    descripcion: Optional[str] = Field(None, max_length=500)
+    name: str = Field(..., min_length=1, max_length=100)
+    type: AccountType
+    currency: str = Field(..., min_length=3, max_length=3)
+    description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     client_id: Optional[str] = Field(None, max_length=100)
 
-    @field_validator("divisa")
+    @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: str) -> str:
         """Validate that currency is supported."""
@@ -74,14 +74,14 @@ class AccountUpdate(BaseModel):
     All fields are optional to support partial updates.
     """
 
-    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
-    tipo: Optional[AccountType] = None
-    divisa: Optional[str] = Field(None, min_length=3, max_length=3)
-    descripcion: Optional[str] = Field(None, max_length=500)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    type: Optional[AccountType] = None
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
-    activa: Optional[bool] = None
+    active: Optional[bool] = None
 
-    @field_validator("divisa")
+    @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
         """Validate that currency is supported if provided."""
@@ -114,12 +114,12 @@ class AccountResponse(BaseModel):
     """
 
     id: UUID
-    nombre: str
-    tipo: AccountType
-    divisa: str
-    descripcion: Optional[str]
+    name: str
+    type: AccountType
+    currency: str
+    description: Optional[str]
     tags: list[str]
-    activa: bool
+    active: bool
     created_at: datetime
     updated_at: datetime
 

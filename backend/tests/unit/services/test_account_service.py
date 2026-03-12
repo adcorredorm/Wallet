@@ -34,20 +34,20 @@ def sample_account():
     """Create a sample account for testing."""
     account = Mock(spec=Account)
     account.id = uuid4()
-    account.nombre = "Cuenta Test"
-    account.tipo = AccountType.DEBITO
-    account.divisa = "MXN"
-    account.descripcion = "Descripción test"
+    account.name = "Cuenta Test"
+    account.type = AccountType.DEBIT
+    account.currency = "MXN"
+    account.description = "Descripción test"
     account.tags = ["test"]
-    account.activa = True
+    account.active = True
 
     # Mock relationships for delete validation
-    account.transacciones = Mock()
-    account.transacciones.count.return_value = 0
-    account.transferencias_origen = Mock()
-    account.transferencias_origen.count.return_value = 0
-    account.transferencias_destino = Mock()
-    account.transferencias_destino.count.return_value = 0
+    account.transactions = Mock()
+    account.transactions.count.return_value = 0
+    account.transfers_source = Mock()
+    account.transfers_source.count.return_value = 0
+    account.transfers_destination = Mock()
+    account.transfers_destination.count.return_value = 0
 
     return account
 
@@ -69,7 +69,7 @@ class TestGetAll:
     def test_get_all_including_archived(self, account_service, mock_repository, sample_account):
         """Should return all accounts including archived when requested."""
         archived_account = Mock(spec=Account)
-        archived_account.activa = False
+        archived_account.active = False
         mock_repository.get_all.return_value = [sample_account, archived_account]
 
         result = account_service.get_all(include_archived=True)
@@ -157,19 +157,19 @@ class TestCreate:
         mock_repository.create.return_value = new_account
 
         result = account_service.create(
-            nombre="Nueva Cuenta",
-            tipo="debito",
-            divisa="usd",  # Should be converted to uppercase
-            descripcion="Test description",
+            name="Nueva Cuenta",
+            type="debit",
+            currency="usd",  # Should be converted to uppercase
+            description="Test description",
             tags=["tag1", "tag2"]
         )
 
         assert result == new_account
         mock_repository.create.assert_called_once()
         call_kwargs = mock_repository.create.call_args.kwargs
-        assert call_kwargs["nombre"] == "Nueva Cuenta"
-        assert call_kwargs["tipo"] == AccountType.DEBITO
-        assert call_kwargs["divisa"] == "USD"  # Uppercase
+        assert call_kwargs["name"] == "Nueva Cuenta"
+        assert call_kwargs["type"] == AccountType.DEBIT
+        assert call_kwargs["currency"] == "USD"  # Uppercase
         assert call_kwargs["tags"] == ["tag1", "tag2"]
 
     def test_create_account_minimal_data(self, account_service, mock_repository):
@@ -178,28 +178,28 @@ class TestCreate:
         mock_repository.create.return_value = new_account
 
         result = account_service.create(
-            nombre="Cuenta Mínima",
-            tipo="efectivo",
-            divisa="MXN"
+            name="Cuenta Mínima",
+            type="cash",
+            currency="MXN"
         )
 
         assert result == new_account
         call_kwargs = mock_repository.create.call_args.kwargs
-        assert call_kwargs["descripcion"] is None
+        assert call_kwargs["description"] is None
         assert call_kwargs["tags"] == []
 
-    def test_create_account_divisa_uppercase(self, account_service, mock_repository):
+    def test_create_account_currency_uppercase(self, account_service, mock_repository):
         """Should convert currency code to uppercase."""
         mock_repository.create.return_value = Mock(spec=Account)
 
         account_service.create(
-            nombre="Test",
-            tipo="debito",
-            divisa="eur"
+            name="Test",
+            type="debit",
+            currency="eur"
         )
 
         call_kwargs = mock_repository.create.call_args.kwargs
-        assert call_kwargs["divisa"] == "EUR"
+        assert call_kwargs["currency"] == "EUR"
 
 
 class TestUpdate:
@@ -213,16 +213,16 @@ class TestUpdate:
 
         result = account_service.update(
             account_id=sample_account.id,
-            nombre="Nombre Actualizado",
-            divisa="USD"
+            name="Nombre Actualizado",
+            currency="USD"
         )
 
         assert result == updated_account
         mock_repository.update.assert_called_once()
         call_args = mock_repository.update.call_args
         assert call_args[0][0] == sample_account
-        assert call_args[1]["nombre"] == "Nombre Actualizado"
-        assert call_args[1]["divisa"] == "USD"
+        assert call_args[1]["name"] == "Nombre Actualizado"
+        assert call_args[1]["currency"] == "USD"
 
     def test_update_account_partial(self, account_service, mock_repository, sample_account):
         """Should only update provided fields."""
@@ -231,13 +231,13 @@ class TestUpdate:
 
         account_service.update(
             account_id=sample_account.id,
-            nombre="Nuevo Nombre"
+            name="Nuevo Nombre"
         )
 
         call_kwargs = mock_repository.update.call_args[1]
-        assert "nombre" in call_kwargs
-        assert "tipo" not in call_kwargs
-        assert "divisa" not in call_kwargs
+        assert "name" in call_kwargs
+        assert "type" not in call_kwargs
+        assert "currency" not in call_kwargs
 
     def test_update_account_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
@@ -245,7 +245,7 @@ class TestUpdate:
         mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
 
         with pytest.raises(NotFoundError):
-            account_service.update(account_id, nombre="Test")
+            account_service.update(account_id, name="Test")
 
 
 class TestArchive:
@@ -254,7 +254,7 @@ class TestArchive:
     def test_archive_success(self, account_service, mock_repository, sample_account):
         """Should archive account successfully."""
         archived_account = Mock(spec=Account)
-        archived_account.activa = False
+        archived_account.active = False
         mock_repository.soft_delete.return_value = archived_account
 
         result = account_service.archive(sample_account.id)
@@ -284,7 +284,7 @@ class TestDelete:
 
     def test_delete_with_transactions_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has transactions."""
-        sample_account.transacciones.count.return_value = 5
+        sample_account.transactions.count.return_value = 5
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:
@@ -293,9 +293,9 @@ class TestDelete:
         assert "transacciones" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
 
-    def test_delete_with_transfers_origen_fails(self, account_service, mock_repository, sample_account):
+    def test_delete_with_transfers_source_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has outgoing transfers."""
-        sample_account.transferencias_origen.count.return_value = 3
+        sample_account.transfers_source.count.return_value = 3
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:
@@ -304,9 +304,9 @@ class TestDelete:
         assert "transferencias" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
 
-    def test_delete_with_transfers_destino_fails(self, account_service, mock_repository, sample_account):
+    def test_delete_with_transfers_destination_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has incoming transfers."""
-        sample_account.transferencias_destino.count.return_value = 2
+        sample_account.transfers_destination.count.return_value = 2
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:

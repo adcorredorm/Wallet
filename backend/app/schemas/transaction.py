@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 class TransactionType(str, Enum):
     """Transaction type enumeration."""
 
-    INGRESO = "ingreso"
-    GASTO = "gasto"
+    INCOME = "income"
+    EXPENSE = "expense"
 
 
 class TransactionCreate(BaseModel):
@@ -26,32 +26,32 @@ class TransactionCreate(BaseModel):
     Schema for creating a new transaction.
 
     Args:
-        tipo: Transaction type (income or expense)
-        monto: Transaction amount (must be positive, 2 decimal places)
-        fecha: Transaction date
-        cuenta_id: Account ID for this transaction
-        categoria_id: Category ID for this transaction
-        titulo: Optional transaction title (max 100 characters)
-        descripcion: Optional description (max 500 characters)
+        type: Transaction type (income or expense)
+        amount: Transaction amount (must be positive, 2 decimal places)
+        date: Transaction date
+        account_id: Account ID for this transaction
+        category_id: Category ID for this transaction
+        title: Optional transaction title (max 100 characters)
+        description: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
     """
 
-    tipo: TransactionType
-    monto: Decimal = Field(..., gt=0)
-    fecha: date
-    cuenta_id: UUID
-    categoria_id: UUID
-    titulo: Optional[str] = Field(None, max_length=100)
-    descripcion: Optional[str] = Field(None, max_length=500)
+    type: TransactionType
+    amount: Decimal = Field(..., gt=0)
+    date: date
+    account_id: UUID
+    category_id: UUID
+    title: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     client_id: Optional[str] = Field(None, max_length=100)
 
-    @field_validator("monto")
+    @field_validator("amount")
     @classmethod
-    def validate_monto(cls, v: Decimal) -> Decimal:
+    def validate_amount(cls, v: Decimal) -> Decimal:
         """Validate amount is positive and round to 2 decimals."""
         if v <= 0:
             raise ValueError("El monto debe ser mayor a 0")
@@ -73,18 +73,18 @@ class TransactionUpdate(BaseModel):
     All fields are optional to support partial updates.
     """
 
-    tipo: Optional[TransactionType] = None
-    monto: Optional[Decimal] = Field(None, gt=0)
-    fecha: Optional[date] = None
-    cuenta_id: Optional[UUID] = None
-    categoria_id: Optional[UUID] = None
-    titulo: Optional[str] = Field(None, max_length=100)
-    descripcion: Optional[str] = Field(None, max_length=500)
+    type: Optional[TransactionType] = None
+    amount: Optional[Decimal] = Field(None, gt=0)
+    date: Optional[date] = None
+    account_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    title: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
 
-    @field_validator("monto")
+    @field_validator("amount")
     @classmethod
-    def validate_monto(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def validate_amount(cls, v: Optional[Decimal]) -> Optional[Decimal]:
         """Validate amount is positive and round to 2 decimals if provided."""
         if v is None:
             return v
@@ -112,13 +112,13 @@ class TransactionResponse(BaseModel):
     """
 
     id: UUID
-    tipo: TransactionType
-    monto: Decimal
-    fecha: date
-    cuenta_id: UUID
-    categoria_id: UUID
-    titulo: Optional[str]
-    descripcion: Optional[str]
+    type: TransactionType
+    amount: Decimal
+    date: date
+    account_id: UUID
+    category_id: UUID
+    title: Optional[str]
+    description: Optional[str]
     tags: list[str]
     created_at: datetime
     updated_at: datetime
@@ -133,8 +133,8 @@ class TransactionWithRelations(TransactionResponse):
     Extends TransactionResponse with nested account and category objects.
     """
 
-    cuenta: "AccountResponse"
-    categoria: "CategoryResponse"
+    account: "AccountResponse"
+    category: "CategoryResponse"
 
 
 class TransactionFilters(BaseModel):
@@ -142,29 +142,29 @@ class TransactionFilters(BaseModel):
     Schema for transaction list filters.
 
     Args:
-        cuenta_id: Filter by account ID
-        categoria_id: Filter by category ID
-        tipo: Filter by transaction type
-        fecha_desde: Filter by start date (inclusive)
-        fecha_hasta: Filter by end date (inclusive)
+        account_id: Filter by account ID
+        category_id: Filter by category ID
+        type: Filter by transaction type
+        date_from: Filter by start date (inclusive)
+        date_to: Filter by end date (inclusive)
         tags: Filter by tags (any match)
         page: Page number (1-indexed)
         limit: Items per page (1-100)
     """
 
-    cuenta_id: Optional[UUID] = None
-    categoria_id: Optional[UUID] = None
-    tipo: Optional[TransactionType] = None
-    fecha_desde: Optional[date] = None
-    fecha_hasta: Optional[date] = None
+    account_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    type: Optional[TransactionType] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
     tags: Optional[list[str]] = None
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=100)
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "TransactionFilters":
-        """Validate that fecha_desde is before fecha_hasta."""
-        if self.fecha_desde and self.fecha_hasta:
-            if self.fecha_desde > self.fecha_hasta:
-                raise ValueError("fecha_desde debe ser anterior a fecha_hasta")
+        """Validate that date_from is before date_to."""
+        if self.date_from and self.date_to:
+            if self.date_from > self.date_to:
+                raise ValueError("date_from debe ser anterior a date_to")
         return self

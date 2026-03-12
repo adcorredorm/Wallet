@@ -37,16 +37,16 @@ const emit = defineEmits<{
   click: []
 }>()
 
-const accountTypeLabel = computed(() => formatAccountType(props.account.tipo))
+const accountTypeLabel = computed(() => formatAccountType(props.account.type))
 
 // Icon for account type
 const accountIcon = computed(() => {
   const icons: Record<string, string> = {
-    debito: '💳',
-    credito: '💳',
-    efectivo: '💵'
+    debit: '💳',
+    credit: '💳',
+    cash: '💵'
   }
-  return icons[props.account.tipo] || '💰'
+  return icons[props.account.type] || '💰'
 })
 </script>
 
@@ -70,7 +70,7 @@ const accountIcon = computed(() => {
           -->
           <div class="flex items-center gap-2">
             <h3 class="font-semibold truncate">
-              {{ account.nombre }}
+              {{ account.name }}
             </h3>
             <!--
               SyncBadge is only rendered when the account has a _sync_status
@@ -84,7 +84,7 @@ const accountIcon = computed(() => {
             />
           </div>
           <p class="text-sm text-dark-text-secondary">
-            {{ accountTypeLabel }} • {{ account.divisa }}
+            {{ accountTypeLabel }} • {{ account.currency }}
           </p>
         </div>
       </div>
@@ -93,7 +93,7 @@ const accountIcon = computed(() => {
       <div class="flex-shrink-0 text-right ml-3">
         <CurrencyDisplay
           :amount="balance"
-          :currency="account.divisa"
+          :currency="account.currency"
           size="lg"
           compact
         />

@@ -51,7 +51,7 @@ export const accountsApi = {
   },
 
   /**
-   * Delete an account (soft delete - sets activa to false)
+   * Delete an account (soft delete - sets active to false)
    * @param id - Account UUID
    */
   delete(id: string): Promise<void> {

@@ -64,18 +64,18 @@ def sample_transaction():
     """
     Create a sample Transaction mock for testing.
 
-    tipo and categoria_id are set so that the update path can read the
+    type and category_id are set so that the update path can read the
     effective values when only one of them is changing.
     """
     transaction = MagicMock()
     transaction.id = uuid4()
-    transaction.tipo = TransactionType.GASTO
-    transaction.monto = Decimal("250.00")
-    transaction.fecha = date(2026, 3, 1)
-    transaction.cuenta_id = uuid4()
-    transaction.categoria_id = uuid4()
-    transaction.titulo = "Compra supermercado"
-    transaction.descripcion = "Descripción test"
+    transaction.type = TransactionType.EXPENSE
+    transaction.amount = Decimal("250.00")
+    transaction.date = date(2026, 3, 1)
+    transaction.account_id = uuid4()
+    transaction.category_id = uuid4()
+    transaction.title = "Compra supermercado"
+    transaction.description = "Descripción test"
     transaction.tags = ["test"]
     transaction.client_id = None
     return transaction
@@ -90,10 +90,10 @@ def _make_account() -> Mock:
     return MagicMock()
 
 
-def _make_category(tipo: CategoryType) -> Mock:
-    """Return a Mock with Category spec and the given tipo set."""
+def _make_category(type: CategoryType) -> Mock:
+    """Return a Mock with Category spec and the given type set."""
     cat = MagicMock()
-    cat.tipo = tipo
+    cat.type = type
     return cat
 
 
@@ -143,16 +143,16 @@ class TestGetFiltered:
         assert call_kwargs["limit"] == 10
         assert total == 1
 
-    def test_get_filtered_with_tipo_converts_to_enum(
+    def test_get_filtered_with_type_converts_to_enum(
         self, transaction_service, mock_transaction_repo, sample_transaction
     ):
-        """Should convert tipo string to TransactionType enum before querying."""
+        """Should convert type string to TransactionType enum before querying."""
         mock_transaction_repo.get_filtered.return_value = ([sample_transaction], 1)
 
-        transaction_service.get_filtered(tipo="gasto")
+        transaction_service.get_filtered(type="expense")
 
         call_kwargs = mock_transaction_repo.get_filtered.call_args.kwargs
-        assert call_kwargs["tipo"] == TransactionType.GASTO
+        assert call_kwargs["type"] == TransactionType.EXPENSE
 
 
 class TestCreate:
@@ -169,22 +169,22 @@ class TestCreate:
         """Should create transaction when account and category exist with compatible types."""
         mock_account_repo.get_by_id_or_fail.return_value = _make_account()
         mock_category_repo.get_by_id_or_fail.return_value = _make_category(
-            CategoryType.GASTO
+            CategoryType.EXPENSE
         )
         mock_transaction_repo.create.return_value = sample_transaction
 
         result = transaction_service.create(
-            tipo="gasto",
-            monto=Decimal("100.00"),
-            fecha=date(2026, 3, 1),
-            cuenta_id=uuid4(),
-            categoria_id=uuid4(),
+            type="expense",
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
         )
 
         assert result == sample_transaction
         mock_transaction_repo.create.assert_called_once()
 
-    def test_create_ingreso_with_ambos_category_is_valid(
+    def test_create_income_with_both_category_is_valid(
         self,
         transaction_service,
         mock_transaction_repo,
@@ -192,19 +192,19 @@ class TestCreate:
         mock_category_repo,
         sample_transaction,
     ):
-        """INGRESO transaction with AMBOS category should succeed."""
+        """INCOME transaction with BOTH category should succeed."""
         mock_account_repo.get_by_id_or_fail.return_value = _make_account()
         mock_category_repo.get_by_id_or_fail.return_value = _make_category(
-            CategoryType.AMBOS
+            CategoryType.BOTH
         )
         mock_transaction_repo.create.return_value = sample_transaction
 
         result = transaction_service.create(
-            tipo="ingreso",
-            monto=Decimal("500.00"),
-            fecha=date(2026, 3, 1),
-            cuenta_id=uuid4(),
-            categoria_id=uuid4(),
+            type="income",
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
         )
 
         assert result == sample_transaction
@@ -221,11 +221,11 @@ class TestCreate:
         mock_transaction_repo.get_by_client_id.return_value = sample_transaction
 
         result = transaction_service.create(
-            tipo="gasto",
-            monto=Decimal("100.00"),
-            fecha=date(2026, 3, 1),
-            cuenta_id=uuid4(),
-            categoria_id=uuid4(),
+            type="expense",
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
             client_id="client-key-abc",
         )
 
@@ -244,11 +244,11 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transaction_service.create(
-                tipo="gasto",
-                monto=Decimal("100.00"),
-                fecha=date(2026, 3, 1),
-                cuenta_id=uuid4(),
-                categoria_id=uuid4(),
+                type="expense",
+                amount=Decimal("100.00"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
             )
 
     def test_create_category_not_found(
@@ -262,53 +262,53 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transaction_service.create(
-                tipo="gasto",
-                monto=Decimal("100.00"),
-                fecha=date(2026, 3, 1),
-                cuenta_id=uuid4(),
-                categoria_id=uuid4(),
+                type="expense",
+                amount=Decimal("100.00"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
             )
 
-    def test_create_gasto_with_ingreso_category_raises_business_rule_error(
+    def test_create_expense_with_income_category_raises_business_rule_error(
         self,
         transaction_service,
         mock_account_repo,
         mock_category_repo,
     ):
-        """Should raise BusinessRuleError when a GASTO transaction uses an INGRESO category."""
+        """Should raise BusinessRuleError when an EXPENSE transaction uses an INCOME category."""
         mock_account_repo.get_by_id_or_fail.return_value = _make_account()
         mock_category_repo.get_by_id_or_fail.return_value = _make_category(
-            CategoryType.INGRESO
+            CategoryType.INCOME
         )
 
         with pytest.raises(BusinessRuleError):
             transaction_service.create(
-                tipo="gasto",
-                monto=Decimal("100.00"),
-                fecha=date(2026, 3, 1),
-                cuenta_id=uuid4(),
-                categoria_id=uuid4(),
+                type="expense",
+                amount=Decimal("100.00"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
             )
 
-    def test_create_ingreso_with_gasto_category_raises_business_rule_error(
+    def test_create_income_with_expense_category_raises_business_rule_error(
         self,
         transaction_service,
         mock_account_repo,
         mock_category_repo,
     ):
-        """Should raise BusinessRuleError when an INGRESO transaction uses a GASTO category."""
+        """Should raise BusinessRuleError when an INCOME transaction uses an EXPENSE category."""
         mock_account_repo.get_by_id_or_fail.return_value = _make_account()
         mock_category_repo.get_by_id_or_fail.return_value = _make_category(
-            CategoryType.GASTO
+            CategoryType.EXPENSE
         )
 
         with pytest.raises(BusinessRuleError):
             transaction_service.create(
-                tipo="ingreso",
-                monto=Decimal("500.00"),
-                fecha=date(2026, 3, 1),
-                cuenta_id=uuid4(),
-                categoria_id=uuid4(),
+                type="income",
+                amount=Decimal("500.00"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
             )
 
 
@@ -320,54 +320,54 @@ class TestValidateCategoryType:
     in the plan to lock in the compatibility matrix.
     """
 
-    def test_ingreso_transaction_with_ingreso_category_is_valid(
+    def test_income_transaction_with_income_category_is_valid(
         self, transaction_service
     ):
-        """INGRESO + INGRESO should not raise."""
+        """INCOME + INCOME should not raise."""
         transaction_service._validate_category_type(
-            TransactionType.INGRESO, CategoryType.INGRESO
+            TransactionType.INCOME, CategoryType.INCOME
         )
 
-    def test_ingreso_transaction_with_ambos_category_is_valid(
+    def test_income_transaction_with_both_category_is_valid(
         self, transaction_service
     ):
-        """INGRESO + AMBOS should not raise."""
+        """INCOME + BOTH should not raise."""
         transaction_service._validate_category_type(
-            TransactionType.INGRESO, CategoryType.AMBOS
+            TransactionType.INCOME, CategoryType.BOTH
         )
 
-    def test_gasto_transaction_with_gasto_category_is_valid(
+    def test_expense_transaction_with_expense_category_is_valid(
         self, transaction_service
     ):
-        """GASTO + GASTO should not raise."""
+        """EXPENSE + EXPENSE should not raise."""
         transaction_service._validate_category_type(
-            TransactionType.GASTO, CategoryType.GASTO
+            TransactionType.EXPENSE, CategoryType.EXPENSE
         )
 
-    def test_gasto_transaction_with_ambos_category_is_valid(
+    def test_expense_transaction_with_both_category_is_valid(
         self, transaction_service
     ):
-        """GASTO + AMBOS should not raise."""
+        """EXPENSE + BOTH should not raise."""
         transaction_service._validate_category_type(
-            TransactionType.GASTO, CategoryType.AMBOS
+            TransactionType.EXPENSE, CategoryType.BOTH
         )
 
-    def test_ingreso_transaction_with_gasto_category_raises(
+    def test_income_transaction_with_expense_category_raises(
         self, transaction_service
     ):
-        """INGRESO + GASTO should raise BusinessRuleError."""
+        """INCOME + EXPENSE should raise BusinessRuleError."""
         with pytest.raises(BusinessRuleError):
             transaction_service._validate_category_type(
-                TransactionType.INGRESO, CategoryType.GASTO
+                TransactionType.INCOME, CategoryType.EXPENSE
             )
 
-    def test_gasto_transaction_with_ingreso_category_raises(
+    def test_expense_transaction_with_income_category_raises(
         self, transaction_service
     ):
-        """GASTO + INGRESO should raise BusinessRuleError."""
+        """EXPENSE + INCOME should raise BusinessRuleError."""
         with pytest.raises(BusinessRuleError):
             transaction_service._validate_category_type(
-                TransactionType.GASTO, CategoryType.INGRESO
+                TransactionType.EXPENSE, CategoryType.INCOME
             )
 
 
@@ -387,15 +387,15 @@ class TestUpdate:
 
         transaction_service.update(
             transaction_id=sample_transaction.id,
-            monto=Decimal("999.00"),
+            amount=Decimal("999.00"),
         )
 
         call_kwargs = mock_transaction_repo.update.call_args[1]
-        assert "monto" in call_kwargs
-        assert "tipo" not in call_kwargs
-        assert "fecha" not in call_kwargs
+        assert "amount" in call_kwargs
+        assert "type" not in call_kwargs
+        assert "date" not in call_kwargs
 
-    def test_update_tipo_revalidates_category_compatibility(
+    def test_update_type_revalidates_category_compatibility(
         self,
         transaction_service,
         mock_transaction_repo,
@@ -403,21 +403,21 @@ class TestUpdate:
         sample_transaction,
     ):
         """Should re-validate compatibility when transaction type changes."""
-        # sample_transaction.tipo == GASTO, existing category will be fetched
-        # by categoria_id from the transaction mock
-        gasto_category = MagicMock()
-        gasto_category.tipo = CategoryType.GASTO  # incompatible with new INGRESO tipo
+        # sample_transaction.type == EXPENSE, existing category will be fetched
+        # by category_id from the transaction mock
+        expense_category = MagicMock()
+        expense_category.type = CategoryType.EXPENSE  # incompatible with new INCOME type
 
         mock_transaction_repo.get_by_id_or_fail.return_value = sample_transaction
-        mock_category_repo.get_by_id_or_fail.return_value = gasto_category
+        mock_category_repo.get_by_id_or_fail.return_value = expense_category
 
         with pytest.raises(BusinessRuleError):
             transaction_service.update(
                 transaction_id=sample_transaction.id,
-                tipo="ingreso",  # changing type but not category → re-validation fires
+                type="income",  # changing type but not category → re-validation fires
             )
 
-    def test_update_categoria_revalidates_type_compatibility(
+    def test_update_category_revalidates_type_compatibility(
         self,
         transaction_service,
         mock_transaction_repo,
@@ -425,16 +425,16 @@ class TestUpdate:
         sample_transaction,
     ):
         """Should re-validate compatibility when category changes."""
-        ingreso_category = MagicMock()
-        ingreso_category.tipo = CategoryType.INGRESO  # incompatible with existing GASTO tipo
+        income_category = MagicMock()
+        income_category.type = CategoryType.INCOME  # incompatible with existing EXPENSE type
 
         mock_transaction_repo.get_by_id_or_fail.return_value = sample_transaction
-        mock_category_repo.get_by_id_or_fail.return_value = ingreso_category
+        mock_category_repo.get_by_id_or_fail.return_value = income_category
 
         with pytest.raises(BusinessRuleError):
             transaction_service.update(
                 transaction_id=sample_transaction.id,
-                categoria_id=uuid4(),  # changing category → re-validation with existing GASTO tipo
+                category_id=uuid4(),  # changing category → re-validation with existing EXPENSE type
             )
 
     def test_update_not_found(
@@ -447,7 +447,7 @@ class TestUpdate:
 
         with pytest.raises(NotFoundError):
             transaction_service.update(
-                transaction_id=uuid4(), monto=Decimal("100.00")
+                transaction_id=uuid4(), amount=Decimal("100.00")
             )
 
 

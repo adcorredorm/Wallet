@@ -4,19 +4,19 @@
  */
 
 export enum AccountType {
-  DEBITO = 'debito',
-  CREDITO = 'credito',
-  EFECTIVO = 'efectivo'
+  DEBIT = 'debit',
+  CREDIT = 'credit',
+  CASH = 'cash'
 }
 
 export interface Account {
   id: string
-  nombre: string
-  tipo: AccountType
-  divisa: string  // ISO 4217 currency code (EUR, USD, etc)
-  descripcion?: string
+  name: string
+  type: AccountType
+  currency: string  // ISO 4217 currency code (EUR, USD, etc)
+  description?: string
   tags: string[]
-  activa: boolean
+  active: boolean
   balance?: number  // Calculated balance (included in list response)
   created_at: string
   updated_at: string
@@ -29,18 +29,18 @@ export interface AccountBalance {
 }
 
 export interface CreateAccountDto {
-  nombre: string
-  tipo: AccountType
-  divisa: string
-  descripcion?: string
+  name: string
+  type: AccountType
+  currency: string
+  description?: string
   tags?: string[]
 }
 
 export interface UpdateAccountDto {
-  nombre?: string
-  tipo?: AccountType
-  divisa?: string
-  descripcion?: string
+  name?: string
+  type?: AccountType
+  currency?: string
+  description?: string
   tags?: string[]
-  activa?: boolean
+  active?: boolean
 }

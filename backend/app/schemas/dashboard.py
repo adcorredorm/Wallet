@@ -11,7 +11,7 @@ from typing import Optional
 class AccountBalanceSummary(BaseModel):
     """Summary of account balance by currency."""
 
-    divisa: str
+    currency: str
     total: Decimal
 
 
@@ -26,16 +26,16 @@ class NetWorthResponse(BaseModel):
     balances: list[AccountBalanceSummary] = Field(
         ..., description="Total balances by currency"
     )
-    fecha_calculo: date = Field(..., description="Calculation date")
+    calculation_date: date = Field(..., description="Calculation date")
 
 
 class CategorySummary(BaseModel):
     """Summary of transactions by category."""
 
-    categoria_id: str
-    categoria_nombre: str
+    category_id: str
+    category_name: str
     total: Decimal
-    cantidad_transacciones: int
+    transaction_count: int
 
 
 class MonthlySummaryResponse(BaseModel):
@@ -43,32 +43,32 @@ class MonthlySummaryResponse(BaseModel):
     Schema for monthly summary.
 
     Args:
-        mes: Month number (1-12)
-        anio: Year
-        total_ingresos: Total income for the month
-        total_gastos: Total expenses for the month
-        neto: Net balance (income - expenses)
-        top_categorias_gasto: Top expense categories
-        top_categorias_ingreso: Top income categories
+        month: Month number (1-12)
+        year: Year
+        total_income: Total income for the month
+        total_expenses: Total expenses for the month
+        net: Net balance (income - expenses)
+        top_expense_categories: Top expense categories
+        top_income_categories: Top income categories
     """
 
-    mes: int = Field(..., ge=1, le=12)
-    anio: int
-    total_ingresos: Decimal
-    total_gastos: Decimal
-    neto: Decimal
-    top_categorias_gasto: list[CategorySummary] = Field(default_factory=list)
-    top_categorias_ingreso: list[CategorySummary] = Field(default_factory=list)
+    month: int = Field(..., ge=1, le=12)
+    year: int
+    total_income: Decimal
+    total_expenses: Decimal
+    net: Decimal
+    top_expense_categories: list[CategorySummary] = Field(default_factory=list)
+    top_income_categories: list[CategorySummary] = Field(default_factory=list)
 
 
 class RecentActivity(BaseModel):
     """Schema for recent activity item."""
 
     id: str
-    tipo: str  # 'transaccion' or 'transferencia'
-    descripcion: str
-    monto: Decimal
-    fecha: date
+    type: str  # 'transaction' or 'transfer'
+    description: str
+    amount: Decimal
+    date: date
 
 
 class DashboardResponse(BaseModel):
@@ -79,8 +79,8 @@ class DashboardResponse(BaseModel):
         Consolidated view with net worth, monthly summary, and recent activity
     """
 
-    patrimonio_neto: NetWorthResponse
-    resumen_mensual: MonthlySummaryResponse
-    actividad_reciente: list[RecentActivity] = Field(
+    net_worth: NetWorthResponse
+    monthly_summary: MonthlySummaryResponse
+    recent_activity: list[RecentActivity] = Field(
         default_factory=list, max_length=10
     )

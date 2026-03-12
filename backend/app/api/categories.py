@@ -51,15 +51,15 @@ def list_categories():
     List all categories.
 
     Query Parameters:
-        tipo (str): Filter by category type (ingreso, gasto, ambos)
+        type (str): Filter by category type (income, expense, both)
 
     Returns:
         200: List of categories
         500: Internal server error
     """
     try:
-        tipo = request.args.get("tipo")
-        categories = category_service.get_all(tipo=tipo)
+        type = request.args.get("type")
+        categories = category_service.get_all(type=type)
 
         data = [
             CategoryResponse.model_validate(cat).model_dump(mode="json")
@@ -90,9 +90,9 @@ def get_category(category_id: UUID):
 
         # Format with subcategories
         data = CategoryResponse.model_validate(category).model_dump(mode="json")
-        data["subcategorias"] = [
+        data["subcategories"] = [
             CategoryResponse.model_validate(sub).model_dump(mode="json")
-            for sub in category.subcategorias.all()
+            for sub in category.subcategories.all()
         ]
 
         return success_response(data=data)
@@ -124,11 +124,11 @@ def create_category():
 
         # Create category (idempotent when client_id is present)
         category = category_service.create(
-            nombre=category_data.nombre,
-            tipo=category_data.tipo.value,
-            icono=category_data.icono,
+            name=category_data.name,
+            type=category_data.type.value,
+            icon=category_data.icon,
             color=category_data.color,
-            categoria_padre_id=category_data.categoria_padre_id,
+            parent_category_id=category_data.parent_category_id,
             client_id=category_data.client_id,
         )
 
@@ -202,11 +202,11 @@ def update_category(category_id: UUID):
         # Update category
         category = category_service.update(
             category_id=category_id,
-            nombre=category_data.nombre,
-            tipo=category_data.tipo.value if category_data.tipo else None,
-            icono=category_data.icono,
+            name=category_data.name,
+            type=category_data.type.value if category_data.type else None,
+            icon=category_data.icon,
             color=category_data.color,
-            categoria_padre_id=category_data.categoria_padre_id,
+            parent_category_id=category_data.parent_category_id,
         )
 
         data = CategoryResponse.model_validate(category).model_dump(mode="json")

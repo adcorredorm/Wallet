@@ -31,18 +31,18 @@ const emit = defineEmits<{
   click: []
 }>()
 
-const isIncome = computed(() => props.transaction.tipo === 'ingreso')
+const isIncome = computed(() => props.transaction.type === 'income')
 
 const amountColor = computed(() => {
   return isIncome.value ? 'text-accent-green' : 'text-accent-red'
 })
 
-const formattedDate = computed(() => formatDateRelative(props.transaction.fecha))
+const formattedDate = computed(() => formatDateRelative(props.transaction.date))
 
-const categoryIcon = computed(() => props.transaction.categoria?.icono || '📝')
-const categoryName = computed(() => props.transaction.categoria?.nombre || 'Sin categoría')
-const accountName = computed(() => props.transaction.cuenta?.nombre || 'Cuenta')
-const currency = computed(() => props.transaction.cuenta?.divisa || 'USD')
+const categoryIcon = computed(() => props.transaction.category?.icon || '📝')
+const categoryName = computed(() => props.transaction.category?.name || 'Sin categoría')
+const accountName = computed(() => props.transaction.account?.name || 'Cuenta')
+const currency = computed(() => props.transaction.account?.currency || 'USD')
 </script>
 
 <template>
@@ -60,7 +60,7 @@ const currency = computed(() => props.transaction.cuenta?.divisa || 'USD')
       <!-- Title or category name + sync badge -->
       <div class="flex items-center gap-2">
         <h4 class="font-medium truncate">
-          {{ transaction.titulo || categoryName }}
+          {{ transaction.title || categoryName }}
         </h4>
         <!--
           Same runtime check as AccountCard: only render the badge if this
@@ -80,7 +80,7 @@ const currency = computed(() => props.transaction.cuenta?.divisa || 'USD')
       </div>
 
       <!-- Category (if title exists) -->
-      <p v-if="transaction.titulo" class="text-xs text-dark-text-tertiary mt-1">
+      <p v-if="transaction.title" class="text-xs text-dark-text-tertiary mt-1">
         {{ categoryName }}
       </p>
     </div>
@@ -88,7 +88,7 @@ const currency = computed(() => props.transaction.cuenta?.divisa || 'USD')
     <!-- Amount -->
     <div class="flex-shrink-0 text-right">
       <CurrencyDisplay
-        :amount="isIncome ? transaction.monto : -transaction.monto"
+        :amount="isIncome ? transaction.amount : -transaction.amount"
         :currency="currency"
         size="md"
         show-sign

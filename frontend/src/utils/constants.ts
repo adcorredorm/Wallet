@@ -4,22 +4,22 @@
 
 // Account types
 export const ACCOUNT_TYPES = [
-  { value: 'debito', label: 'Débito' },
-  { value: 'credito', label: 'Crédito' },
-  { value: 'efectivo', label: 'Efectivo' }
+  { value: 'debit', label: 'Débito' },
+  { value: 'credit', label: 'Crédito' },
+  { value: 'cash', label: 'Efectivo' }
 ] as const
 
 // Category types
 export const CATEGORY_TYPES = [
-  { value: 'ingreso', label: 'Ingreso' },
-  { value: 'gasto', label: 'Gasto' },
-  { value: 'ambos', label: 'Ambos' }
+  { value: 'income', label: 'Ingreso' },
+  { value: 'expense', label: 'Gasto' },
+  { value: 'both', label: 'Ambos' }
 ] as const
 
 // Transaction types
 export const TRANSACTION_TYPES = [
-  { value: 'ingreso', label: 'Ingreso' },
-  { value: 'gasto', label: 'Gasto' }
+  { value: 'income', label: 'Ingreso' },
+  { value: 'expense', label: 'Gasto' }
 ] as const
 
 // Common currencies

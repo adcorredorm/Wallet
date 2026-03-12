@@ -23,52 +23,52 @@ class Transfer(BaseModel):
     Transfer model for inter-account money movements.
 
     Attributes:
-        cuenta_origen_id: Source account ID
-        cuenta_destino_id: Destination account ID
-        monto: Transfer amount (positive decimal with 2 decimal places)
-        fecha: Transfer date
-        descripcion: Optional transfer description
+        source_account_id: Source account ID
+        destination_account_id: Destination account ID
+        amount: Transfer amount (positive decimal with 2 decimal places)
+        date: Transfer date
+        description: Optional transfer description
         tags: List of tags for categorization
-        cuenta_origen: Source account relationship
-        cuenta_destino: Destination account relationship
+        source_account: Source account relationship
+        destination_account: Destination account relationship
     """
 
-    __tablename__ = "transferencias"
+    __tablename__ = "transfers"
 
-    cuenta_origen_id = Column(
+    source_account_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("cuentas.id"),
+        ForeignKey("accounts.id"),
         nullable=False,
     )
-    cuenta_destino_id = Column(
+    destination_account_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("cuentas.id"),
+        ForeignKey("accounts.id"),
         nullable=False,
     )
-    monto = Column(Numeric(15, 2), nullable=False)
-    fecha = Column(Date, nullable=False)
-    descripcion = Column(String(500), nullable=True)
+    amount = Column(Numeric(15, 2), nullable=False)
+    date = Column(Date, nullable=False)
+    description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
 
     # Relationships
-    cuenta_origen = relationship(
+    source_account = relationship(
         "Account",
-        foreign_keys=[cuenta_origen_id],
-        back_populates="transferencias_origen",
+        foreign_keys=[source_account_id],
+        back_populates="transfers_source",
     )
-    cuenta_destino = relationship(
+    destination_account = relationship(
         "Account",
-        foreign_keys=[cuenta_destino_id],
-        back_populates="transferencias_destino",
+        foreign_keys=[destination_account_id],
+        back_populates="transfers_destination",
     )
 
     # Indexes for performance
     __table_args__ = (
-        Index("idx_transferencias_origen", "cuenta_origen_id"),
-        Index("idx_transferencias_destino", "cuenta_destino_id"),
-        Index("idx_transferencias_fecha", "fecha"),
+        Index("idx_transfers_source", "source_account_id"),
+        Index("idx_transfers_destination", "destination_account_id"),
+        Index("idx_transfers_date", "date"),
     )
 
     def __repr__(self) -> str:
         """String representation of the transfer."""
-        return f"<Transfer {self.monto} on {self.fecha}>"
+        return f"<Transfer {self.amount} on {self.date}>"

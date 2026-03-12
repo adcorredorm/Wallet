@@ -39,9 +39,9 @@ class TransferService:
 
     def get_filtered(
         self,
-        cuenta_id: UUID | None = None,
-        fecha_desde: date | None = None,
-        fecha_hasta: date | None = None,
+        account_id: UUID | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         tags: list[str] | None = None,
         page: int = 1,
         limit: int = 20,
@@ -50,9 +50,9 @@ class TransferService:
         Get transfers with filters and pagination.
 
         Args:
-            cuenta_id: Filter by account (source or destination)
-            fecha_desde: Filter by start date
-            fecha_hasta: Filter by end date
+            account_id: Filter by account (source or destination)
+            date_from: Filter by start date
+            date_to: Filter by end date
             tags: Filter by tags
             page: Page number (1-indexed)
             limit: Items per page
@@ -63,9 +63,9 @@ class TransferService:
         offset = (page - 1) * limit
 
         return self.repository.get_filtered(
-            cuenta_id=cuenta_id,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
+            account_id=account_id,
+            date_from=date_from,
+            date_to=date_to,
             tags=tags,
             limit=limit,
             offset=offset,
@@ -73,11 +73,11 @@ class TransferService:
 
     def create(
         self,
-        cuenta_origen_id: UUID,
-        cuenta_destino_id: UUID,
-        monto: Decimal,
-        fecha: date,
-        descripcion: str | None = None,
+        source_account_id: UUID,
+        destination_account_id: UUID,
+        amount: Decimal,
+        date: date,
+        description: str | None = None,
         tags: list[str] | None = None,
         client_id: str | None = None,
     ) -> Transfer:
@@ -89,11 +89,11 @@ class TransferService:
         inserting a duplicate row (offline-first idempotency).
 
         Args:
-            cuenta_origen_id: Source account ID
-            cuenta_destino_id: Destination account ID
-            monto: Transfer amount
-            fecha: Transfer date
-            descripcion: Optional description
+            source_account_id: Source account ID
+            destination_account_id: Destination account ID
+            amount: Transfer amount
+            date: Transfer date
+            description: Optional description
             tags: Optional tags
             client_id: Optional client-generated idempotency key
 
@@ -110,22 +110,22 @@ class TransferService:
                 return existing
 
         # Validate both accounts exist
-        cuenta_origen = self.account_repository.get_by_id_or_fail(cuenta_origen_id)
-        cuenta_destino = self.account_repository.get_by_id_or_fail(cuenta_destino_id)
+        source_account = self.account_repository.get_by_id_or_fail(source_account_id)
+        destination_account = self.account_repository.get_by_id_or_fail(destination_account_id)
 
         # Validate same currency
-        if cuenta_origen.divisa != cuenta_destino.divisa:
+        if source_account.currency != destination_account.currency:
             raise BusinessRuleError(
                 f"No se pueden transferir fondos entre cuentas con diferentes divisas. "
-                f"Cuenta origen: {cuenta_origen.divisa}, Cuenta destino: {cuenta_destino.divisa}"
+                f"Cuenta origen: {source_account.currency}, Cuenta destino: {destination_account.currency}"
             )
 
         return self.repository.create(
-            cuenta_origen_id=cuenta_origen_id,
-            cuenta_destino_id=cuenta_destino_id,
-            monto=monto,
-            fecha=fecha,
-            descripcion=descripcion,
+            source_account_id=source_account_id,
+            destination_account_id=destination_account_id,
+            amount=amount,
+            date=date,
+            description=description,
             tags=tags or [],
             client_id=client_id,
         )
@@ -133,9 +133,9 @@ class TransferService:
     def update(
         self,
         transfer_id: UUID,
-        monto: Decimal | None = None,
-        fecha: date | None = None,
-        descripcion: str | None = None,
+        amount: Decimal | None = None,
+        date: date | None = None,
+        description: str | None = None,
         tags: list[str] | None = None,
     ) -> Transfer:
         """
@@ -145,9 +145,9 @@ class TransferService:
 
         Args:
             transfer_id: Transfer UUID
-            monto: New amount
-            fecha: New date
-            descripcion: New description
+            amount: New amount
+            date: New date
+            description: New description
             tags: New tags
 
         Returns:
@@ -159,12 +159,12 @@ class TransferService:
         transfer = self.repository.get_by_id_or_fail(transfer_id)
 
         update_data = {}
-        if monto is not None:
-            update_data["monto"] = monto
-        if fecha is not None:
-            update_data["fecha"] = fecha
-        if descripcion is not None:
-            update_data["descripcion"] = descripcion
+        if amount is not None:
+            update_data["amount"] = amount
+        if date is not None:
+            update_data["date"] = date
+        if description is not None:
+            update_data["description"] = description
         if tags is not None:
             update_data["tags"] = tags
 

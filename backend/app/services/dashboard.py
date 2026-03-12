@@ -36,120 +36,120 @@ class DashboardService:
 
         for account in active_accounts:
             balance = self.account_repository.calculate_balance(account.id)
-            balances_by_currency[account.divisa] += balance
+            balances_by_currency[account.currency] += balance
 
         # Format response
         balances = [
-            {"divisa": divisa, "total": float(total)}
-            for divisa, total in balances_by_currency.items()
+            {"currency": currency, "total": float(total)}
+            for currency, total in balances_by_currency.items()
         ]
 
         return {
             "balances": balances,
-            "fecha_calculo": date.today(),
+            "calculation_date": date.today(),
         }
 
-    def get_monthly_summary(self, mes: int, anio: int) -> dict:
+    def get_monthly_summary(self, month: int, year: int) -> dict:
         """
         Get summary of income and expenses for a specific month.
 
         Args:
-            mes: Month number (1-12)
-            anio: Year
+            month: Month number (1-12)
+            year: Year
 
         Returns:
             Dictionary with monthly summary data
         """
         # Get total income for the month
-        total_ingresos = (
-            db.session.query(func.coalesce(func.sum(Transaction.monto), 0))
+        total_income = (
+            db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
-                Transaction.tipo == TransactionType.INGRESO,
-                extract("month", Transaction.fecha) == mes,
-                extract("year", Transaction.fecha) == anio,
+                Transaction.type == TransactionType.INCOME,
+                extract("month", Transaction.date) == month,
+                extract("year", Transaction.date) == year,
             )
             .scalar()
         ) or Decimal("0")
 
         # Get total expenses for the month
-        total_gastos = (
-            db.session.query(func.coalesce(func.sum(Transaction.monto), 0))
+        total_expenses = (
+            db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
-                Transaction.tipo == TransactionType.GASTO,
-                extract("month", Transaction.fecha) == mes,
-                extract("year", Transaction.fecha) == anio,
+                Transaction.type == TransactionType.EXPENSE,
+                extract("month", Transaction.date) == month,
+                extract("year", Transaction.date) == year,
             )
             .scalar()
         ) or Decimal("0")
 
         # Calculate net balance
-        neto = Decimal(str(total_ingresos)) - Decimal(str(total_gastos))
+        net = Decimal(str(total_income)) - Decimal(str(total_expenses))
 
         # Get top expense categories
         from app.models import Category
 
-        top_gastos = (
+        top_expenses = (
             db.session.query(
                 Category.id,
-                Category.nombre,
-                func.sum(Transaction.monto).label("total"),
-                func.count(Transaction.id).label("cantidad"),
+                Category.name,
+                func.sum(Transaction.amount).label("total"),
+                func.count(Transaction.id).label("count"),
             )
             .join(Transaction)
             .filter(
-                Transaction.tipo == TransactionType.GASTO,
-                extract("month", Transaction.fecha) == mes,
-                extract("year", Transaction.fecha) == anio,
+                Transaction.type == TransactionType.EXPENSE,
+                extract("month", Transaction.date) == month,
+                extract("year", Transaction.date) == year,
             )
-            .group_by(Category.id, Category.nombre)
-            .order_by(func.sum(Transaction.monto).desc())
+            .group_by(Category.id, Category.name)
+            .order_by(func.sum(Transaction.amount).desc())
             .limit(5)
             .all()
         )
 
         # Get top income categories
-        top_ingresos = (
+        top_income = (
             db.session.query(
                 Category.id,
-                Category.nombre,
-                func.sum(Transaction.monto).label("total"),
-                func.count(Transaction.id).label("cantidad"),
+                Category.name,
+                func.sum(Transaction.amount).label("total"),
+                func.count(Transaction.id).label("count"),
             )
             .join(Transaction)
             .filter(
-                Transaction.tipo == TransactionType.INGRESO,
-                extract("month", Transaction.fecha) == mes,
-                extract("year", Transaction.fecha) == anio,
+                Transaction.type == TransactionType.INCOME,
+                extract("month", Transaction.date) == month,
+                extract("year", Transaction.date) == year,
             )
-            .group_by(Category.id, Category.nombre)
-            .order_by(func.sum(Transaction.monto).desc())
+            .group_by(Category.id, Category.name)
+            .order_by(func.sum(Transaction.amount).desc())
             .limit(5)
             .all()
         )
 
         return {
-            "mes": mes,
-            "anio": anio,
-            "total_ingresos": float(total_ingresos),
-            "total_gastos": float(total_gastos),
-            "neto": float(neto),
-            "top_categorias_gasto": [
+            "month": month,
+            "year": year,
+            "total_income": float(total_income),
+            "total_expenses": float(total_expenses),
+            "net": float(net),
+            "top_expense_categories": [
                 {
-                    "categoria_id": str(cat.id),
-                    "categoria_nombre": cat.nombre,
+                    "category_id": str(cat.id),
+                    "category_name": cat.name,
                     "total": float(cat.total),
-                    "cantidad_transacciones": cat.cantidad,
+                    "transaction_count": cat.count,
                 }
-                for cat in top_gastos
+                for cat in top_expenses
             ],
-            "top_categorias_ingreso": [
+            "top_income_categories": [
                 {
-                    "categoria_id": str(cat.id),
-                    "categoria_nombre": cat.nombre,
+                    "category_id": str(cat.id),
+                    "category_name": cat.name,
                     "total": float(cat.total),
-                    "cantidad_transacciones": cat.cantidad,
+                    "transaction_count": cat.count,
                 }
-                for cat in top_ingresos
+                for cat in top_income
             ],
         }
 
@@ -176,12 +176,12 @@ class DashboardService:
             activities.append(
                 {
                     "id": str(trans.id),
-                    "tipo": "transaccion",
-                    "subtipo": trans.tipo.value,
-                    "descripcion": trans.titulo or f"{trans.tipo.value.title()} - {trans.categoria.nombre}",
-                    "monto": float(trans.monto),
-                    "fecha": trans.fecha,
-                    "cuenta": trans.cuenta.nombre,
+                    "type": "transaction",
+                    "subtype": trans.type.value,
+                    "description": trans.title or f"{trans.type.value.title()} - {trans.category.name}",
+                    "amount": float(trans.amount),
+                    "date": trans.date,
+                    "account": trans.account.name,
                 }
             )
 
@@ -189,38 +189,38 @@ class DashboardService:
             activities.append(
                 {
                     "id": str(transfer.id),
-                    "tipo": "transferencia",
-                    "descripcion": transfer.descripcion
-                    or f"Transferencia: {transfer.cuenta_origen.nombre} → {transfer.cuenta_destino.nombre}",
-                    "monto": float(transfer.monto),
-                    "fecha": transfer.fecha,
-                    "cuenta_origen": transfer.cuenta_origen.nombre,
-                    "cuenta_destino": transfer.cuenta_destino.nombre,
+                    "type": "transfer",
+                    "description": transfer.description
+                    or f"Transferencia: {transfer.source_account.name} → {transfer.destination_account.name}",
+                    "amount": float(transfer.amount),
+                    "date": transfer.date,
+                    "source_account": transfer.source_account.name,
+                    "destination_account": transfer.destination_account.name,
                 }
             )
 
         # Sort by date (most recent first)
-        activities.sort(key=lambda x: x["fecha"], reverse=True)
+        activities.sort(key=lambda x: x["date"], reverse=True)
 
         return activities[:limit]
 
-    def get_dashboard_data(self, mes: int | None = None, anio: int | None = None) -> dict:
+    def get_dashboard_data(self, month: int | None = None, year: int | None = None) -> dict:
         """
         Get complete dashboard data.
 
         Args:
-            mes: Month for summary (defaults to current month)
-            anio: Year for summary (defaults to current year)
+            month: Month for summary (defaults to current month)
+            year: Year for summary (defaults to current year)
 
         Returns:
             Complete dashboard data with net worth, monthly summary, and recent activity
         """
         today = date.today()
-        mes = mes or today.month
-        anio = anio or today.year
+        month = month or today.month
+        year = year or today.year
 
         return {
-            "patrimonio_neto": self.get_net_worth(),
-            "resumen_mensual": self.get_monthly_summary(mes, anio),
-            "actividad_reciente": self.get_recent_activity(limit=10),
+            "net_worth": self.get_net_worth(),
+            "monthly_summary": self.get_monthly_summary(month, year),
+            "recent_activity": self.get_recent_activity(limit=10),
         }

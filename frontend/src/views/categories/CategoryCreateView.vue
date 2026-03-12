@@ -21,49 +21,49 @@ const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
 const form = reactive({
-  nombre: '',
-  tipo: '' as CategoryType,
-  icono: '',
+  name: '',
+  type: '' as CategoryType,
+  icon: '',
   color: '#3b82f6',
-  categoria_padre_id: '' as string
+  parent_category_id: '' as string
 })
 
-// Eligible parent categories based on the selected tipo
+// Eligible parent categories based on the selected type
 const parentOptions = computed(() => {
-  if (!form.tipo) return []
-  return categoriesStore.compatibleParentCategories(form.tipo as CategoryType)
+  if (!form.type) return []
+  return categoriesStore.compatibleParentCategories(form.type as CategoryType)
     .map(cat => ({
       value: cat.id,
-      label: `${cat.icono ?? ''} ${cat.nombre}`.trim()
+      label: `${cat.icon ?? ''} ${cat.name}`.trim()
     }))
 })
 
-// Reset parent when tipo changes (parent compatibility may change)
-watch(() => form.tipo, () => {
-  form.categoria_padre_id = ''
+// Reset parent when type changes (parent compatibility may change)
+watch(() => form.type, () => {
+  form.parent_category_id = ''
 })
 
 const errors = reactive({
-  nombre: '',
-  tipo: ''
+  name: '',
+  type: ''
 })
 
 function validateForm(): boolean {
   let isValid = true
 
-  const nombreValidation = required(form.nombre) && minLength(2)(form.nombre) && maxLength(50)(form.nombre)
-  if (nombreValidation !== true) {
-    errors.nombre = nombreValidation as string
+  const nameValidation = required(form.name) && minLength(2)(form.name) && maxLength(50)(form.name)
+  if (nameValidation !== true) {
+    errors.name = nameValidation as string
     isValid = false
   } else {
-    errors.nombre = ''
+    errors.name = ''
   }
 
-  if (!form.tipo) {
-    errors.tipo = 'Debes seleccionar un tipo'
+  if (!form.type) {
+    errors.type = 'Debes seleccionar un tipo'
     isValid = false
   } else {
-    errors.tipo = ''
+    errors.type = ''
   }
 
   return isValid
@@ -74,11 +74,11 @@ async function handleSubmit() {
 
   try {
     const data: CreateCategoryDto = {
-      nombre: form.nombre.trim(),
-      tipo: form.tipo,
-      icono: form.icono || undefined,
+      name: form.name.trim(),
+      type: form.type,
+      icon: form.icon || undefined,
       color: form.color || undefined,
-      categoria_padre_id: form.categoria_padre_id || undefined
+      parent_category_id: form.parent_category_id || undefined
     }
 
     await categoriesStore.createCategory(data)
@@ -102,35 +102,35 @@ function handleCancel() {
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Nombre -->
         <BaseInput
-          v-model="form.nombre"
+          v-model="form.name"
           label="Nombre"
           placeholder="Ej: Alimentación"
-          :error="errors.nombre"
+          :error="errors.name"
           required
         />
 
         <!-- Tipo -->
         <BaseSelect
-          v-model="form.tipo"
+          v-model="form.type"
           label="Tipo"
           :options="CATEGORY_TYPES"
           placeholder="Selecciona un tipo"
-          :error="errors.tipo"
+          :error="errors.type"
           required
         />
 
         <!-- Categoría padre -->
         <div>
           <BaseSelect
-            v-model="form.categoria_padre_id"
+            v-model="form.parent_category_id"
             label="Categoría padre (opcional)"
             :options="[
               { value: '', label: 'Ninguna (categoría raíz)' },
               ...parentOptions
             ]"
-            :disabled="!form.tipo"
+            :disabled="!form.type"
           />
-          <p v-if="!form.tipo" class="mt-1 text-xs text-dark-text-secondary">
+          <p v-if="!form.type" class="mt-1 text-xs text-dark-text-secondary">
             Selecciona un tipo primero
           </p>
         </div>
@@ -145,9 +145,9 @@ function handleCancel() {
               type="button"
               :class="[
                 'p-2 rounded-lg text-2xl hover:bg-dark-bg-tertiary transition-colors',
-                form.icono === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
+                form.icon === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
               ]"
-              @click="form.icono = icon"
+              @click="form.icon = icon"
             >
               {{ icon }}
             </button>

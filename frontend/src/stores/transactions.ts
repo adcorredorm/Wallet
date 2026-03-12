@@ -11,7 +11,7 @@
  * optimistically. The SyncManager (Phase 4) will flush to the server when
  * connectivity is available.
  *
- * Important: cuenta_id and categoria_id in transaction payloads may be
+ * Important: account_id and category_id in transaction payloads may be
  * temporary IDs (prefixed 'temp-') if the referenced account or category
  * was created offline. These IDs are preserved as-is in the mutation payload.
  * The SyncManager resolves temp IDs to real server IDs before sending each
@@ -32,13 +32,13 @@ import type { LocalTransaction } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 
 // Sort helper: newest transaction first (matches the server's default order).
-// Primary: fecha DESC. Secondary: created_at DESC as tiebreaker so that
+// Primary: date DESC. Secondary: created_at DESC as tiebreaker so that
 // transactions created on the same calendar date are ordered newest-first.
 // Without the tiebreaker, stable sort would keep IndexedDB insertion order
 // (oldest first) among same-date transactions, pushing newly created entries
 // below the top-5 slice shown in Recent Activity.
-const byFechaDesc = (a: LocalTransaction, b: LocalTransaction) => {
-  const byDate = b.fecha.localeCompare(a.fecha)
+const byDateDesc = (a: LocalTransaction, b: LocalTransaction) => {
+  const byDate = b.date.localeCompare(a.date)
   if (byDate !== 0) return byDate
   return (b.created_at ?? '').localeCompare(a.created_at ?? '')
 }
@@ -54,19 +54,19 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
   // Computed
   const incomeTransactions = computed(() =>
-    transactions.value.filter(t => t.tipo === 'ingreso')
+    transactions.value.filter(t => t.type === 'income')
   )
 
   const expenseTransactions = computed(() =>
-    transactions.value.filter(t => t.tipo === 'gasto')
+    transactions.value.filter(t => t.type === 'expense')
   )
 
   const totalIncome = computed(() =>
-    incomeTransactions.value.reduce((sum, t) => sum + Number(t.monto), 0)
+    incomeTransactions.value.reduce((sum, t) => sum + Number(t.amount), 0)
   )
 
   const totalExpenses = computed(() =>
-    expenseTransactions.value.reduce((sum, t) => sum + Number(t.monto), 0)
+    expenseTransactions.value.reduce((sum, t) => sum + Number(t.amount), 0)
   )
 
   const netBalance = computed(() =>
@@ -93,11 +93,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
         db.transactions,
         () => transactionsApi.getAll(appliedFilters),
         (freshItems) => {
-          transactions.value = [...freshItems].sort(byFechaDesc)
+          transactions.value = [...freshItems].sort(byDateDesc)
         }
       )
 
-      transactions.value = [...localData].sort(byFechaDesc)
+      transactions.value = [...localData].sort(byDateDesc)
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transacciones'
       throw err
@@ -146,7 +146,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     error.value = null
     try {
       // For account-scoped queries we can do a targeted local read using the
-      // cuenta_id index, which is more precise than loading all transactions.
+      // account_id index, which is more precise than loading all transactions.
       // However, we still revalidate with the server to pick up changes.
       const localData = await fetchAllWithRevalidation(
         db.transactions,
@@ -156,16 +156,16 @@ export const useTransactionsStore = defineStore('transactions', () => {
           // background revalidation doesn't replace account-scoped data with the
           // full merged list (which includes records from other accounts).
           transactions.value = [...freshItems]
-            .filter(t => t.cuenta_id === accountId)
-            .sort(byFechaDesc)
+            .filter(t => t.account_id === accountId)
+            .sort(byDateDesc)
         }
       )
 
       // Narrow the local result to the requested account so the stale value
       // shown before revalidation is scoped correctly.
       transactions.value = [...localData]
-        .filter(t => t.cuenta_id === accountId)
-        .sort(byFechaDesc)
+        .filter(t => t.account_id === accountId)
+        .sort(byDateDesc)
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transacciones de la cuenta'
       throw err
@@ -185,18 +185,18 @@ export const useTransactionsStore = defineStore('transactions', () => {
     // Build the full local transaction record.
     // tags defaults to an empty array when not provided by the caller, which
     // matches the Transaction interface requirement (tags: string[], not optional).
-    // cuenta_id and categoria_id are kept exactly as provided — they may be
+    // account_id and category_id are kept exactly as provided — they may be
     // real server UUIDs or temp-* IDs if the account/category was created
     // offline. The SyncManager resolves temp IDs before the network call.
     const localTransaction: LocalTransaction = {
       id: tempId,
-      tipo: data.tipo,
-      monto: data.monto,
-      fecha: data.fecha,
-      cuenta_id: data.cuenta_id,
-      categoria_id: data.categoria_id,
-      titulo: data.titulo,
-      descripcion: data.descripcion,
+      type: data.type,
+      amount: data.amount,
+      date: data.date,
+      account_id: data.account_id,
+      category_id: data.category_id,
+      title: data.title,
+      description: data.description,
       tags: data.tags ?? [],
       created_at: now,
       updated_at: now,
@@ -218,12 +218,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
       // Adjust the account's in-memory balance immediately so balance
       // displays are accurate while offline (before server sync).
       const accountsStore = useAccountsStore()
-      const balanceDelta = data.tipo === 'ingreso' ? Number(data.monto) : -Number(data.monto)
-      accountsStore.adjustBalance(data.cuenta_id, balanceDelta)
+      const balanceDelta = data.type === 'income' ? Number(data.amount) : -Number(data.amount)
+      accountsStore.adjustBalance(data.account_id, balanceDelta)
 
       // Step 3 — Enqueue CREATE mutation.
       // client_id in the payload allows the server to deduplicate retries.
-      // cuenta_id / categoria_id are preserved verbatim (may be temp IDs).
+      // account_id / category_id are preserved verbatim (may be temp IDs).
       await mutationQueue.enqueue({
         entity_type: 'transaction',
         entity_id: tempId,
@@ -265,20 +265,20 @@ export const useTransactionsStore = defineStore('transactions', () => {
         }
 
         // Compute how this update changes the account balance.
-        // If cuenta_id changed, reverse the old account's effect and apply
+        // If account_id changed, reverse the old account's effect and apply
         // the new amount to the new account. If it stayed the same, just
         // apply the net difference.
         const accountsStore = useAccountsStore()
-        const oldImpact = old.tipo === 'ingreso' ? Number(old.monto) : -Number(old.monto)
-        const newTipo = data.tipo ?? old.tipo
-        const newMonto = data.monto ?? old.monto
-        const newCuentaId = data.cuenta_id ?? old.cuenta_id
-        const newImpact = newTipo === 'ingreso' ? Number(newMonto) : -Number(newMonto)
-        if (newCuentaId === old.cuenta_id) {
-          accountsStore.adjustBalance(old.cuenta_id, newImpact - oldImpact)
+        const oldImpact = old.type === 'income' ? Number(old.amount) : -Number(old.amount)
+        const newType = data.type ?? old.type
+        const newAmount = data.amount ?? old.amount
+        const newAccountId = data.account_id ?? old.account_id
+        const newImpact = newType === 'income' ? Number(newAmount) : -Number(newAmount)
+        if (newAccountId === old.account_id) {
+          accountsStore.adjustBalance(old.account_id, newImpact - oldImpact)
         } else {
-          accountsStore.adjustBalance(old.cuenta_id, -oldImpact)
-          accountsStore.adjustBalance(newCuentaId, newImpact)
+          accountsStore.adjustBalance(old.account_id, -oldImpact)
+          accountsStore.adjustBalance(newAccountId, newImpact)
         }
       }
 
@@ -322,8 +322,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
         transactions.value = transactions.value.filter(t => t.id !== id)
         if (tx) {
           const accountsStore = useAccountsStore()
-          const delta = tx.tipo === 'ingreso' ? -Number(tx.monto) : Number(tx.monto)
-          accountsStore.adjustBalance(tx.cuenta_id, delta)
+          const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount)
+          accountsStore.adjustBalance(tx.account_id, delta)
         }
         return
       }
@@ -333,8 +333,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
       transactions.value = transactions.value.filter(t => t.id !== id)
       if (tx) {
         const accountsStore = useAccountsStore()
-        const delta = tx.tipo === 'ingreso' ? -Number(tx.monto) : Number(tx.monto)
-        accountsStore.adjustBalance(tx.cuenta_id, delta)
+        const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount)
+        accountsStore.adjustBalance(tx.account_id, delta)
       }
 
       await mutationQueue.enqueue({
@@ -360,11 +360,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
   }
 
   function getTransactionsByAccount(accountId: string): LocalTransaction[] {
-    return transactions.value.filter(t => t.cuenta_id === accountId)
+    return transactions.value.filter(t => t.account_id === accountId)
   }
 
   function getTransactionsByCategory(categoryId: string): LocalTransaction[] {
-    return transactions.value.filter(t => t.categoria_id === categoryId)
+    return transactions.value.filter(t => t.category_id === categoryId)
   }
 
   /**
@@ -374,7 +374,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
    */
   async function refreshFromDB() {
     const data = await db.transactions.toArray()
-    transactions.value = [...data].sort(byFechaDesc)
+    transactions.value = [...data].sort(byDateDesc)
   }
 
   return {

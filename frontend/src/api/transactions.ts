@@ -43,7 +43,7 @@ export const transactionsApi = {
    * @param filters - Additional filters
    */
   getByAccount(accountId: string, filters?: TransactionFilters): Promise<Transaction[]> {
-    const params = { ...filters, cuenta_id: accountId }
+    const params = { ...filters, account_id: accountId }
     return apiClient.get('/transactions', { params })
   },
 

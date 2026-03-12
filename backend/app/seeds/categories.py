@@ -13,111 +13,111 @@ from app.extensions import db
 CATEGORIES = [
     # INCOME CATEGORIES
     {
-        "nombre": "Salario",
-        "tipo": CategoryType.INGRESO,
-        "icono": "💰",
+        "name": "Salario",
+        "type": CategoryType.INCOME,
+        "icon": "💰",
         "color": "#10B981",
     },
     {
-        "nombre": "Freelance",
-        "tipo": CategoryType.INGRESO,
-        "icono": "💼",
+        "name": "Freelance",
+        "type": CategoryType.INCOME,
+        "icon": "💼",
         "color": "#3B82F6",
     },
     {
-        "nombre": "Inversiones",
-        "tipo": CategoryType.INGRESO,
-        "icono": "📈",
+        "name": "Inversiones",
+        "type": CategoryType.INCOME,
+        "icon": "📈",
         "color": "#8B5CF6",
     },
     {
-        "nombre": "Otros Ingresos",
-        "tipo": CategoryType.INGRESO,
-        "icono": "🎁",
+        "name": "Otros Ingresos",
+        "type": CategoryType.INCOME,
+        "icon": "🎁",
         "color": "#EC4899",
     },
     # EXPENSE CATEGORIES
     {
-        "nombre": "Alimentación",
-        "tipo": CategoryType.GASTO,
-        "icono": "🛒",
+        "name": "Alimentación",
+        "type": CategoryType.EXPENSE,
+        "icon": "🛒",
         "color": "#EF4444",
-        "subcategorias": [
-            {"nombre": "Supermercado", "icono": "🛍️"},
-            {"nombre": "Restaurantes", "icono": "🍽️"},
-            {"nombre": "Cafetería", "icono": "☕"},
+        "subcategories": [
+            {"name": "Supermercado", "icon": "🛍️"},
+            {"name": "Restaurantes", "icon": "🍽️"},
+            {"name": "Cafetería", "icon": "☕"},
         ],
     },
     {
-        "nombre": "Transporte",
-        "tipo": CategoryType.GASTO,
-        "icono": "🚗",
+        "name": "Transporte",
+        "type": CategoryType.EXPENSE,
+        "icon": "🚗",
         "color": "#F59E0B",
-        "subcategorias": [
-            {"nombre": "Gasolina", "icono": "⛽"},
-            {"nombre": "Transporte Público", "icono": "🚌"},
-            {"nombre": "Taxi/Uber", "icono": "🚕"},
+        "subcategories": [
+            {"name": "Gasolina", "icon": "⛽"},
+            {"name": "Transporte Público", "icon": "🚌"},
+            {"name": "Taxi/Uber", "icon": "🚕"},
         ],
     },
     {
-        "nombre": "Vivienda",
-        "tipo": CategoryType.GASTO,
-        "icono": "🏠",
+        "name": "Vivienda",
+        "type": CategoryType.EXPENSE,
+        "icon": "🏠",
         "color": "#6366F1",
-        "subcategorias": [
-            {"nombre": "Renta", "icono": "🔑"},
-            {"nombre": "Servicios", "icono": "⚡"},
-            {"nombre": "Mantenimiento", "icono": "🔧"},
+        "subcategories": [
+            {"name": "Renta", "icon": "🔑"},
+            {"name": "Servicios", "icon": "⚡"},
+            {"name": "Mantenimiento", "icon": "🔧"},
         ],
     },
     {
-        "nombre": "Entretenimiento",
-        "tipo": CategoryType.GASTO,
-        "icono": "🎬",
+        "name": "Entretenimiento",
+        "type": CategoryType.EXPENSE,
+        "icon": "🎬",
         "color": "#EC4899",
-        "subcategorias": [
-            {"nombre": "Streaming", "icono": "📺"},
-            {"nombre": "Cine", "icono": "🎟️"},
-            {"nombre": "Eventos", "icono": "📅"},
+        "subcategories": [
+            {"name": "Streaming", "icon": "📺"},
+            {"name": "Cine", "icon": "🎟️"},
+            {"name": "Eventos", "icon": "📅"},
         ],
     },
     {
-        "nombre": "Salud",
-        "tipo": CategoryType.GASTO,
-        "icono": "❤️",
+        "name": "Salud",
+        "type": CategoryType.EXPENSE,
+        "icon": "❤️",
         "color": "#14B8A6",
-        "subcategorias": [
-            {"nombre": "Medicamentos", "icono": "💊"},
-            {"nombre": "Consultas", "icono": "🩺"},
-            {"nombre": "Gimnasio", "icono": "💪"},
+        "subcategories": [
+            {"name": "Medicamentos", "icon": "💊"},
+            {"name": "Consultas", "icon": "🩺"},
+            {"name": "Gimnasio", "icon": "💪"},
         ],
     },
     {
-        "nombre": "Educación",
-        "tipo": CategoryType.GASTO,
-        "icono": "📖",
+        "name": "Educación",
+        "type": CategoryType.EXPENSE,
+        "icon": "📖",
         "color": "#8B5CF6",
-        "subcategorias": [
-            {"nombre": "Cursos", "icono": "🎓"},
-            {"nombre": "Libros", "icono": "📚"},
-            {"nombre": "Material", "icono": "✏️"},
+        "subcategories": [
+            {"name": "Cursos", "icon": "🎓"},
+            {"name": "Libros", "icon": "📚"},
+            {"name": "Material", "icon": "✏️"},
         ],
     },
     {
-        "nombre": "Compras",
-        "tipo": CategoryType.GASTO,
-        "icono": "🛍️",
+        "name": "Compras",
+        "type": CategoryType.EXPENSE,
+        "icon": "🛍️",
         "color": "#F97316",
-        "subcategorias": [
-            {"nombre": "Ropa", "icono": "👕"},
-            {"nombre": "Tecnología", "icono": "💻"},
-            {"nombre": "Hogar", "icono": "🛋️"},
+        "subcategories": [
+            {"name": "Ropa", "icon": "👕"},
+            {"name": "Tecnología", "icon": "💻"},
+            {"name": "Hogar", "icon": "🛋️"},
         ],
     },
     {
-        "nombre": "Otros Gastos",
-        "tipo": CategoryType.GASTO,
-        "icono": "📝",
+        "name": "Otros Gastos",
+        "type": CategoryType.EXPENSE,
+        "icon": "📝",
         "color": "#6B7280",
     },
 ]
@@ -135,47 +135,47 @@ def seed_categories() -> None:
     for cat_data in CATEGORIES:
         # Check if parent category already exists
         existing = Category.query.filter_by(
-            nombre=cat_data["nombre"], categoria_padre_id=None
+            name=cat_data["name"], parent_category_id=None
         ).first()
 
         if existing:
-            print(f"  - Categoria '{cat_data['nombre']}' ya existe, omitiendo...")
+            print(f"  - Categoria '{cat_data['name']}' ya existe, omitiendo...")
             parent = existing
         else:
             # Create parent category
             parent = Category(
-                nombre=cat_data["nombre"],
-                tipo=cat_data["tipo"],
-                icono=cat_data.get("icono"),
+                name=cat_data["name"],
+                type=cat_data["type"],
+                icon=cat_data.get("icon"),
                 color=cat_data.get("color"),
             )
             db.session.add(parent)
             db.session.flush()  # Flush to get the ID
-            print(f"  + Categoria '{cat_data['nombre']}' creada")
+            print(f"  + Categoria '{cat_data['name']}' creada")
 
         # Create subcategories if they exist
-        if "subcategorias" in cat_data:
-            for subcat_data in cat_data["subcategorias"]:
+        if "subcategories" in cat_data:
+            for subcat_data in cat_data["subcategories"]:
                 # Check if subcategory already exists
                 existing_sub = Category.query.filter_by(
-                    nombre=subcat_data["nombre"], categoria_padre_id=parent.id
+                    name=subcat_data["name"], parent_category_id=parent.id
                 ).first()
 
                 if existing_sub:
                     print(
-                        f"    - Subcategoria '{subcat_data['nombre']}' ya existe, omitiendo..."
+                        f"    - Subcategoria '{subcat_data['name']}' ya existe, omitiendo..."
                     )
                 else:
                     # Create subcategory with same type and color as parent
                     subcategory = Category(
-                        nombre=subcat_data["nombre"],
-                        tipo=cat_data["tipo"],
-                        icono=subcat_data.get("icono"),
+                        name=subcat_data["name"],
+                        type=cat_data["type"],
+                        icon=subcat_data.get("icon"),
                         color=cat_data.get("color"),  # Inherit parent color
-                        categoria_padre_id=parent.id,
+                        parent_category_id=parent.id,
                     )
                     db.session.add(subcategory)
-                    print(f"    + Subcategoria '{subcat_data['nombre']}' creada")
+                    print(f"    + Subcategoria '{subcat_data['name']}' creada")
 
     # Commit all changes
     db.session.commit()

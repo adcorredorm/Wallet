@@ -4,62 +4,62 @@
  */
 
 export enum TransactionType {
-  INGRESO = 'ingreso',
-  GASTO = 'gasto'
+  INCOME = 'income',
+  EXPENSE = 'expense'
 }
 
 export interface Transaction {
   id: string
-  tipo: TransactionType
-  monto: number
-  fecha: string  // ISO date string (YYYY-MM-DD)
-  cuenta_id: string
-  categoria_id: string
-  titulo?: string
-  descripcion?: string
+  type: TransactionType
+  amount: number
+  date: string  // ISO date string (YYYY-MM-DD)
+  account_id: string
+  category_id: string
+  title?: string
+  description?: string
   tags: string[]
   created_at: string
   updated_at: string
   // Populated relations (optional, depends on API response)
-  cuenta?: {
-    nombre: string
-    divisa: string
+  account?: {
+    name: string
+    currency: string
   }
-  categoria?: {
-    nombre: string
-    icono?: string
+  category?: {
+    name: string
+    icon?: string
     color?: string
   }
 }
 
 export interface CreateTransactionDto {
-  tipo: TransactionType
-  monto: number
-  fecha: string
-  cuenta_id: string
-  categoria_id: string
-  titulo?: string
-  descripcion?: string
+  type: TransactionType
+  amount: number
+  date: string
+  account_id: string
+  category_id: string
+  title?: string
+  description?: string
   tags?: string[]
 }
 
 export interface UpdateTransactionDto {
-  tipo?: TransactionType
-  monto?: number
-  fecha?: string
-  cuenta_id?: string
-  categoria_id?: string
-  titulo?: string
-  descripcion?: string
+  type?: TransactionType
+  amount?: number
+  date?: string
+  account_id?: string
+  category_id?: string
+  title?: string
+  description?: string
   tags?: string[]
 }
 
 export interface TransactionFilters {
-  cuenta_id?: string
-  categoria_id?: string
-  tipo?: TransactionType
-  fecha_inicio?: string
-  fecha_fin?: string
+  account_id?: string
+  category_id?: string
+  type?: TransactionType
+  date_from?: string
+  date_to?: string
   tags?: string[]
   limit?: number
   offset?: number

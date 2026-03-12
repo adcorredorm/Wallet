@@ -83,7 +83,7 @@ function createTransfer() {
             -->
             <div class="flex items-center gap-2">
               <h4 class="font-medium truncate">
-                {{ transfer.titulo || 'Transferencia' }}
+                {{ transfer.title || 'Transferencia' }}
               </h4>
               <SyncBadge
                 v-if="'_sync_status' in transfer"
@@ -91,16 +91,16 @@ function createTransfer() {
               />
             </div>
             <div class="text-sm text-dark-text-secondary">
-              <p>{{ transfer.cuenta_origen?.nombre }} → {{ transfer.cuenta_destino?.nombre }}</p>
-              <p>{{ formatDateRelative(transfer.fecha) }}</p>
+              <p>{{ transfer.source_account?.name }} → {{ transfer.destination_account?.name }}</p>
+              <p>{{ formatDateRelative(transfer.date) }}</p>
             </div>
           </div>
 
           <!-- Amount -->
           <div class="flex-shrink-0 text-right">
             <CurrencyDisplay
-              :amount="transfer.monto"
-              :currency="transfer.cuenta_origen?.divisa || 'USD'"
+              :amount="transfer.amount"
+              :currency="transfer.source_account?.currency || 'USD'"
               size="md"
             />
           </div>

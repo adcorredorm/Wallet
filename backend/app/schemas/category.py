@@ -13,9 +13,9 @@ import re
 class CategoryType(str, Enum):
     """Category type enumeration."""
 
-    INGRESO = "ingreso"
-    GASTO = "gasto"
-    AMBOS = "ambos"
+    INCOME = "income"
+    EXPENSE = "expense"
+    BOTH = "both"
 
 
 class CategoryCreate(BaseModel):
@@ -23,21 +23,21 @@ class CategoryCreate(BaseModel):
     Schema for creating a new category.
 
     Args:
-        nombre: Category name (1-50 characters)
-        tipo: Category type (income, expense, or both)
-        icono: Optional icon identifier (max 50 characters)
+        name: Category name (1-50 characters)
+        type: Category type (income, expense, or both)
+        icon: Optional icon identifier (max 50 characters)
         color: Optional color in hex format (#RRGGBB)
-        categoria_padre_id: Optional parent category ID for subcategories
+        parent_category_id: Optional parent category ID for subcategories
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
     """
 
-    nombre: str = Field(..., min_length=1, max_length=50)
-    tipo: CategoryType
-    icono: Optional[str] = Field(None, max_length=50)
+    name: str = Field(..., min_length=1, max_length=50)
+    type: CategoryType
+    icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
-    categoria_padre_id: Optional[UUID] = None
+    parent_category_id: Optional[UUID] = None
     client_id: Optional[str] = Field(None, max_length=100)
 
     @field_validator("color")
@@ -58,11 +58,11 @@ class CategoryUpdate(BaseModel):
     All fields are optional to support partial updates.
     """
 
-    nombre: Optional[str] = Field(None, min_length=1, max_length=50)
-    tipo: Optional[CategoryType] = None
-    icono: Optional[str] = Field(None, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
+    type: Optional[CategoryType] = None
+    icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = None
-    categoria_padre_id: Optional[UUID] = None
+    parent_category_id: Optional[UUID] = None
 
     @field_validator("color")
     @classmethod
@@ -84,11 +84,11 @@ class CategoryResponse(BaseModel):
     """
 
     id: UUID
-    nombre: str
-    tipo: CategoryType
-    icono: Optional[str]
+    name: str
+    type: CategoryType
+    icon: Optional[str]
     color: Optional[str]
-    categoria_padre_id: Optional[UUID]
+    parent_category_id: Optional[UUID]
     created_at: datetime
     updated_at: datetime
 
@@ -102,6 +102,6 @@ class CategoryWithSubcategories(CategoryResponse):
     Extends CategoryResponse with nested subcategories list.
     """
 
-    subcategorias: list["CategoryResponse"] = Field(
+    subcategories: list["CategoryResponse"] = Field(
         default_factory=list, description="Child categories"
     )
