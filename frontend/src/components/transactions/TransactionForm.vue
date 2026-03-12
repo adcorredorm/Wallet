@@ -82,11 +82,14 @@ watch(() => form.type, () => {
 // FX (foreign currency) section state
 // ---------------------------------------------------------------------------
 
-// The currency the user is paying IN — null means same as account currency
-const foreignCurrency = ref<string>('')
+// The currency the user is paying IN — initialized from existing transaction in edit mode
+const foreignCurrency = ref<string>(
+  (props.transaction as any)?.original_currency || ''
+)
 
 // Whether the collapsible FX section is visually expanded
-const isFxSectionOpen = ref(false)
+// Auto-open when editing a transaction that already has FX data
+const isFxSectionOpen = ref(!!(props.transaction as any)?.original_currency)
 
 // ---------------------------------------------------------------------------
 // Advanced options section state
@@ -100,9 +103,15 @@ const isAdvancedOpen = ref(false)
 // FX section field values — kept separate from `form` to isolate the reactive
 // triangle logic. form.amount is always kept in sync with accountAmount when
 // FX mode is active so existing validation and submission paths need no changes.
-const originalAmount = ref<number | null>(null)
-const accountAmount = ref<number | null>(null)
-const exchangeRate = ref<number | null>(null)
+const originalAmount = ref<number | null>(
+  (props.transaction as any)?.original_amount ? Number((props.transaction as any).original_amount) : null
+)
+const accountAmount = ref<number | null>(
+  (props.transaction as any)?.original_currency ? Number(props.transaction!.amount) : null
+)
+const exchangeRate = ref<number | null>(
+  (props.transaction as any)?.exchange_rate ? Number((props.transaction as any).exchange_rate) : null
+)
 
 // Tracks which field the user last touched to decide which one to recalculate.
 // 'original' | 'account' | 'rate' | null (null = no user edit yet this session)
@@ -276,7 +285,8 @@ const foreignCurrencyOptions = computed(() => [
 onMounted(() => {
   const hasOptionalValues =
     !!form.tags ||
-    !!foreignCurrency.value
+    !!foreignCurrency.value ||
+    !!(props.transaction as any)?.original_currency
 
   if (hasOptionalValues) {
     isAdvancedOpen.value = true
