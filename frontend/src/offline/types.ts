@@ -42,6 +42,7 @@ export interface LocalTransaction extends Transaction {
   original_amount?: number    // Amount in the original currency before conversion
   original_currency?: string  // ISO 4217 code of the original currency (e.g. 'COP')
   exchange_rate?: number      // Rate applied at the time of the transaction
+  base_rate?: number | null   // Units of primaryCurrency per 1 unit of account.currency at capture time
 }
 
 export interface LocalTransfer extends Transfer {
@@ -51,6 +52,7 @@ export interface LocalTransfer extends Transfer {
   destination_amount?: number   // Amount received in the destination account (may differ due to FX)
   exchange_rate?: number        // Rate applied at the time of the transfer
   destination_currency?: string // ISO 4217 code of the destination account's currency
+  base_rate?: number | null     // Units of primaryCurrency per 1 unit of source_account.currency at capture time
 }
 
 export interface LocalCategory extends Category {
