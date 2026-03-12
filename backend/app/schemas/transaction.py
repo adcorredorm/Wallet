@@ -45,6 +45,10 @@ class TransactionCreate(BaseModel):
         exchange_rate: Units of account currency per 1 unit of original_currency
             at the time of the transaction. Required when original_currency is
             provided. Must be > 0.
+        base_rate: Units of primaryCurrency per 1 unit of the account's native
+            currency at the time of the transaction. NULL when no rate was
+            available offline. Optional — the backend stores whatever the
+            frontend supplies.
     """
 
     type: TransactionType
@@ -59,6 +63,7 @@ class TransactionCreate(BaseModel):
     original_amount: Optional[Decimal] = None
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
+    base_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -143,6 +148,7 @@ class TransactionUpdate(BaseModel):
     original_amount: Optional[Decimal] = None
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
+    base_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -226,6 +232,8 @@ class TransactionResponse(BaseModel):
         exchange_rate: Rate applied at transaction time — units of account
             currency per 1 unit of original_currency (None for single-currency
             transactions)
+        base_rate: Units of primaryCurrency per 1 unit of the account's native
+            currency at the time of the transaction. None when unavailable offline.
         created_at: Creation timestamp
         updated_at: Last update timestamp
     """
@@ -242,6 +250,7 @@ class TransactionResponse(BaseModel):
     original_amount: Optional[Decimal] = None
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
+    base_rate: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
 

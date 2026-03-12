@@ -35,6 +35,8 @@ class TransferCreate(BaseModel):
         destination_currency: ISO 4217 currency code of the destination account.
             Auto-derived from the destination account in the service layer;
             clients do not need to supply this field.
+        base_rate: Units of primaryCurrency per 1 unit of the source account's
+            native currency at the time of the transfer. Optional, nullable.
 
     Raises:
         ValueError: If source and destination accounts are the same, or if
@@ -51,6 +53,7 @@ class TransferCreate(BaseModel):
     destination_amount: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None
     destination_currency: Optional[str] = Field(None, max_length=10)
+    base_rate: Optional[Decimal] = None
 
     @model_validator(mode="after")
     def validate_transfer(self) -> "TransferCreate":
@@ -112,6 +115,8 @@ class TransferUpdate(BaseModel):
             provided. Only meaningful on cross-currency transfers.
         exchange_rate: New exchange rate. Must be positive when provided.
             Only meaningful on cross-currency transfers.
+        base_rate: Units of primaryCurrency per 1 unit of the source account's
+            native currency at the time of the transfer. Optional, nullable.
     """
 
     amount: Optional[Decimal] = Field(None, gt=0)
@@ -120,6 +125,7 @@ class TransferUpdate(BaseModel):
     tags: Optional[list[str]] = None
     destination_amount: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None
+    base_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -162,6 +168,9 @@ class TransferResponse(BaseModel):
             same-currency transfers.
         destination_currency: ISO 4217 currency code of the destination
             account. None for same-currency transfers.
+        base_rate: Units of primaryCurrency per 1 unit of the source account's
+            native currency at the time of the transfer. None when unavailable
+            offline.
     """
 
     id: UUID
@@ -176,6 +185,7 @@ class TransferResponse(BaseModel):
     destination_amount: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None
     destination_currency: Optional[str] = None
+    base_rate: Optional[Decimal] = None
 
     model_config = {"from_attributes": True}
 
