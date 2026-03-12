@@ -109,7 +109,7 @@ const isNegative = computed(() =>
 // (primary currency first, then alphabetical).
 const sortedCurrencies = computed(() => {
   const primary = settingsStore.primaryCurrency
-  return [...balancesByCurrency.value.keys()].sort((a, b) => {
+  return [...balancesByCurrency.value.keys()].filter(Boolean).sort((a, b) => {
     if (a === primary) return -1
     if (b === primary) return 1
     return a.localeCompare(b)
