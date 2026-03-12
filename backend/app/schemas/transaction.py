@@ -66,7 +66,7 @@ class TransactionCreate(BaseModel):
         """Validate amount is positive and round to 2 decimals."""
         if v <= 0:
             raise ValueError("El monto debe ser mayor a 0")
-        return round(v, 2)
+        return round(v, 8)
 
     @field_validator("tags")
     @classmethod
@@ -152,7 +152,7 @@ class TransactionUpdate(BaseModel):
             return v
         if v <= 0:
             raise ValueError("El monto debe ser mayor a 0")
-        return round(v, 2)
+        return round(v, 8)
 
     @field_validator("tags")
     @classmethod
