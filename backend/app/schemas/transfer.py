@@ -211,7 +211,7 @@ class TransferFilters(BaseModel):
         date_to: Filter by end date (inclusive)
         tags: Filter by tags (any match)
         page: Page number (1-indexed)
-        limit: Items per page (1-100)
+        limit: Items per page (1-10000)
     """
 
     account_id: Optional[UUID] = None
@@ -219,7 +219,7 @@ class TransferFilters(BaseModel):
     date_to: Optional[date] = None
     tags: Optional[list[str]] = None
     page: int = Field(default=1, ge=1)
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(default=20, ge=1, le=10000)
 
     @model_validator(mode="after")
     def validate_date_range(self) -> "TransferFilters":

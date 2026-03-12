@@ -47,6 +47,8 @@ import { db } from '@/offline'
 import type { LocalTransaction, LocalTransfer } from '@/offline'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
+import { useTransactionsStore } from '@/stores/transactions'
+import { useTransfersStore } from '@/stores/transfers'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -142,6 +144,8 @@ export function useNetWorthHistory(
 ): UseNetWorthHistoryReturn {
   const exchangeRatesStore = useExchangeRatesStore()
   const settingsStore = useSettingsStore()
+  const transactionsStore = useTransactionsStore()
+  const transfersStore = useTransfersStore()
 
   // Resolve reactive options to plain computed values
   const _rangeDays = computed<number>(() => {
@@ -183,6 +187,12 @@ export function useNetWorthHistory(
     // Touch rates.length to subscribe to rate updates — when rates refresh,
     // fallback rate lookups may change and the chart should recompute.
     void exchangeRatesStore.rates.length
+    // Subscribe to transaction/transfer store updates so the chart recomputes
+    // automatically when sync completes (refreshFromDB) or when the user adds
+    // a new transaction. The composable reads from Dexie directly but needs
+    // this reactive dep to know when Dexie has new data.
+    void transactionsStore.transactions.length
+    void transfersStore.transfers.length
 
     loading.value = true
 
