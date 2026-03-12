@@ -83,6 +83,7 @@ class TransferService:
         destination_amount: Decimal | None = None,
         exchange_rate: Decimal | None = None,
         destination_currency: str | None = None,
+        base_rate: Decimal | None = None,
     ) -> Transfer:
         """
         Create a new transfer, handling both same-currency and cross-currency cases.
@@ -112,6 +113,9 @@ class TransferService:
                 cross-currency transfers.
             destination_currency: Ignored — always derived from the destination
                 account. Accepted for symmetry with the schema but not used.
+            base_rate: Units of primaryCurrency per 1 unit of the source
+                account's native currency at transfer time. Stored as-is; NULL
+                when unavailable offline.
 
         Returns:
             Created or pre-existing transfer instance
@@ -157,6 +161,7 @@ class TransferService:
             destination_amount=destination_amount,
             exchange_rate=exchange_rate,
             destination_currency=resolved_destination_currency,
+            base_rate=base_rate,
         )
 
     def update(
@@ -168,6 +173,7 @@ class TransferService:
         tags: list[str] | None = None,
         destination_amount: Decimal | None = None,
         exchange_rate: Decimal | None = None,
+        base_rate: Decimal | None = None,
     ) -> Transfer:
         """
         Update an existing transfer.
@@ -186,6 +192,8 @@ class TransferService:
                 Only meaningful for cross-currency transfers.
             exchange_rate: New exchange rate. When provided must be > 0.
                 Only meaningful for cross-currency transfers.
+            base_rate: Units of primaryCurrency per 1 unit of the source
+                account's native currency. Stored as-is; NULL when unavailable.
 
         Returns:
             Updated transfer instance
@@ -214,6 +222,8 @@ class TransferService:
             update_data["destination_amount"] = destination_amount
         if exchange_rate is not None:
             update_data["exchange_rate"] = exchange_rate
+        if base_rate is not None:
+            update_data["base_rate"] = base_rate
 
         return self.repository.update(transfer, **update_data)
 

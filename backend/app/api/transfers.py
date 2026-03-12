@@ -169,6 +169,7 @@ def create_transfer():
             client_id=transfer_data.client_id,
             destination_amount=transfer_data.destination_amount,
             exchange_rate=transfer_data.exchange_rate,
+            base_rate=transfer_data.base_rate,
         )
 
         data = TransferResponse.model_validate(transfer).model_dump(mode="json")
@@ -250,6 +251,7 @@ def update_transfer(transfer_id: UUID):
             tags=transfer_data.tags,
             destination_amount=transfer_data.destination_amount,
             exchange_rate=transfer_data.exchange_rate,
+            base_rate=transfer_data.base_rate,
         )
 
         data = TransferResponse.model_validate(transfer).model_dump(mode="json")

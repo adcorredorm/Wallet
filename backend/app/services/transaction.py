@@ -93,6 +93,7 @@ class TransactionService:
         original_amount: Decimal | None = None,
         original_currency: str | None = None,
         exchange_rate: Decimal | None = None,
+        base_rate: Decimal | None = None,
     ) -> Transaction:
         """
         Create a new transaction.
@@ -125,6 +126,9 @@ class TransactionService:
             exchange_rate: Units of account currency per 1 unit of
                 original_currency at transaction time. Must be > 0 when
                 provided.
+            base_rate: Units of primaryCurrency per 1 unit of the account's
+                native currency at transaction time. Stored as-is; NULL when
+                unavailable offline.
 
         Returns:
             Created or pre-existing transaction instance
@@ -170,6 +174,7 @@ class TransactionService:
             original_amount=original_amount,
             original_currency=original_currency,
             exchange_rate=exchange_rate,
+            base_rate=base_rate,
         )
 
     def update(
@@ -186,6 +191,7 @@ class TransactionService:
         original_amount: Decimal | None = None,
         original_currency: str | None = None,
         exchange_rate: Decimal | None = None,
+        base_rate: Decimal | None = None,
     ) -> Transaction:
         """
         Update an existing transaction.
@@ -208,6 +214,9 @@ class TransactionService:
             original_amount: New original amount in the foreign currency.
             original_currency: New ISO 4217 foreign currency code.
             exchange_rate: New exchange rate (account currency per foreign unit).
+            base_rate: Units of primaryCurrency per 1 unit of the account's
+                native currency at transaction time. Stored as-is; NULL when
+                unavailable offline.
 
         Returns:
             Updated transaction instance
@@ -278,6 +287,8 @@ class TransactionService:
             update_data["original_currency"] = original_currency
         if exchange_rate is not None:
             update_data["exchange_rate"] = exchange_rate
+        if base_rate is not None:
+            update_data["base_rate"] = base_rate
 
         return self.repository.update(transaction, **update_data)
 

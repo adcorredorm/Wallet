@@ -179,6 +179,7 @@ def create_transaction():
             original_amount=transaction_data.original_amount,
             original_currency=transaction_data.original_currency,
             exchange_rate=transaction_data.exchange_rate,
+            base_rate=transaction_data.base_rate,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
@@ -262,6 +263,7 @@ def update_transaction(transaction_id: UUID):
             original_amount=transaction_data.original_amount,
             original_currency=transaction_data.original_currency,
             exchange_rate=transaction_data.exchange_rate,
+            base_rate=transaction_data.base_rate,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
