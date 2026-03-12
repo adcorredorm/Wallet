@@ -9,7 +9,7 @@
  * - Visual feedback for positive/negative
  */
 
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { formatNumber, parseFormattedNumber } from '@/utils/formatters'
 import { SUPPORTED_CURRENCIES } from '@/utils/constants'
 
@@ -17,6 +17,8 @@ import { SUPPORTED_CURRENCIES } from '@/utils/constants'
 const CURRENCY_SYMBOL_MAP: Record<string, string> = Object.fromEntries(
   SUPPORTED_CURRENCIES.map(c => [c.code, c.symbol])
 )
+
+const CRYPTO_CURRENCIES = new Set(['BTC', 'ETH'])
 
 interface Props {
   modelValue: number
@@ -43,10 +45,15 @@ const emit = defineEmits<{
 
 const displayValue = ref('')
 
+// Crypto uses up to 8 decimals; fiat uses 2
+const decimals = computed(() =>
+  CRYPTO_CURRENCIES.has(props.currency?.toUpperCase() ?? '') ? 8 : 2
+)
+
 // Initialize display value
 watch(() => props.modelValue, (value) => {
   if (value !== parseFormattedNumber(displayValue.value)) {
-    displayValue.value = value ? formatNumber(value, 2) : ''
+    displayValue.value = value ? formatNumber(value, decimals.value) : ''
   }
 }, { immediate: true })
 
@@ -68,10 +75,10 @@ function handleInput(event: Event) {
 }
 
 function handleBlur() {
-  // Format on blur
+  // Format on blur with currency-appropriate decimals
   const numericValue = parseFormattedNumber(displayValue.value)
   if (!isNaN(numericValue)) {
-    displayValue.value = formatNumber(numericValue, 2)
+    displayValue.value = formatNumber(numericValue, decimals.value)
   }
 }
 </script>
