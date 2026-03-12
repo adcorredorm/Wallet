@@ -11,7 +11,7 @@
  * Editing any two recalculates the third automatically.
  */
 
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -87,6 +87,15 @@ const foreignCurrency = ref<string>('')
 
 // Whether the collapsible FX section is visually expanded
 const isFxSectionOpen = ref(false)
+
+// ---------------------------------------------------------------------------
+// Advanced options section state
+// ---------------------------------------------------------------------------
+
+// Whether the "Opciones avanzadas" collapsible block is expanded.
+// Starts closed on new transactions; auto-opens when any optional field
+// already has a value (edit mode or pre-populated form).
+const isAdvancedOpen = ref(false)
 
 // FX section field values — kept separate from `form` to isolate the reactive
 // triangle logic. form.amount is always kept in sync with accountAmount when
@@ -258,6 +267,25 @@ const foreignCurrencyOptions = computed(() => [
 ])
 
 // ---------------------------------------------------------------------------
+// Auto-open advanced section when optional fields already have values
+// (e.g. editing an existing transaction).
+// We run this once on mount so that the initial state of the reactive form
+// is fully settled before we check.
+// ---------------------------------------------------------------------------
+
+onMounted(() => {
+  const hasOptionalValues =
+    !!form.title ||
+    !!form.description ||
+    !!form.tags ||
+    !!foreignCurrency.value
+
+  if (hasOptionalValues) {
+    isAdvancedOpen.value = true
+  }
+})
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -352,130 +380,6 @@ function handleSubmit() {
       required
     />
 
-    <!-- Moneda extranjera (optional) -->
-    <div class="w-full">
-      <BaseSelect
-        v-model="foreignCurrency"
-        label="Moneda extranjera (opcional)"
-        :options="foreignCurrencyOptions"
-        placeholder="Sin moneda extranjera"
-      />
-    </div>
-
-    <!-- FX collapsible section -->
-    <div v-if="fxActive" class="rounded-lg border border-dark-border bg-dark-bg-secondary overflow-hidden">
-      <!-- Section header / toggle -->
-      <button
-        type="button"
-        class="w-full flex items-center justify-between px-4 py-3 text-left min-h-touch hover:bg-dark-bg-tertiary transition-colors"
-        :aria-expanded="isFxSectionOpen"
-        aria-controls="fx-section-body"
-        @click="isFxSectionOpen = !isFxSectionOpen"
-      >
-        <span class="text-sm font-medium text-dark-text-secondary">
-          Detalle de cambio de divisas
-          <span class="ml-1 text-dark-text-tertiary text-xs font-normal">
-            ({{ foreignCurrency }} → {{ selectedAccountCurrency }})
-          </span>
-        </span>
-        <!-- Chevron icon — rotates 180° when open -->
-        <svg
-          class="w-4 h-4 text-dark-text-tertiary flex-shrink-0 transition-transform duration-200"
-          :class="{ 'rotate-180': isFxSectionOpen }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      <!-- Expandable body -->
-      <Transition name="fx-expand">
-        <div
-          v-if="isFxSectionOpen"
-          id="fx-section-body"
-          class="px-4 pb-4 space-y-3 border-t border-dark-border"
-        >
-          <!-- Suggested rate hint (when available) -->
-          <p
-            v-if="suggestedRate !== null"
-            class="pt-3 text-xs text-dark-text-tertiary"
-          >
-            Tasa sugerida: 1 {{ foreignCurrency }} = {{ formatRate(suggestedRate) }} {{ selectedAccountCurrency }}
-          </p>
-          <div v-else class="pt-3" />
-
-          <!-- Original amount (in foreign currency) -->
-          <div class="w-full">
-            <label class="label">
-              Monto original
-              <span class="ml-1 text-dark-text-tertiary text-xs font-normal">({{ foreignCurrency }})</span>
-              <span class="text-accent-red ml-1">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              :value="originalAmount ?? ''"
-              inputmode="decimal"
-              placeholder="0.00"
-              class="input"
-              @input="handleOriginalAmountInput"
-            />
-          </div>
-
-          <!-- Exchange rate -->
-          <div class="w-full">
-            <label class="label">
-              Tasa de cambio
-              <span class="ml-1 text-dark-text-tertiary text-xs font-normal">
-                ({{ selectedAccountCurrency }} por 1 {{ foreignCurrency }})
-              </span>
-              <span class="text-accent-red ml-1">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              :value="formatRate(exchangeRate)"
-              inputmode="decimal"
-              placeholder="0.00"
-              class="input"
-              @input="handleRateInput"
-            />
-            <!-- Rate deviation alert (Phase 5.2 integrated) -->
-            <div v-if="showRateAlert" class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1">
-              <span>&#x26A0;&#xFE0F;</span>
-              <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
-            </div>
-          </div>
-
-          <!-- Amount in account currency (calculated or user-entered) -->
-          <div class="w-full">
-            <label class="label">
-              Monto en {{ selectedAccountCurrency }}
-              <span class="text-accent-red ml-1">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              :value="accountAmount ?? ''"
-              inputmode="decimal"
-              placeholder="0.00"
-              class="input"
-              @input="handleAccountAmountInput"
-            />
-            <p class="mt-1 text-xs text-dark-text-tertiary">
-              Este valor se guarda como el monto de la transacción.
-            </p>
-          </div>
-        </div>
-      </Transition>
-    </div>
-
     <!-- Fecha -->
     <DatePicker
       v-model="form.date"
@@ -502,27 +406,187 @@ function handleSubmit() {
       required
     />
 
-    <!-- Título -->
-    <BaseInput
-      v-model="form.title"
-      label="Título (opcional)"
-      placeholder="Ej: Compra supermercado"
-    />
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Opciones avanzadas (collapsible) -->
+    <!-- ------------------------------------------------------------------ -->
+    <div class="rounded-lg border border-dark-border bg-dark-bg-secondary overflow-hidden">
+      <!-- Section header / toggle -->
+      <button
+        type="button"
+        class="w-full flex items-center justify-between px-4 py-3 text-left min-h-touch hover:bg-dark-bg-tertiary transition-colors"
+        :aria-expanded="isAdvancedOpen"
+        aria-controls="advanced-section-body"
+        @click="isAdvancedOpen = !isAdvancedOpen"
+      >
+        <span class="text-sm font-medium text-dark-text-secondary">Opciones avanzadas</span>
+        <!-- Chevron icon — rotates 180° when open -->
+        <svg
+          class="w-4 h-4 text-dark-text-tertiary flex-shrink-0 transition-transform duration-200"
+          :class="{ 'rotate-180': isAdvancedOpen }"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-    <!-- Descripción -->
-    <BaseInput
-      v-model="form.description"
-      label="Descripción (opcional)"
-      placeholder="Detalles adicionales"
-    />
+      <!-- Expandable body -->
+      <Transition name="adv-expand">
+        <div
+          v-if="isAdvancedOpen"
+          id="advanced-section-body"
+          class="px-4 pb-4 space-y-4 border-t border-dark-border pt-4"
+        >
+          <!-- Título -->
+          <BaseInput
+            v-model="form.title"
+            label="Título (opcional)"
+            placeholder="Ej: Compra supermercado"
+          />
 
-    <!-- Tags -->
-    <BaseInput
-      v-model="form.tags"
-      label="Etiquetas (opcional)"
-      placeholder="comida, semanal (separadas por comas)"
-      helper-text="Separadas por comas"
-    />
+          <!-- Descripción -->
+          <BaseInput
+            v-model="form.description"
+            label="Descripción (opcional)"
+            placeholder="Detalles adicionales"
+          />
+
+          <!-- Tags -->
+          <BaseInput
+            v-model="form.tags"
+            label="Etiquetas (opcional)"
+            placeholder="comida, semanal (separadas por comas)"
+            helper-text="Separadas por comas"
+          />
+
+          <!-- Moneda extranjera (optional) -->
+          <div class="w-full">
+            <BaseSelect
+              v-model="foreignCurrency"
+              label="Moneda extranjera (opcional)"
+              :options="foreignCurrencyOptions"
+              placeholder="Sin moneda extranjera"
+            />
+          </div>
+
+          <!-- FX collapsible section (independent inner block) -->
+          <div v-if="fxActive" class="rounded-lg border border-dark-border bg-dark-bg-tertiary overflow-hidden">
+            <!-- Section header / toggle -->
+            <button
+              type="button"
+              class="w-full flex items-center justify-between px-4 py-3 text-left min-h-touch hover:bg-dark-bg-secondary transition-colors"
+              :aria-expanded="isFxSectionOpen"
+              aria-controls="fx-section-body"
+              @click="isFxSectionOpen = !isFxSectionOpen"
+            >
+              <span class="text-sm font-medium text-dark-text-secondary">
+                Detalle de cambio de divisas
+                <span class="ml-1 text-dark-text-tertiary text-xs font-normal">
+                  ({{ foreignCurrency }} → {{ selectedAccountCurrency }})
+                </span>
+              </span>
+              <!-- Chevron icon — rotates 180° when open -->
+              <svg
+                class="w-4 h-4 text-dark-text-tertiary flex-shrink-0 transition-transform duration-200"
+                :class="{ 'rotate-180': isFxSectionOpen }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <!-- Expandable body -->
+            <Transition name="fx-expand">
+              <div
+                v-if="isFxSectionOpen"
+                id="fx-section-body"
+                class="px-4 pb-4 space-y-3 border-t border-dark-border"
+              >
+                <!-- Suggested rate hint (when available) -->
+                <p
+                  v-if="suggestedRate !== null"
+                  class="pt-3 text-xs text-dark-text-tertiary"
+                >
+                  Tasa sugerida: 1 {{ foreignCurrency }} = {{ formatRate(suggestedRate) }} {{ selectedAccountCurrency }}
+                </p>
+                <div v-else class="pt-3" />
+
+                <!-- Original amount (in foreign currency) -->
+                <div class="w-full">
+                  <label class="label">
+                    Monto original
+                    <span class="ml-1 text-dark-text-tertiary text-xs font-normal">({{ foreignCurrency }})</span>
+                    <span class="text-accent-red ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    :value="originalAmount ?? ''"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    class="input"
+                    @input="handleOriginalAmountInput"
+                  />
+                </div>
+
+                <!-- Exchange rate -->
+                <div class="w-full">
+                  <label class="label">
+                    Tasa de cambio
+                    <span class="ml-1 text-dark-text-tertiary text-xs font-normal">
+                      ({{ selectedAccountCurrency }} por 1 {{ foreignCurrency }})
+                    </span>
+                    <span class="text-accent-red ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    :value="formatRate(exchangeRate)"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    class="input"
+                    @input="handleRateInput"
+                  />
+                  <!-- Rate deviation alert (Phase 5.2 integrated) -->
+                  <div v-if="showRateAlert" class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1">
+                    <span>&#x26A0;&#xFE0F;</span>
+                    <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
+                  </div>
+                </div>
+
+                <!-- Amount in account currency (calculated or user-entered) -->
+                <div class="w-full">
+                  <label class="label">
+                    Monto en {{ selectedAccountCurrency }}
+                    <span class="text-accent-red ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    :value="accountAmount ?? ''"
+                    inputmode="decimal"
+                    placeholder="0.00"
+                    class="input"
+                    @input="handleAccountAmountInput"
+                  />
+                  <p class="mt-1 text-xs text-dark-text-tertiary">
+                    Este valor se guarda como el monto de la transacción.
+                  </p>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </div>
+      </Transition>
+    </div>
 
     <!-- Actions -->
     <div class="flex gap-3 pt-4 flex-col md:flex-row">
@@ -560,6 +624,21 @@ function handleSubmit() {
 
 .fx-expand-enter-from,
 .fx-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Advanced options section — same accordion pattern as FX.
+   max-height is larger to accommodate all optional fields. */
+.adv-expand-enter-active,
+.adv-expand-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 900px;
+}
+
+.adv-expand-enter-from,
+.adv-expand-leave-to {
   max-height: 0;
   opacity: 0;
 }
