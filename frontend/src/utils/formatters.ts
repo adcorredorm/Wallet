@@ -102,8 +102,20 @@ export function formatNumber(value: number, decimals: number = 2): string {
  * Handles Spanish number format (1.234,56)
  */
 export function parseFormattedNumber(value: string): number {
-  // Remove thousand separators and replace decimal comma with dot
-  const cleaned = value.replace(/\./g, '').replace(',', '.')
+  const hasDot = value.includes('.')
+  const hasComma = value.includes(',')
+
+  let cleaned: string
+  if (hasDot && hasComma) {
+    // Spanish format: 1.234,56 — dot=thousands, comma=decimal
+    cleaned = value.replace(/\./g, '').replace(',', '.')
+  } else if (hasComma && !hasDot) {
+    // Spanish decimal only: 0,001
+    cleaned = value.replace(',', '.')
+  } else {
+    // Standard: 0.001 or integer — use as-is
+    cleaned = value
+  }
   return parseFloat(cleaned) || 0
 }
 
