@@ -39,12 +39,18 @@ export interface LocalTransaction extends Transaction {
   server_id?: string
   _sync_status: SyncStatus
   _local_updated_at: string
+  original_amount?: number    // Amount in the original currency before conversion
+  original_currency?: string  // ISO 4217 code of the original currency (e.g. 'COP')
+  exchange_rate?: number      // Rate applied at the time of the transaction
 }
 
 export interface LocalTransfer extends Transfer {
   server_id?: string
   _sync_status: SyncStatus
   _local_updated_at: string
+  destination_amount?: number   // Amount received in the destination account (may differ due to FX)
+  exchange_rate?: number        // Rate applied at the time of the transfer
+  destination_currency?: string // ISO 4217 code of the destination account's currency
 }
 
 export interface LocalCategory extends Category {
@@ -67,12 +73,59 @@ export interface LocalCategory extends Category {
  * feedback when a specific mutation keeps failing.
  */
 export interface PendingMutation {
-  id?: number                                                       // Auto-incremented by Dexie (undefined before first insert)
-  entity_type: 'account' | 'transaction' | 'transfer' | 'category'
-  entity_id: string                                                 // Local ID (may be a temp-* UUID)
+  id?: number                                                                    // Auto-incremented by Dexie (undefined before first insert)
+  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting'
+  entity_id: string                                                              // Local ID (may be a temp-* UUID)
   operation: 'create' | 'update' | 'delete'
   payload: Record<string, unknown>                                  // Serialised DTO
   queued_at: string                                                 // ISO timestamp — FIFO ordering key
   retry_count: number
   last_error?: string
+}
+
+/**
+ * LocalExchangeRate — a cached foreign-exchange rate stored locally.
+ *
+ * Why no _sync_status?
+ * Exchange rates are fetched from external APIs (exchangerate.host,
+ * CoinGecko, etc.) and replaced wholesale. There is no concept of a
+ * "pending" local mutation to sync back to the server — the server itself
+ * fetches and caches these from the same sources. Therefore LWW sync
+ * fields are not needed here.
+ *
+ * Why currency_code as PK?
+ * There is at most one rate per currency at any given time. Using the ISO
+ * 4217 code (or ticker for crypto) as the primary key means a simple
+ * table.put() is both an insert and an upsert — no duplicate-rate logic
+ * needed in the consuming code.
+ */
+export interface LocalExchangeRate {
+  currency_code: string // PK — ISO 4217 code or crypto ticker, e.g. 'USD', 'BTC'
+  rate_to_usd: number   // Units of this currency per 1 USD
+  source: string        // 'exchangerate.host' | 'coingecko' | 'system'
+  fetched_at: string    // ISO timestamp of the last remote fetch
+  updated_at: string    // ISO timestamp of the last local write
+}
+
+/**
+ * LocalSetting — a key/value store for user-configurable settings.
+ *
+ * Why offline-first with _sync_status?
+ * Settings like 'primary_currency' are user choices that should survive
+ * offline usage and sync back to the server when connectivity returns,
+ * exactly like accounts and transactions. LWW resolution via
+ * _local_updated_at ensures the most recent change wins during sync.
+ *
+ * Why `value: unknown` instead of `value: string`?
+ * Different settings carry different value shapes — a currency code is a
+ * string, a display precision is a number, a feature flag is a boolean.
+ * Using `unknown` forces callers to narrow the type explicitly, which is
+ * safer than casting to `any`.
+ */
+export interface LocalSetting {
+  key: string              // PK — e.g. 'primary_currency', 'display_precision'
+  value: unknown           // JSON value narrowed by the caller
+  updated_at: string       // ISO timestamp of the last server sync
+  _sync_status: SyncStatus // Offline-first sync state (same pattern as other entities)
+  _local_updated_at: string // ISO timestamp for LWW conflict resolution
 }

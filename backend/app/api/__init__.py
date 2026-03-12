@@ -11,6 +11,8 @@ from app.api.categories import categories_bp
 from app.api.transactions import transactions_bp
 from app.api.transfers import transfers_bp
 from app.api.dashboard import dashboard_bp
+from app.api.exchange_rates import exchange_rates_bp
+from app.api.settings import settings_bp
 
 
 def register_blueprints(app: Flask) -> None:
@@ -25,3 +27,5 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(transactions_bp)
     app.register_blueprint(transfers_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(exchange_rates_bp)
+    app.register_blueprint(settings_bp)

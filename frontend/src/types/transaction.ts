@@ -41,6 +41,10 @@ export interface CreateTransactionDto {
   title?: string
   description?: string
   tags?: string[]
+  // Multi-currency fields (null when no foreign currency involved)
+  original_amount?: number | null
+  original_currency?: string | null
+  exchange_rate?: number | null
 }
 
 export interface UpdateTransactionDto {
@@ -52,6 +56,10 @@ export interface UpdateTransactionDto {
   title?: string
   description?: string
   tags?: string[]
+  // Multi-currency fields (null when no foreign currency involved)
+  original_amount?: number | null
+  original_currency?: string | null
+  exchange_rate?: number | null
 }
 
 export interface TransactionFilters {

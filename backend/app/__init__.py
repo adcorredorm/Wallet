@@ -37,6 +37,10 @@ def create_app(config_name: str = "development") -> Flask:
     from app.api import register_blueprints
     register_blueprints(app)
 
+    # Register CLI commands
+    from app.cli import register_cli
+    register_cli(app)
+
     # Health check endpoint
     @app.route("/health")
     def health_check():

@@ -2,8 +2,22 @@
 /**
  * Account Card Component
  *
- * Displays account summary with balance
- * Mobile-optimized card layout
+ * Displays account summary with balance.
+ * Mobile-optimized card layout.
+ *
+ * Phase 4.1 — Dual balance display
+ * When an account's currency differs from the user's primary currency, a
+ * secondary line is rendered showing the approximate converted amount.
+ *
+ * Why show the converted balance here and not in the parent?
+ * AccountCard is the canonical place where a balance is presented to the
+ * user. Centralising the conversion here means every consumer of AccountCard
+ * gets the dual-balance behaviour for free without any extra wiring.
+ *
+ * Guard: if exchangeRatesStore.rates.length === 0 we have no rates cached at
+ * all. In that situation convert() would return the original amount unchanged,
+ * which would look like a valid converted value but is actually meaningless.
+ * We return null to suppress the secondary row rather than mislead the user.
  */
 
 import { computed } from 'vue'
@@ -12,6 +26,8 @@ import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
 // Phase 5: SyncBadge shows per-item sync state (pending / error dot)
 import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatAccountType } from '@/utils/formatters'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 import type { Account } from '@/types'
 import type { LocalAccount } from '@/offline/types'
 
@@ -37,6 +53,17 @@ const emit = defineEmits<{
   click: []
 }>()
 
+// ---------------------------------------------------------------------------
+// Store access
+// ---------------------------------------------------------------------------
+
+const exchangeRatesStore = useExchangeRatesStore()
+const settingsStore = useSettingsStore()
+
+// ---------------------------------------------------------------------------
+// Account display helpers
+// ---------------------------------------------------------------------------
+
 const accountTypeLabel = computed(() => formatAccountType(props.account.type))
 
 // Icon for account type
@@ -47,6 +74,45 @@ const accountIcon = computed(() => {
     cash: '💵'
   }
   return icons[props.account.type] || '💰'
+})
+
+// ---------------------------------------------------------------------------
+// Phase 4.1 — Dual balance (native currency + primary currency conversion)
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the account's currency differs from the user's primary currency.
+ *
+ * Why computed instead of an inline v-if expression?
+ * Both showConvertedBalance and convertedBalance depend on the same
+ * comparison. Hoisting it into a named computed avoids duplicating the logic
+ * and makes the template easier to read.
+ */
+const showConvertedBalance = computed(
+  () => props.account.currency !== settingsStore.primaryCurrency
+)
+
+/**
+ * The balance converted to the user's primary currency, or null when:
+ *   - the account currency already IS the primary currency (handled by
+ *     showConvertedBalance, but we also short-circuit here for safety), OR
+ *   - no exchange rates are cached (rates.length === 0) — in that case
+ *     convert() would silently return the original amount, which would
+ *     appear as a valid conversion but is actually meaningless. We return
+ *     null so the template suppresses the row entirely.
+ *
+ * Type is explicitly number | null so the template v-if correctly narrows
+ * to number before passing to CurrencyDisplay.
+ */
+const convertedBalance = computed<number | null>(() => {
+  if (!showConvertedBalance.value) return null
+  if (exchangeRatesStore.rates.length === 0) return null
+
+  return exchangeRatesStore.convert(
+    props.balance,
+    props.account.currency,
+    settingsStore.primaryCurrency
+  )
 })
 </script>
 
@@ -89,7 +155,7 @@ const accountIcon = computed(() => {
         </div>
       </div>
 
-      <!-- Right: Balance -->
+      <!-- Right: Balance (native + optional primary-currency conversion) -->
       <div class="flex-shrink-0 text-right ml-3">
         <CurrencyDisplay
           :amount="balance"
@@ -97,6 +163,34 @@ const accountIcon = computed(() => {
           size="lg"
           compact
         />
+        <!--
+          Secondary balance: shown only when the account currency differs from
+          the user's primary currency AND exchange rates are cached.
+
+          Why mt-0.5 (2px) instead of mt-1 (4px)?
+          The secondary line is visually subordinate — it is explanatory text,
+          not a peer element. A 2px gap keeps it visually attached to the
+          primary balance above it, making them read as a unit rather than
+          two independent lines. 4px would create enough separation that the
+          eye reads them as separate rows, which conflicts with the intent.
+
+          Why text-xs + text-gray-400?
+          text-xs (12px) clearly communicates lower visual hierarchy than the
+          lg-size primary balance. text-gray-400 / dark:text-gray-500 matches
+          the muted secondary text convention used throughout this codebase
+          (see accountTypeLabel line above) and maintains WCAG AA contrast
+          against both the card background (#1e293b) and mobile dark surfaces.
+        -->
+        <div
+          v-if="showConvertedBalance && convertedBalance !== null"
+          class="text-xs text-gray-400 dark:text-gray-500 mt-0.5"
+        >
+          ≈ <CurrencyDisplay
+            :amount="convertedBalance"
+            :currency="settingsStore.primaryCurrency"
+            size="sm"
+          />
+        </div>
       </div>
     </div>
 

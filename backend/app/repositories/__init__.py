@@ -9,10 +9,14 @@ from app.repositories.account import AccountRepository
 from app.repositories.category import CategoryRepository
 from app.repositories.transaction import TransactionRepository
 from app.repositories.transfer import TransferRepository
+from app.repositories.exchange_rate import ExchangeRateRepository
+from app.repositories.user_setting import SettingsRepository
 
 __all__ = [
     "AccountRepository",
     "CategoryRepository",
     "TransactionRepository",
     "TransferRepository",
+    "ExchangeRateRepository",
+    "SettingsRepository",
 ]

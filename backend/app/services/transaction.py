@@ -90,6 +90,9 @@ class TransactionService:
         description: str | None = None,
         tags: list[str] | None = None,
         client_id: str | None = None,
+        original_amount: Decimal | None = None,
+        original_currency: str | None = None,
+        exchange_rate: Decimal | None = None,
     ) -> Transaction:
         """
         Create a new transaction.
@@ -98,9 +101,17 @@ class TransactionService:
         the database the existing transaction is returned immediately without
         inserting a duplicate row (offline-first idempotency).
 
+        When original_currency equals the account's native currency the three
+        multi-currency fields are cleared — they would be redundant metadata.
+
+        ``amount`` (in the account's native currency) is always the
+        authoritative value stored for balance calculations.  The three
+        original_* fields are display-only metadata and never affect balance
+        computation.
+
         Args:
             type: Transaction type (income or expense)
-            amount: Transaction amount
+            amount: Transaction amount in the account's native currency
             date: Transaction date
             account_id: Account ID
             category_id: Category ID
@@ -108,13 +119,20 @@ class TransactionService:
             description: Optional description
             tags: Optional tags
             client_id: Optional client-generated idempotency key
+            original_amount: Amount in the foreign currency before conversion.
+                Must be > 0 when provided.
+            original_currency: ISO 4217 code of the foreign currency.
+            exchange_rate: Units of account currency per 1 unit of
+                original_currency at transaction time. Must be > 0 when
+                provided.
 
         Returns:
             Created or pre-existing transaction instance
 
         Raises:
             NotFoundError: If account or category not found
-            BusinessRuleError: If category type is incompatible with transaction type
+            BusinessRuleError: If category type is incompatible with
+                transaction type
         """
         if client_id:
             existing = self.repository.get_by_client_id(client_id)
@@ -131,6 +149,14 @@ class TransactionService:
         type_enum = TransactionType(type)
         self._validate_category_type(type_enum, category.type)
 
+        # Resolve multi-currency metadata.
+        # If the original currency matches the account's own currency the three
+        # fields are redundant — clear them so we never store useless data.
+        if original_currency is not None and original_currency == account.currency:
+            original_amount = None
+            original_currency = None
+            exchange_rate = None
+
         return self.repository.create(
             type=type_enum,
             amount=amount,
@@ -141,6 +167,9 @@ class TransactionService:
             description=description,
             tags=tags or [],
             client_id=client_id,
+            original_amount=original_amount,
+            original_currency=original_currency,
+            exchange_rate=exchange_rate,
         )
 
     def update(
@@ -154,27 +183,39 @@ class TransactionService:
         title: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        original_amount: Decimal | None = None,
+        original_currency: str | None = None,
+        exchange_rate: Decimal | None = None,
     ) -> Transaction:
         """
         Update an existing transaction.
 
+        Multi-currency fields follow the same consistency rules as create: if
+        any of the three are present in the payload they must form a complete
+        and valid set (original_currency present, original_amount > 0,
+        exchange_rate > 0).  Passing only a subset raises BusinessRuleError.
+
         Args:
             transaction_id: Transaction UUID
             type: New transaction type
-            amount: New amount
+            amount: New amount in the account's native currency
             date: New date
             account_id: New account ID
             category_id: New category ID
             title: New title
             description: New description
             tags: New tags
+            original_amount: New original amount in the foreign currency.
+            original_currency: New ISO 4217 foreign currency code.
+            exchange_rate: New exchange rate (account currency per foreign unit).
 
         Returns:
             Updated transaction instance
 
         Raises:
             NotFoundError: If transaction, account, or category not found
-            BusinessRuleError: If new category type is incompatible
+            BusinessRuleError: If new category type is incompatible or if the
+                multi-currency fields are inconsistently provided
         """
         transaction = self.repository.get_by_id_or_fail(transaction_id)
 
@@ -189,6 +230,30 @@ class TransactionService:
 
             category = self.category_repository.get_by_id_or_fail(effective_category_id)
             self._validate_category_type(effective_type, category.type)
+
+        # Validate multi-currency field consistency when any of the three are
+        # present in the update payload.
+        has_currency = original_currency is not None
+        has_amount = original_amount is not None
+        has_rate = exchange_rate is not None
+
+        if has_currency or has_amount or has_rate:
+            if not has_currency:
+                raise BusinessRuleError(
+                    "original_currency es requerido cuando original_amount o exchange_rate son proporcionados"
+                )
+            if not has_amount:
+                raise BusinessRuleError(
+                    "original_amount es requerido cuando original_currency es proporcionado"
+                )
+            if not has_rate:
+                raise BusinessRuleError(
+                    "exchange_rate es requerido cuando original_currency es proporcionado"
+                )
+            if original_amount <= 0:
+                raise BusinessRuleError("original_amount debe ser mayor a 0")
+            if exchange_rate <= 0:
+                raise BusinessRuleError("exchange_rate debe ser mayor a 0")
 
         update_data = {}
         if type is not None:
@@ -207,6 +272,12 @@ class TransactionService:
             update_data["description"] = description
         if tags is not None:
             update_data["tags"] = tags
+        if original_amount is not None:
+            update_data["original_amount"] = original_amount
+        if original_currency is not None:
+            update_data["original_currency"] = original_currency
+        if exchange_rate is not None:
+            update_data["exchange_rate"] = exchange_rate
 
         return self.repository.update(transaction, **update_data)
 

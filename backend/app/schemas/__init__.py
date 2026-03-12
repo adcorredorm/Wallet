@@ -37,6 +37,17 @@ from app.schemas.dashboard import (
     MonthlySummaryResponse,
 )
 from app.schemas.common import PaginatedResponse
+from app.schemas.exchange_rate import (
+    ExchangeRateResponse,
+    ExchangeRatesListResponse,
+    ConvertRequest,
+    ConvertResponse,
+)
+from app.schemas.user_setting import (
+    SettingUpdateRequest,
+    SettingResponse,
+    SettingsResponse,
+)
 
 __all__ = [
     # Account schemas
@@ -67,4 +78,13 @@ __all__ = [
     "MonthlySummaryResponse",
     # Common schemas
     "PaginatedResponse",
+    # ExchangeRate schemas
+    "ExchangeRateResponse",
+    "ExchangeRatesListResponse",
+    "ConvertRequest",
+    "ConvertResponse",
+    # UserSetting schemas
+    "SettingUpdateRequest",
+    "SettingResponse",
+    "SettingsResponse",
 ]

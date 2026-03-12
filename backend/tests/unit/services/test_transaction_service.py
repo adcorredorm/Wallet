@@ -451,6 +451,258 @@ class TestUpdate:
             )
 
 
+class TestCreateMultiCurrency:
+    """Tests for multi-currency transaction creation in TransactionService."""
+
+    def test_create_multi_currency_income_stores_fx_metadata(
+        self,
+        transaction_service,
+        mock_transaction_repo,
+        mock_account_repo,
+        mock_category_repo,
+        sample_transaction,
+    ):
+        """
+        Creating an income transaction with a foreign-currency source should
+        pass original_amount, original_currency, and exchange_rate to the
+        repository unchanged when original_currency differs from the account
+        currency.
+        """
+        account = _make_account()
+        account.currency = "COP"
+
+        mock_account_repo.get_by_id_or_fail.return_value = account
+        mock_category_repo.get_by_id_or_fail.return_value = _make_category(
+            CategoryType.INCOME
+        )
+        mock_transaction_repo.create.return_value = sample_transaction
+
+        result = transaction_service.create(
+            type="income",
+            amount=Decimal("4000000"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
+            original_currency="USD",
+            original_amount=Decimal("1000"),
+            exchange_rate=Decimal("4000"),
+        )
+
+        assert result == sample_transaction
+
+        call_kwargs = mock_transaction_repo.create.call_args[1]
+        assert call_kwargs["original_currency"] == "USD"
+        assert call_kwargs["original_amount"] == Decimal("1000")
+        assert call_kwargs["exchange_rate"] == Decimal("4000")
+        # amount in account currency must be passed through untouched
+        assert call_kwargs["amount"] == Decimal("4000000")
+
+    def test_create_clears_fx_fields_when_original_currency_matches_account(
+        self,
+        transaction_service,
+        mock_transaction_repo,
+        mock_account_repo,
+        mock_category_repo,
+        sample_transaction,
+    ):
+        """
+        When original_currency equals the account's own currency the three
+        multi-currency fields are redundant and must be cleared before
+        persisting.
+        """
+        account = _make_account()
+        account.currency = "USD"
+
+        mock_account_repo.get_by_id_or_fail.return_value = account
+        mock_category_repo.get_by_id_or_fail.return_value = _make_category(
+            CategoryType.INCOME
+        )
+        mock_transaction_repo.create.return_value = sample_transaction
+
+        transaction_service.create(
+            type="income",
+            amount=Decimal("1000"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
+            original_currency="USD",  # same as account
+            original_amount=Decimal("1000"),
+            exchange_rate=Decimal("1"),
+        )
+
+        call_kwargs = mock_transaction_repo.create.call_args[1]
+        assert call_kwargs["original_currency"] is None
+        assert call_kwargs["original_amount"] is None
+        assert call_kwargs["exchange_rate"] is None
+
+    def test_create_single_currency_passes_none_fx_fields(
+        self,
+        transaction_service,
+        mock_transaction_repo,
+        mock_account_repo,
+        mock_category_repo,
+        sample_transaction,
+    ):
+        """
+        A standard single-currency transaction must pass None for all three
+        multi-currency fields so the database columns remain NULL.
+        """
+        account = _make_account()
+        account.currency = "COP"
+
+        mock_account_repo.get_by_id_or_fail.return_value = account
+        mock_category_repo.get_by_id_or_fail.return_value = _make_category(
+            CategoryType.EXPENSE
+        )
+        mock_transaction_repo.create.return_value = sample_transaction
+
+        transaction_service.create(
+            type="expense",
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
+        )
+
+        call_kwargs = mock_transaction_repo.create.call_args[1]
+        assert call_kwargs["original_currency"] is None
+        assert call_kwargs["original_amount"] is None
+        assert call_kwargs["exchange_rate"] is None
+
+
+class TestCreateMultiCurrencySchemaValidation:
+    """Tests for multi-currency field validation in TransactionCreate schema."""
+
+    def test_schema_raises_when_original_currency_provided_without_original_amount(self):
+        """TransactionCreate must raise ValidationError when original_currency
+        is provided but original_amount is omitted."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            from app.schemas.transaction import TransactionCreate
+            TransactionCreate(
+                type="income",
+                amount=Decimal("4000000"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
+                original_currency="USD",
+                exchange_rate=Decimal("4000"),
+                # original_amount intentionally omitted
+            )
+
+        errors = exc_info.value.errors()
+        assert any("original_amount" in str(e) for e in errors)
+
+    def test_schema_raises_when_original_currency_provided_without_exchange_rate(self):
+        """TransactionCreate must raise ValidationError when original_currency
+        is provided but exchange_rate is omitted."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            from app.schemas.transaction import TransactionCreate
+            TransactionCreate(
+                type="income",
+                amount=Decimal("4000000"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
+                original_currency="USD",
+                original_amount=Decimal("1000"),
+                # exchange_rate intentionally omitted
+            )
+
+        errors = exc_info.value.errors()
+        assert any("exchange_rate" in str(e) for e in errors)
+
+    def test_schema_raises_when_original_amount_provided_without_original_currency(self):
+        """TransactionCreate must raise ValidationError when original_amount is
+        provided without original_currency."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            from app.schemas.transaction import TransactionCreate
+            TransactionCreate(
+                type="income",
+                amount=Decimal("4000000"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
+                original_amount=Decimal("1000"),
+                exchange_rate=Decimal("4000"),
+                # original_currency intentionally omitted
+            )
+
+    def test_schema_raises_when_original_amount_is_zero(self):
+        """TransactionCreate must reject original_amount <= 0."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            from app.schemas.transaction import TransactionCreate
+            TransactionCreate(
+                type="income",
+                amount=Decimal("4000000"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
+                original_currency="USD",
+                original_amount=Decimal("0"),
+                exchange_rate=Decimal("4000"),
+            )
+
+    def test_schema_raises_when_exchange_rate_is_negative(self):
+        """TransactionCreate must reject exchange_rate <= 0."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            from app.schemas.transaction import TransactionCreate
+            TransactionCreate(
+                type="income",
+                amount=Decimal("4000000"),
+                date=date(2026, 3, 1),
+                account_id=uuid4(),
+                category_id=uuid4(),
+                original_currency="USD",
+                original_amount=Decimal("1000"),
+                exchange_rate=Decimal("-1"),
+            )
+
+    def test_schema_valid_complete_multi_currency_payload(self):
+        """A fully populated multi-currency payload must be accepted."""
+        from app.schemas.transaction import TransactionCreate
+
+        schema = TransactionCreate(
+            type="income",
+            amount=Decimal("4000000"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
+            original_currency="USD",
+            original_amount=Decimal("1000"),
+            exchange_rate=Decimal("4000"),
+        )
+
+        assert schema.original_currency == "USD"
+        assert schema.original_amount == Decimal("1000")
+        assert schema.exchange_rate == Decimal("4000")
+
+    def test_schema_valid_single_currency_payload(self):
+        """A transaction with no multi-currency fields must be accepted."""
+        from app.schemas.transaction import TransactionCreate
+
+        schema = TransactionCreate(
+            type="expense",
+            amount=Decimal("200.00"),
+            date=date(2026, 3, 1),
+            account_id=uuid4(),
+            category_id=uuid4(),
+        )
+
+        assert schema.original_currency is None
+        assert schema.original_amount is None
+        assert schema.exchange_rate is None
+
+
 class TestDelete:
     """Tests for TransactionService.delete."""
 

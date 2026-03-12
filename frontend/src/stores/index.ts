@@ -11,3 +11,5 @@ export { useUiStore } from './ui'
 // Phase 5: sync state store (connectivity + queue status for UI visibility)
 export { useSyncStore } from './sync'
 export type { SyncError } from './sync'
+// Phase 3.2: exchange rates cache + conversion helpers
+export { useExchangeRatesStore } from './exchangeRates'

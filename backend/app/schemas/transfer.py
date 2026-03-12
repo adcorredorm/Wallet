@@ -19,16 +19,26 @@ class TransferCreate(BaseModel):
     Args:
         source_account_id: Source account ID
         destination_account_id: Destination account ID
-        amount: Transfer amount (must be positive, 2 decimal places)
+        amount: Transfer amount in source currency (must be positive)
         date: Transfer date
         description: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
+        destination_amount: Amount credited to the destination account in its
+            currency. Required when transferring between accounts with different
+            currencies. Must be positive when provided.
+        exchange_rate: Exchange rate applied at transfer time (source / destination
+            currency ratio). Required when transferring between accounts with
+            different currencies. Must be positive when provided.
+        destination_currency: ISO 4217 currency code of the destination account.
+            Auto-derived from the destination account in the service layer;
+            clients do not need to supply this field.
 
     Raises:
-        ValueError: If source and destination accounts are the same
+        ValueError: If source and destination accounts are the same, or if
+            destination_amount / exchange_rate are provided but not positive.
     """
 
     source_account_id: UUID
@@ -38,12 +48,34 @@ class TransferCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     client_id: Optional[str] = Field(None, max_length=100)
+    destination_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    destination_currency: Optional[str] = Field(None, max_length=10)
 
     @model_validator(mode="after")
-    def validate_different_accounts(self) -> "TransferCreate":
-        """Validate that source and destination accounts are different."""
+    def validate_transfer(self) -> "TransferCreate":
+        """
+        Validate transfer-level constraints.
+
+        Checks:
+        - Source and destination accounts must differ.
+        - destination_amount, when provided, must be > 0.
+        - exchange_rate, when provided, must be > 0.
+        Cross-currency requirement (comparing account currencies) is enforced
+        in the service layer where account records are available.
+
+        Returns:
+            The validated TransferCreate instance.
+
+        Raises:
+            ValueError: If any constraint is violated.
+        """
         if self.source_account_id == self.destination_account_id:
             raise ValueError("No se puede transferir a la misma cuenta")
+        if self.destination_amount is not None and self.destination_amount <= 0:
+            raise ValueError("destination_amount debe ser mayor a 0")
+        if self.exchange_rate is not None and self.exchange_rate <= 0:
+            raise ValueError("exchange_rate debe ser mayor a 0")
         return self
 
     @field_validator("amount")
@@ -68,13 +100,26 @@ class TransferUpdate(BaseModel):
     Schema for updating an existing transfer.
 
     All fields are optional to support partial updates.
-    Note: Cannot change source or destination accounts.
+    Note: Cannot change source or destination accounts, and therefore cannot
+    change the same-currency vs. cross-currency nature of the transfer.
+
+    Args:
+        amount: New transfer amount in source currency. Must be positive.
+        date: New transfer date.
+        description: New description (max 500 characters).
+        tags: New list of tags (max 10, each max 50 characters).
+        destination_amount: New destination amount. Must be positive when
+            provided. Only meaningful on cross-currency transfers.
+        exchange_rate: New exchange rate. Must be positive when provided.
+            Only meaningful on cross-currency transfers.
     """
 
     amount: Optional[Decimal] = Field(None, gt=0)
     date: Optional[date] = None
     description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
+    destination_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -101,8 +146,22 @@ class TransferResponse(BaseModel):
     """
     Schema for transfer responses.
 
-    Returns:
-        Complete transfer information including metadata
+    Attributes:
+        id: Transfer UUID
+        source_account_id: Source account UUID
+        destination_account_id: Destination account UUID
+        amount: Transfer amount in source currency
+        date: Transfer date
+        description: Optional description
+        tags: List of tags
+        created_at: Creation timestamp
+        updated_at: Last update timestamp
+        destination_amount: Amount credited to destination account in its
+            currency. None for same-currency transfers.
+        exchange_rate: Exchange rate applied at transfer time. None for
+            same-currency transfers.
+        destination_currency: ISO 4217 currency code of the destination
+            account. None for same-currency transfers.
     """
 
     id: UUID
@@ -114,6 +173,9 @@ class TransferResponse(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
+    destination_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    destination_currency: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

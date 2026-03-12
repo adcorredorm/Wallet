@@ -128,10 +128,11 @@ class TestCreate:
         assert result == mock_transfer
         mock_transfer_repo.create.assert_called_once()
 
-    def test_create_different_currencies_raises_business_rule_error(
+    def test_create_cross_currency_missing_destination_amount_raises(
         self, transfer_service, mock_account_repo
     ):
-        """Should raise BusinessRuleError when the two accounts have different currencies."""
+        """Cross-currency transfer without destination_amount should raise ValidationError."""
+        from app.utils.exceptions import ValidationError
         origin = MagicMock()
         origin.currency = "MXN"
         destination = MagicMock()
@@ -139,15 +140,39 @@ class TestCreate:
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
 
-        with pytest.raises(BusinessRuleError) as exc_info:
+        with pytest.raises(ValidationError):
             transfer_service.create(
                 source_account_id=uuid4(),
                 destination_account_id=uuid4(),
                 amount=Decimal("500.00"),
                 date=date(2026, 3, 1),
+                # Missing destination_amount and exchange_rate
             )
 
-        assert "divisas" in str(exc_info.value).lower()
+    def test_create_cross_currency_success(
+        self, transfer_service, mock_transfer_repo, mock_account_repo, mock_transfer
+    ):
+        """Cross-currency transfer with all required fields should succeed."""
+        origin = MagicMock()
+        origin.currency = "USD"
+        destination = MagicMock()
+        destination.currency = "COP"
+
+        mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
+        mock_transfer_repo.get_by_client_id.return_value = None
+        mock_transfer_repo.create.return_value = mock_transfer
+
+        result = transfer_service.create(
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("100.00"),
+            destination_amount=Decimal("420000.00"),
+            exchange_rate=Decimal("4200.00"),
+            date=date(2026, 3, 1),
+        )
+
+        assert result == mock_transfer
+        mock_transfer_repo.create.assert_called_once()
 
     def test_create_idempotency_returns_existing_record(
         self, transfer_service, mock_transfer_repo, mock_account_repo, mock_transfer

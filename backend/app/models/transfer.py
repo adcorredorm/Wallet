@@ -1,8 +1,9 @@
 """
 Transfer model for money movements between accounts.
 
-Transfers represent money moving from one account to another. Both accounts
-must use the same currency.
+Transfers represent money moving from one account to another. Same-currency
+transfers leave destination_amount, exchange_rate, and destination_currency
+as NULL. Cross-currency transfers populate all three fields.
 """
 
 from typing import TYPE_CHECKING
@@ -25,10 +26,16 @@ class Transfer(BaseModel):
     Attributes:
         source_account_id: Source account ID
         destination_account_id: Destination account ID
-        amount: Transfer amount (positive decimal with 2 decimal places)
+        amount: Transfer amount (positive decimal, source currency)
         date: Transfer date
         description: Optional transfer description
         tags: List of tags for categorization
+        destination_amount: Amount credited to the destination account in its
+            own currency (NULL for same-currency transfers)
+        exchange_rate: Exchange rate applied at transfer time, expressed as
+            source_currency / destination_currency (NULL for same-currency transfers)
+        destination_currency: ISO 4217 currency code of the destination account
+            (NULL for same-currency transfers)
         source_account: Source account relationship
         destination_account: Destination account relationship
     """
@@ -49,6 +56,9 @@ class Transfer(BaseModel):
     date = Column(Date, nullable=False)
     description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
+    destination_amount = Column(Numeric(20, 8), nullable=True)
+    exchange_rate = Column(Numeric(20, 10), nullable=True)
+    destination_currency = Column(String(10), nullable=True)
 
     # Relationships
     source_account = relationship(

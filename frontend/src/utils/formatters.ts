@@ -8,10 +8,36 @@
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 
+// Crypto currencies that Intl.NumberFormat does not recognise as ISO 4217 codes.
+// Using a Set for O(1) membership checks.
+const CRYPTO_CURRENCIES = new Set(['BTC', 'ETH'])
+
+// Display symbols for each supported crypto ticker
+const CRYPTO_SYMBOLS: Record<string, string> = {
+  BTC: '₿',
+  ETH: 'Ξ',
+}
+
+/**
+ * Format a crypto amount for compact (mobile) display.
+ * Uses K/M suffixes for large values; preserves up to `maxDecimals` significant
+ * decimal places with no trailing zeros.
+ */
+function compactCryptoNumber(amount: number, maxDecimals: number): string {
+  const abs = Math.abs(amount)
+  if (abs >= 1_000_000) {
+    return `${parseFloat((amount / 1_000_000).toFixed(maxDecimals))}M`
+  }
+  if (abs >= 1_000) {
+    return `${parseFloat((amount / 1_000).toFixed(maxDecimals))}K`
+  }
+  return parseFloat(amount.toFixed(maxDecimals)).toString()
+}
+
 /**
  * Format currency amount with symbol
  * @param amount - The numeric amount
- * @param currency - ISO currency code (EUR, USD, etc)
+ * @param currency - ISO currency code (EUR, USD, COP, BTC, ETH, …)
  * @param compact - Use compact format for mobile (1.2K instead of 1,200)
  */
 export function formatCurrency(
@@ -22,6 +48,20 @@ export function formatCurrency(
   // Ensure currency is valid, fallback to USD
   const validCurrency = currency && currency.length === 3 ? currency.toUpperCase() : 'USD'
 
+  // --- Crypto path ---
+  // Intl.NumberFormat throws for non-ISO-4217 codes like BTC / ETH.
+  // We handle them manually: up to 6 significant decimal places, no trailing zeros.
+  if (CRYPTO_CURRENCIES.has(validCurrency)) {
+    const symbol = CRYPTO_SYMBOLS[validCurrency] ?? validCurrency
+    if (compact && Math.abs(amount) >= 1000) {
+      return `${symbol}${compactCryptoNumber(amount, 6)}`
+    }
+    // parseFloat strips trailing zeros that toFixed(6) would leave
+    const formatted = parseFloat(amount.toFixed(6)).toString()
+    return `${symbol}${formatted}`
+  }
+
+  // --- Fiat path (unchanged behaviour) ---
   const options: Intl.NumberFormatOptions = {
     style: 'currency',
     currency: validCurrency,

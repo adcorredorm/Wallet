@@ -92,6 +92,7 @@ import { useAccountsStore } from '@/stores/accounts'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useTransfersStore } from '@/stores/transfers'
 import { useCategoriesStore } from '@/stores/categories'
+import { useSettingsStore } from '@/stores/settings'
 
 const { isOnline, onOnline, onOffline } = useNetworkStatus()
 
@@ -112,6 +113,26 @@ const { isOnline, onOnline, onOffline } = useNetworkStatus()
  */
 const syncStore = useSyncStore()
 syncStore.setOnline(isOnline.value)
+
+/**
+ * Phase 3.3 — Load user settings at boot.
+ *
+ * Why here and not inside a component?
+ * Settings (e.g. primary_currency) are needed by multiple components and
+ * stores as soon as the app renders. Bootstrapping them here ensures they
+ * are available before any component mounts, without requiring each
+ * component to call loadSettings() defensively.
+ *
+ * Why fire-and-forget (no await)?
+ * loadSettings() reads IndexedDB first, which is synchronous from the
+ * caller's perspective (< 1 ms). The background API revalidation is
+ * explicitly non-blocking. There is no reason to delay the app mount
+ * for a settings fetch.
+ */
+const settingsStore = useSettingsStore()
+settingsStore.loadSettings().catch((err) => {
+  console.warn('[boot] Settings failed to load:', err)
+})
 
 onOnline(() => {
   syncStore.setOnline(true)

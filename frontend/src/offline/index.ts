@@ -24,5 +24,7 @@ export type {
   LocalTransfer,
   LocalCategory,
   PendingMutation,
-  SyncStatus
+  SyncStatus,
+  LocalExchangeRate,
+  LocalSetting
 } from './types'

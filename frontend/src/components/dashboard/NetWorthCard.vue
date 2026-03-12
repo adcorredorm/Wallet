@@ -2,22 +2,117 @@
 /**
  * Net Worth Card Component
  *
- * Displays total net worth (patrimonio neto)
- * Sum of all account balances
+ * Multi-currency net worth display.
+ *
+ * Why does this component own the store connections instead of receiving
+ * netWorth as a prop?
+ * The parent (DashboardView) used to pass a naive sum of all account balances
+ * in mixed currencies. That number is meaningless when accounts hold different
+ * currencies. The conversion logic (exchange rates, primary currency) belongs
+ * here, not scattered across every caller.
+ *
+ * Headline strategy:
+ *   - convertedNetWorth is null  → rates not available yet; show breakdown only.
+ *   - convertedNetWorth is a number → show as the main headline in primaryCurrency.
+ *
+ * Per-currency breakdown:
+ *   Always shown below the headline (or alone when no rates are available).
+ *   Format: "USD: $1,200 · EUR: €800 · COP: $5,000,000"
+ *   A ⚠ icon is shown next to any currency whose rate is missing, with a
+ *   tooltip "Tasa de cambio no disponible".
+ *
+ * Reactivity:
+ *   All three computed properties depend on accountsStore.accountsWithBalances,
+ *   exchangeRatesStore.rates, and settingsStore.primaryCurrency. Vue tracks
+ *   these dependencies automatically — no manual watchers needed.
  */
 
+import { computed } from 'vue'
+import { useAccountsStore } from '@/stores/accounts'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+import { formatCurrency } from '@/utils/formatters'
 
+// ── Props ──────────────────────────────────────────────────────────────────
+// Why keep loading as a prop?
+// The parent (DashboardView) orchestrates the fetch lifecycle and sets loading
+// during the initial IndexedDB read. The component does not call fetchAccounts
+// itself, so it cannot know when that async work starts or ends.
 interface Props {
-  netWorth: number
-  currency?: string
   loading?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  currency: 'USD',
+withDefaults(defineProps<Props>(), {
   loading: false
+})
+
+// ── Stores ─────────────────────────────────────────────────────────────────
+const accountsStore = useAccountsStore()
+const exchangeRatesStore = useExchangeRatesStore()
+const settingsStore = useSettingsStore()
+
+// ── Computed: balances grouped by currency ─────────────────────────────────
+// Why Map<string, number> instead of a plain object?
+// Map guarantees insertion-order iteration, which produces a stable breakdown
+// list order in the template. It also avoids the prototype-pollution risk
+// of using plain objects as dictionaries.
+const balancesByCurrency = computed(() => {
+  const map = new Map<string, number>()
+  for (const account of accountsStore.accountsWithBalances) {
+    const curr = account.currency
+    map.set(curr, (map.get(curr) ?? 0) + account.balance)
+  }
+  return map
+})
+
+// ── Computed: total net worth converted to primary currency ────────────────
+// Returns null when no rates are cached at all (first cold start with no
+// network). In that case the breakdown list is the only thing we can show.
+// Returns a number (possibly 0 or negative) once at least one rate exists.
+//
+// Why check rates.length === 0 as the null-guard?
+// exchangeRatesStore.convert() degrades gracefully (returns the original
+// amount) when a rate is missing. If rates is completely empty we cannot
+// convert any amount reliably, so null signals "unavailable" to the template.
+const convertedNetWorth = computed<number | null>(() => {
+  if (exchangeRatesStore.rates.length === 0) return null
+  let total = 0
+  for (const [currency, balance] of balancesByCurrency.value) {
+    total += exchangeRatesStore.convert(balance, currency, settingsStore.primaryCurrency)
+  }
+  return total
+})
+
+// ── Computed: currencies for which no rate is available ───────────────────
+// Used to show the ⚠ icon next to those currencies in the breakdown.
+// The primary currency itself is always skippable — convert(x, A, A) === x.
+const currenciesWithMissingRates = computed(() =>
+  [...balancesByCurrency.value.keys()].filter(
+    c =>
+      c !== settingsStore.primaryCurrency &&
+      exchangeRatesStore.getRate(c, settingsStore.primaryCurrency) === null
+  )
+)
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+// True when the net worth is computable and negative.
+// Drives the trend icon.
+const isNegative = computed(() =>
+  convertedNetWorth.value !== null && convertedNetWorth.value < 0
+)
+
+// Sorted currency codes so the breakdown always renders in a predictable order
+// (primary currency first, then alphabetical).
+const sortedCurrencies = computed(() => {
+  const primary = settingsStore.primaryCurrency
+  return [...balancesByCurrency.value.keys()].sort((a, b) => {
+    if (a === primary) return -1
+    if (b === primary) return 1
+    return a.localeCompare(b)
+  })
 })
 </script>
 
@@ -29,21 +124,90 @@ const props = withDefaults(defineProps<Props>(), {
         Patrimonio Neto
       </p>
 
-      <!-- Amount -->
+      <!-- Loading spinner -->
       <div v-if="loading" class="flex justify-center">
         <div class="spinner w-8 h-8"></div>
       </div>
-      <CurrencyDisplay
-        v-else
-        :amount="netWorth"
-        :currency="currency"
-        size="xl"
-      />
 
-      <!-- Emoji indicator -->
-      <p class="text-4xl mt-4">
-        {{ netWorth >= 0 ? '📈' : '📉' }}
-      </p>
+      <template v-else>
+        <!-- Headline: converted total in primary currency -->
+        <!-- Only shown when exchange rates are available -->
+        <CurrencyDisplay
+          v-if="convertedNetWorth !== null"
+          :amount="convertedNetWorth"
+          :currency="settingsStore.primaryCurrency"
+          size="xl"
+          :colorize="true"
+        />
+
+        <!-- Trend icon -->
+        <!-- Why text-4xl mt-4?  Matches original spacing and visual weight.
+             The emoji conveys sign at a glance for users who scan quickly.
+             We compute isNegative from the converted total when available,
+             falling back to true (📉) only if the total is truly negative. -->
+        <p class="text-4xl mt-4">
+          {{ isNegative ? '📉' : '📈' }}
+        </p>
+
+        <!-- Per-currency breakdown ────────────────────────────────────────
+          Always rendered.  Purpose:
+            - Shows the raw per-currency amounts so the user understands
+              where the converted total comes from.
+            - Acts as the sole display when no rates are cached (null total).
+          Layout: flex-wrap so it collapses cleanly on narrow mobile screens.
+          Separator "·" between items is purely presentational (aria-hidden).
+        -->
+        <div
+          v-if="balancesByCurrency.size > 0"
+          class="mt-3 flex flex-wrap justify-center gap-x-1 gap-y-1 text-xs text-dark-text-secondary"
+        >
+          <template
+            v-for="(currency, index) in sortedCurrencies"
+            :key="currency"
+          >
+            <!-- Separator between items, hidden from assistive tech -->
+            <span
+              v-if="index > 0"
+              aria-hidden="true"
+              class="select-none"
+            >·</span>
+
+            <!-- Currency + amount -->
+            <span class="inline-flex items-center gap-0.5">
+              <span class="font-medium text-dark-text-primary">{{ currency }}:</span>
+              <!-- Why formatCurrency here instead of CurrencyDisplay?
+                   The breakdown uses xs text in a single line. CurrencyDisplay
+                   is a block-level span with size classes (text-sm through
+                   text-2xl) that would break the inline layout. formatCurrency
+                   returns a plain string we can embed directly. -->
+              <span>{{ formatCurrency(balancesByCurrency.get(currency) ?? 0, currency) }}</span>
+
+              <!-- Missing-rate warning icon ─────────────────────────────
+                Why title="" for the tooltip?
+                The <title> attribute is the lightest-weight accessible
+                tooltip: zero dependencies, supported on all browsers, read
+                by screen readers as the accessible name when there is no
+                other text. A full tooltip component would be overkill here.
+              -->
+              <span
+                v-if="currenciesWithMissingRates.includes(currency)"
+                title="Tasa de cambio no disponible"
+                aria-label="Tasa de cambio no disponible"
+                class="text-warning cursor-help"
+              >⚠</span>
+            </span>
+          </template>
+        </div>
+
+        <!-- No-rates notice: only when rates are absent AND there is more
+             than one currency (a single currency needs no rate). -->
+        <p
+          v-if="convertedNetWorth === null && balancesByCurrency.size > 1"
+          class="mt-2 text-xs text-dark-text-secondary italic"
+        >
+          Total sin convertir — tasas no disponibles
+        </p>
+      </template>
     </div>
   </BaseCard>
 </template>

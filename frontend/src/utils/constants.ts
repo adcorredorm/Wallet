@@ -22,13 +22,24 @@ export const TRANSACTION_TYPES = [
   { value: 'expense', label: 'Gasto' }
 ] as const
 
-// Common currencies
-export const CURRENCIES = [
-  { value: 'EUR', label: 'EUR - Euro', symbol: '€' },
-  { value: 'USD', label: 'USD - Dólar', symbol: '$' },
-  { value: 'GBP', label: 'GBP - Libra', symbol: '£' },
-  { value: 'COP', label: 'COP - Peso Colombiano', symbol: '$' }
+// Full currency data — use this wherever the symbol or full name is needed
+export const SUPPORTED_CURRENCIES = [
+  { code: 'COP', name: 'Peso Colombiano',  symbol: '$'  },
+  { code: 'USD', name: 'Dólar Americano',  symbol: '$'  },
+  { code: 'EUR', name: 'Euro',             symbol: '€'  },
+  { code: 'BRL', name: 'Real Brasileño',   symbol: 'R$' },
+  { code: 'JPY', name: 'Yen Japonés',      symbol: '¥'  },
+  { code: 'ARS', name: 'Peso Argentino',   symbol: '$'  },
+  { code: 'GBP', name: 'Libra Esterlina',  symbol: '£'  },
+  { code: 'BTC', name: 'Bitcoin',          symbol: '₿'  },
+  { code: 'ETH', name: 'Ethereum',         symbol: 'Ξ'  },
 ] as const
+
+// BaseSelect-compatible list — value/label shape consumed by AccountForm and any other dropdown
+export const CURRENCIES = SUPPORTED_CURRENCIES.map(c => ({
+  value: c.code,
+  label: `${c.code} - ${c.name}`,
+}))
 
 // Common category icons (using emoji for simplicity)
 export const CATEGORY_ICONS = [
