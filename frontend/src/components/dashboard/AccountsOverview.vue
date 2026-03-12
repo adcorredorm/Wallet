@@ -8,7 +8,13 @@
 import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+import { formatAccountType } from '@/utils/formatters'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 import type { Account } from '@/types'
+
+const exchangeRatesStore = useExchangeRatesStore()
+const settingsStore = useSettingsStore()
 
 interface AccountWithBalance extends Account {
   balance: number
@@ -69,17 +75,30 @@ const accountIcon = (type: string) => {
             <span class="text-2xl">{{ accountIcon(account.type) }}</span>
             <div>
               <p class="font-medium">{{ account.name }}</p>
-              <p class="text-sm text-dark-text-secondary">{{ account.currency }} - Balance: {{ account.balance }}</p>
+              <p class="text-sm text-dark-text-secondary">{{ formatAccountType(account.type) }} · {{ account.currency }}</p>
             </div>
           </div>
 
-          <!-- Balance -->
-          <CurrencyDisplay
-            :amount="account.balance || 0"
-            :currency="account.currency"
-            size="md"
-            compact
-          />
+          <!-- Balance: native + converted -->
+          <div class="text-right">
+            <CurrencyDisplay
+              :amount="account.balance || 0"
+              :currency="account.currency"
+              size="md"
+              compact
+            />
+            <div
+              v-if="account.currency !== settingsStore.primaryCurrency && exchangeRatesStore.rates.length > 0"
+              class="text-xs text-dark-text-secondary mt-0.5"
+            >
+              ≈ <CurrencyDisplay
+                :amount="exchangeRatesStore.convert(account.balance || 0, account.currency, settingsStore.primaryCurrency)"
+                :currency="settingsStore.primaryCurrency"
+                size="sm"
+                compact
+              />
+            </div>
+          </div>
         </div>
       </BaseCard>
     </div>
