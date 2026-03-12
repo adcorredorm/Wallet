@@ -88,14 +88,14 @@ const errors = reactive({
 /** Raw string value for the destination amount input — preserves full precision */
 const destinationAmountStr = ref<string>(
   props.transfer?.destination_amount
-    ? parseFloat(props.transfer.destination_amount.toFixed(10)).toString()
+    ? parseFloat(Number(props.transfer.destination_amount).toFixed(10)).toString()
     : ''
 )
 
 /** Raw string value for the exchange rate input — preserves full precision */
 const exchangeRateStr = ref<string>(
   props.transfer?.exchange_rate
-    ? parseFloat(props.transfer.exchange_rate.toFixed(10)).toString()
+    ? parseFloat(Number(props.transfer.exchange_rate).toFixed(10)).toString()
     : ''
 )
 
@@ -110,8 +110,9 @@ const exchangeRate = computed<number>(() => {
   return isNaN(n) ? 0 : n
 })
 
-/** Controls visibility of the exchange-rate collapsible section */
-const isRateSectionOpen = ref(false)
+/** Controls visibility of the exchange-rate collapsible section.
+ * Auto-open in edit mode when the transfer already has FX data. */
+const isRateSectionOpen = ref(!!(props.transfer?.exchange_rate))
 
 /** Guard flag to prevent circular watcher loops during recalculation */
 let isCalculating = false
