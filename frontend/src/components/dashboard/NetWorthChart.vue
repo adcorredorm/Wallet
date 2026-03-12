@@ -90,7 +90,6 @@ interface RangePreset {
 }
 
 const PRESETS: RangePreset[] = [
-  { label: '1D',   staticDays: 1    },
   { label: '1S',   staticDays: 7    },
   { label: '1M',   staticDays: 30   },   // default
   { label: '1A',   staticDays: 365  },
