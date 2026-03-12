@@ -93,6 +93,7 @@ import { useTransactionsStore } from '@/stores/transactions'
 import { useTransfersStore } from '@/stores/transfers'
 import { useCategoriesStore } from '@/stores/categories'
 import { useSettingsStore } from '@/stores/settings'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
 
 const { isOnline, onOnline, onOffline } = useNetworkStatus()
 
@@ -132,6 +133,11 @@ syncStore.setOnline(isOnline.value)
 const settingsStore = useSettingsStore()
 settingsStore.loadSettings().catch((err) => {
   console.warn('[boot] Settings failed to load:', err)
+})
+
+const exchangeRatesStore = useExchangeRatesStore()
+exchangeRatesStore.fetchRates().catch((err) => {
+  console.warn('[boot] Exchange rates failed to load:', err)
 })
 
 onOnline(() => {
