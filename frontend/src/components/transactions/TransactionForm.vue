@@ -275,8 +275,6 @@ const foreignCurrencyOptions = computed(() => [
 
 onMounted(() => {
   const hasOptionalValues =
-    !!form.title ||
-    !!form.description ||
     !!form.tags ||
     !!foreignCurrency.value
 
@@ -380,6 +378,20 @@ function handleSubmit() {
       required
     />
 
+    <!-- Título -->
+    <BaseInput
+      v-model="form.title"
+      label="Título (opcional)"
+      placeholder="Ej: Compra supermercado"
+    />
+
+    <!-- Descripción -->
+    <BaseInput
+      v-model="form.description"
+      label="Descripción (opcional)"
+      placeholder="Detalles adicionales"
+    />
+
     <!-- Fecha -->
     <DatePicker
       v-model="form.date"
@@ -439,20 +451,6 @@ function handleSubmit() {
           id="advanced-section-body"
           class="px-4 pb-4 space-y-4 border-t border-dark-border pt-4"
         >
-          <!-- Título -->
-          <BaseInput
-            v-model="form.title"
-            label="Título (opcional)"
-            placeholder="Ej: Compra supermercado"
-          />
-
-          <!-- Descripción -->
-          <BaseInput
-            v-model="form.description"
-            label="Descripción (opcional)"
-            placeholder="Detalles adicionales"
-          />
-
           <!-- Tags -->
           <BaseInput
             v-model="form.tags"
