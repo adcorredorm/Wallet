@@ -196,15 +196,56 @@ If any check fails:
 
 ---
 
-## Phase 6: Close
+## Phase 6: QA — User-directed testing
+
+**DO NOT proceed to Phase 7 until the user explicitly says all bugs are resolved.**
+
+### 6.1 Deliver the QA checklist
+
+Generate a testing checklist based on everything built in Phase 4. The checklist must cover:
+- Each sub-task's acceptance criteria (happy path)
+- Cross-cutting flows that touch multiple sub-tasks
+- Edge cases identified during implementation (e.g. offline behavior, empty states, cross-currency)
+- Regression paths for areas modified by this feature
+
+Present the checklist to the user in a clear, step-by-step format they can follow manually in the app.
+
+### 6.2 Bug tracking rules
+
+- **One bug at a time.** Work on a single bug until the user confirms it is resolved before starting the next.
+- **If it is not clear whether a new bug has started or the current one is still open, ask the user directly.**
+- For each bug reported by the user:
+  1. Create a Notion ticket immediately with:
+     - **Name**: concise bug description
+     - **Status**: `In Progress`
+     - **Priority**: based on severity (High if blocks core flow, Medium otherwise, Low if cosmetic)
+     - **Tags**: `Frontend` or `Backend` depending on the affected layer
+     - **Parent**: link to the main feature page, or to the relevant sub-ticket if the bug is clearly scoped to one
+     - **Notes**: what the user observed vs what was expected
+  2. Diagnose and fix the bug
+  3. **No commit until the user confirms the fix is working**
+  4. Once confirmed: commit the fix, update the Notion ticket Status to `Done`
+  5. Move to the next bug
+
+### 6.3 Completing QA
+
+When the user confirms all bugs are resolved, state clearly:
+> "QA complete. No open bugs. Ready for Phase 7."
+
+Then proceed.
+
+---
+
+## Phase 7: Close
 
 Use `superpowers:requesting-code-review` before closing.
 
 1. Update the main Notion entry Status to `Done`
-2. Use `git-flow` skill to tag the completed feature with the appropriate semver tag
+2. Use `git-flow` skill to tag the completed feature with the appropriate semantic version tag (e.g. `v1.1.0`)
 3. Present a final summary:
    - What was built
    - Sub-tasks completed per agent
+   - Bugs found and fixed during QA
    - Files modified
    - Test results (backend pytest + frontend type-check + lint)
    - Any follow-up items or known limitations (suggest adding them to the backlog)
