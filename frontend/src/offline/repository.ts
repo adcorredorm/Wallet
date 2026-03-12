@@ -161,6 +161,14 @@ export async function fetchAllWithRevalidation<
         const itemsToWrite = localMapped.filter((item) => !pendingIds.has(item.id as never))
         await table.bulkPut(itemsToWrite)
 
+        // Remove orphaned synced records: items in IndexedDB that the server
+        // no longer returns AND are not pending local changes. These are stale
+        // records (e.g. deleted server-side, or left over from test data).
+        const serverIds = new Set(localMapped.map((item) => item.id))
+        const orphanedIds = (await table.where('_sync_status').equals('synced').primaryKeys())
+          .filter((id) => !serverIds.has(id as string))
+        if (orphanedIds.length > 0) await table.bulkDelete(orphanedIds)
+
         // Re-read the full table from IndexedDB after bulkPut.
         //
         // Why table.toArray() instead of mergeWithPending(table, localMapped)?
