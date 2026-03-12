@@ -45,7 +45,7 @@ import {
   startOfYear,
   parseISO,
 } from 'date-fns'
-import { useNetWorthHistory } from '@/composables/useNetWorthHistory'
+import { useNetWorthHistory, type Granularity } from '@/composables/useNetWorthHistory'
 import { useSettingsStore } from '@/stores/settings'
 import { formatCurrency } from '@/utils/formatters'
 import { db } from '@/offline'
@@ -160,14 +160,22 @@ function selectPreset(preset: RangePreset): void {
 // ── Composable ─────────────────────────────────────────────────────────────
 const settingsStore = useSettingsStore()
 
-// We pass only rangeDays with no granularity override.
-// useNetWorthHistory's selectGranularity() auto-selects:
-//   ≤90 days   → day   (covers 1D, 1S, 1M)
-//   ≤365 days  → week  (covers 1A; YTD when <1 year)
-//   ≤1095 days → month (covers 5A; YTD if multi-year edge; Todo for medium history)
-//   >1095 days → year  (covers Todo for long histories)
+// Preset-specific granularity overrides for YTD and Todo.
+// Other presets (1S, 1M, 1A) use the composable's auto-select.
+//
+// YTD: ≤15 weeks → week (~10 pts early in year), >15 weeks → month (≤12 pts)
+// Todo: ≤15 months → month (≤15 pts), >15 months → year
+const granularityOverride = computed<Granularity | null>(() => {
+  const label = selectedLabel.value
+  const days  = rangeDays.value
+  if (label === 'YTD')  return days / 7 <= 15 ? 'week' : 'month'
+  if (label === 'Todo') return days / 30.44 <= 15 ? 'month' : 'year'
+  return null  // let the composable auto-select for 1S, 1M, 1A
+})
+
 const { dataPoints, loading, isEmpty } = useNetWorthHistory({
   rangeDays,
+  granularity: granularityOverride,
 })
 
 // ── Chart data ─────────────────────────────────────────────────────────────
