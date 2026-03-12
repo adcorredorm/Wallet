@@ -86,9 +86,20 @@ class AccountRepository(BaseRepository[Account]):
             .scalar()
         )
 
-        # Sum of incoming transfers
+        # Sum of incoming transfers.
+        # For cross-currency transfers the credited amount is destination_amount,
+        # not amount. COALESCE falls back to amount for same-currency transfers
+        # where destination_amount is NULL (legacy rows) or where amount was
+        # stored as destination_amount by the service layer.
         transfers_in = (
-            db.session.query(func.coalesce(func.sum(Transfer.amount), 0))
+            db.session.query(
+                func.coalesce(
+                    func.sum(
+                        func.coalesce(Transfer.destination_amount, Transfer.amount)
+                    ),
+                    0,
+                )
+            )
             .filter(Transfer.destination_account_id == account_id)
             .scalar()
         )

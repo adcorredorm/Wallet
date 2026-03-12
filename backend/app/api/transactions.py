@@ -176,6 +176,9 @@ def create_transaction():
             description=transaction_data.description,
             tags=transaction_data.tags,
             client_id=transaction_data.client_id,
+            original_amount=transaction_data.original_amount,
+            original_currency=transaction_data.original_currency,
+            exchange_rate=transaction_data.exchange_rate,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
@@ -256,6 +259,9 @@ def update_transaction(transaction_id: UUID):
             title=transaction_data.title,
             description=transaction_data.description,
             tags=transaction_data.tags,
+            original_amount=transaction_data.original_amount,
+            original_currency=transaction_data.original_currency,
+            exchange_rate=transaction_data.exchange_rate,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")

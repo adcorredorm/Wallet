@@ -23,6 +23,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
+// Note: NetWorthCard is now self-contained — it reads its own stores internally.
+// DashboardView only passes the `loading` flag it already controls.
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import AccountsOverview from '@/components/dashboard/AccountsOverview.vue'
 import RecentActivity from '@/components/dashboard/RecentActivity.vue'
@@ -44,14 +46,6 @@ const recentTransactions = computed(() =>
   transactionsStore.transactions.slice(0, 5)
 )
 
-// netWorth is always derived locally from accountsWithBalances.
-// Using a server override (dashboardApi.getSummary) would cause the net worth
-// to show a stale value whenever there are unsynced offline transactions.
-// The local sum is always correct because adjustBalance() keeps IndexedDB
-// and balances.value in sync with every write.
-const netWorth = computed(() =>
-  accountsStore.accountsWithBalances.reduce((sum, a) => sum + (a.balance ?? 0), 0)
-)
 
 onMounted(async () => {
   loading.value = true
@@ -87,7 +81,7 @@ function goToTransaction(transaction: Transaction) {
 <template>
   <div class="space-y-6">
     <!-- Net Worth Card -->
-    <NetWorthCard :net-worth="netWorth" :loading="loading" />
+    <NetWorthCard :loading="loading" />
 
     <!-- Main content grid -->
     <div class="grid gap-6 md:grid-cols-2">

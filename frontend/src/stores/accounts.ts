@@ -205,10 +205,17 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
 
     for (const t of allTransfers) {
+      // Source account always loses `amount` (what was sent, in source currency).
       const fromBal = computed.get(t.source_account_id) ?? 0
       computed.set(t.source_account_id, fromBal - Number(t.amount))
+      // Destination account gains `destination_amount` for cross-currency transfers,
+      // or falls back to `amount` for same-currency transfers where destination_amount
+      // is undefined. This mirrors the adjustBalance logic in the transfers store.
       const toBal = computed.get(t.destination_account_id) ?? 0
-      computed.set(t.destination_account_id, toBal + Number(t.amount))
+      computed.set(
+        t.destination_account_id,
+        toBal + Number(t.destination_amount ?? t.amount)
+      )
     }
 
     for (const [accountId, balance] of computed) {

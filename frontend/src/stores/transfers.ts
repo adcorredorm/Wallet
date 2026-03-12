@@ -151,7 +151,13 @@ export const useTransfersStore = defineStore('transfers', () => {
       created_at: now,
       updated_at: now,
       _sync_status: 'pending',
-      _local_updated_at: now
+      _local_updated_at: now,
+      // Cross-currency fields: undefined for same-currency transfers, present for FX transfers.
+      // Storing them here ensures IndexedDB (source of truth) has the full record and
+      // recomputeBalancesFromTransactions() can use destination_amount on reload.
+      destination_amount: data.destination_amount,
+      exchange_rate: data.exchange_rate,
+      destination_currency: data.destination_currency
     }
 
     loading.value = true
@@ -165,9 +171,16 @@ export const useTransfersStore = defineStore('transfers', () => {
       transfers.value.unshift(localTransfer)
 
       // Adjust both account balances immediately so the UI is accurate offline.
+      // Source always loses `amount` (the amount sent, in the source currency).
+      // Destination gains `destination_amount` when set (cross-currency FX transfer)
+      // or falls back to `amount` for same-currency transfers where destination_amount
+      // is undefined. The ?? operator handles both cases cleanly.
       const accountsStore = useAccountsStore()
       accountsStore.adjustBalance(data.source_account_id, -Number(data.amount))
-      accountsStore.adjustBalance(data.destination_account_id, Number(data.amount))
+      accountsStore.adjustBalance(
+        data.destination_account_id,
+        Number(data.destination_amount ?? data.amount)
+      )
 
       // Step 3 — Enqueue CREATE mutation.
       // client_id enables server-side idempotency on retries.
@@ -214,14 +227,24 @@ export const useTransfersStore = defineStore('transfers', () => {
 
         // Reverse the old transfer's effect, then apply the updated values.
         // This handles all cases: amount change, account change, or both.
+        // For the destination reversal we use destination_amount ?? amount so a
+        // cross-currency transfer is undone at the correct received amount, not
+        // the source amount.
         const accountsStore = useAccountsStore()
         accountsStore.adjustBalance(old.source_account_id, Number(old.amount))
-        accountsStore.adjustBalance(old.destination_account_id, -Number(old.amount))
+        accountsStore.adjustBalance(
+          old.destination_account_id,
+          -Number(old.destination_amount ?? old.amount)
+        )
         const newSourceId = data.source_account_id ?? old.source_account_id
         const newDestinationId = data.destination_account_id ?? old.destination_account_id
         const newAmount = data.amount ?? old.amount
+        const newDestinationAmount = data.destination_amount ?? old.destination_amount
         accountsStore.adjustBalance(newSourceId, -Number(newAmount))
-        accountsStore.adjustBalance(newDestinationId, Number(newAmount))
+        accountsStore.adjustBalance(
+          newDestinationId,
+          Number(newDestinationAmount ?? newAmount)
+        )
       }
 
       // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE.
@@ -262,9 +285,14 @@ export const useTransfersStore = defineStore('transfers', () => {
         await db.transfers.delete(id)
         transfers.value = transfers.value.filter(t => t.id !== id)
         if (transfer) {
+          // Restore source by adding back `amount`; restore destination by
+          // removing `destination_amount ?? amount` — mirroring the create logic.
           const accountsStore = useAccountsStore()
           accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
-          accountsStore.adjustBalance(transfer.destination_account_id, -Number(transfer.amount))
+          accountsStore.adjustBalance(
+            transfer.destination_account_id,
+            -Number(transfer.destination_amount ?? transfer.amount)
+          )
         }
         return
       }
@@ -273,9 +301,13 @@ export const useTransfersStore = defineStore('transfers', () => {
       await db.transfers.update(id, { _sync_status: 'pending' })
       transfers.value = transfers.value.filter(t => t.id !== id)
       if (transfer) {
+        // Same reversal logic as the pending-CREATE path above.
         const accountsStore = useAccountsStore()
         accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
-        accountsStore.adjustBalance(transfer.destination_account_id, -Number(transfer.amount))
+        accountsStore.adjustBalance(
+          transfer.destination_account_id,
+          -Number(transfer.destination_amount ?? transfer.amount)
+        )
       }
 
       await mutationQueue.enqueue({

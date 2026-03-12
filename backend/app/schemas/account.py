@@ -18,9 +18,40 @@ class AccountType(str, Enum):
     CASH = "cash"
 
 
-# Supported currencies (ISO 4217)
-# Should match frontend constants (src/utils/constants.ts)
-SUPPORTED_CURRENCIES = {"EUR", "USD", "GBP", "COP"}
+# Bootstrap fallback: used when the exchange_rates table is empty or unreachable.
+# Should match frontend constants (src/utils/constants.ts).
+SUPPORTED_CURRENCIES = {"COP", "USD", "EUR", "BRL", "JPY", "BTC", "ETH", "ARS", "GBP"}
+
+
+def _get_supported_currencies() -> set[str]:
+    """Return the set of valid currency codes.
+
+    Queries the ``exchange_rates`` table for all known currency codes. Falls
+    back to the hardcoded ``SUPPORTED_CURRENCIES`` bootstrap set when:
+
+    - The table is empty (no rates seeded yet).
+    - The query raises any exception (DB unreachable, table not yet created,
+      no application context, etc.).
+
+    The fallback is always silent — callers are never aware of whether the
+    live table or the static set was used.
+
+    Returns:
+        A set of upper-case currency code strings suitable for membership
+        testing inside Pydantic field validators.
+    """
+    try:
+        from app.models.exchange_rate import ExchangeRate
+
+        codes = {
+            row.currency_code
+            for row in ExchangeRate.query.with_entities(
+                ExchangeRate.currency_code
+            ).all()
+        }
+        return codes if codes else SUPPORTED_CURRENCIES
+    except Exception:
+        return SUPPORTED_CURRENCIES
 
 
 class AccountCreate(BaseModel):
@@ -48,13 +79,19 @@ class AccountCreate(BaseModel):
     @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: str) -> str:
-        """Validate that currency is supported."""
+        """Validate that currency is supported.
+
+        The set of valid currencies is resolved at validation time by querying
+        the ``exchange_rates`` table, falling back to ``SUPPORTED_CURRENCIES``
+        when the table is empty or the DB is unreachable.
+        """
         if not v:
             raise ValueError("Divisa es requerida")
         v = v.upper()
-        if v not in SUPPORTED_CURRENCIES:
+        supported = _get_supported_currencies()
+        if v not in supported:
             raise ValueError(
-                f"Divisa no soportada. Opciones válidas: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+                f"Divisa no soportada. Opciones válidas: {', '.join(sorted(supported))}"
             )
         return v
 
@@ -84,13 +121,19 @@ class AccountUpdate(BaseModel):
     @field_validator("currency")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        """Validate that currency is supported if provided."""
+        """Validate that currency is supported if provided.
+
+        The set of valid currencies is resolved at validation time by querying
+        the ``exchange_rates`` table, falling back to ``SUPPORTED_CURRENCIES``
+        when the table is empty or the DB is unreachable.
+        """
         if v is None:
             return v
         v = v.upper()
-        if v not in SUPPORTED_CURRENCIES:
+        supported = _get_supported_currencies()
+        if v not in supported:
             raise ValueError(
-                f"Divisa no soportada. Opciones: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+                f"Divisa no soportada. Opciones: {', '.join(sorted(supported))}"
             )
         return v
 

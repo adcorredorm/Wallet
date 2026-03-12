@@ -30,6 +30,8 @@ import type {
 import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransaction } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useSettingsStore } from '@/stores/settings'
 
 // Sort helper: newest transaction first (matches the server's default order).
 // Primary: date DESC. Secondary: created_at DESC as tiebreaker so that
@@ -44,6 +46,14 @@ const byDateDesc = (a: LocalTransaction, b: LocalTransaction) => {
 }
 
 export const useTransactionsStore = defineStore('transactions', () => {
+  // Cross-store references — called at the top of the setup function per the
+  // Pinia setup-store pattern. Vue tracks reactive reads from these stores
+  // inside computed() bodies automatically, so the converted totals below
+  // re-compute whenever rates, settings, or accounts change.
+  const accountsStore = useAccountsStore()
+  const exchangeRatesStore = useExchangeRatesStore()
+  const settingsStore = useSettingsStore()
+
   // State
   // Why LocalTransaction[] instead of Transaction[]?
   // LocalTransaction extends Transaction, so all consumers continue to work.
@@ -71,6 +81,57 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
   const netBalance = computed(() =>
     totalIncome.value - totalExpenses.value
+  )
+
+  // ---------------------------------------------------------------------------
+  // Dashboard totals — converted to the user's primary currency
+  //
+  // Why add *Converted variants instead of changing the existing computeds?
+  // The existing totalIncome/totalExpenses/netBalance are used by the account
+  // detail view where filters.account_id is set and all transactions share the
+  // same currency. That single-currency sum is correct and must not change.
+  //
+  // These new variants are for the dashboard: they convert each transaction's
+  // amount to primaryCurrency via the exchange rates store before summing,
+  // avoiding the meaningless cross-currency total (e.g. 100 USD + 500,000 COP).
+  //
+  // Graceful degradation: exchangeRatesStore.convert() returns the original
+  // amount unchanged when a currency is not yet cached (e.g. first offline
+  // start before any rate fetch). This means the sum is best-effort rather
+  // than NaN or 0, so the dashboard is still useful with partial rate data.
+  //
+  // Reactivity: Vue tracks all reactive reads inside computed() — including
+  // reads of accountsStore.accounts, exchangeRatesStore.rates, and
+  // settingsStore.settings — so these recompute automatically when any of
+  // those change (rates fetched, user changes primaryCurrency, etc.).
+  // ---------------------------------------------------------------------------
+
+  const totalIncomeConverted = computed(() =>
+    incomeTransactions.value.reduce((sum, tx) => {
+      const account = accountsStore.accounts.find(a => a.id === tx.account_id)
+      if (!account) return sum
+      return sum + exchangeRatesStore.convert(
+        Number(tx.amount),
+        account.currency,
+        settingsStore.primaryCurrency
+      )
+    }, 0)
+  )
+
+  const totalExpensesConverted = computed(() =>
+    expenseTransactions.value.reduce((sum, tx) => {
+      const account = accountsStore.accounts.find(a => a.id === tx.account_id)
+      if (!account) return sum
+      return sum + exchangeRatesStore.convert(
+        Number(tx.amount),
+        account.currency,
+        settingsStore.primaryCurrency
+      )
+    }, 0)
+  )
+
+  const netBalanceConverted = computed(() =>
+    totalIncomeConverted.value - totalExpensesConverted.value
   )
 
   // ---------------------------------------------------------------------------
@@ -389,6 +450,9 @@ export const useTransactionsStore = defineStore('transactions', () => {
     totalIncome,
     totalExpenses,
     netBalance,
+    totalIncomeConverted,
+    totalExpensesConverted,
+    netBalanceConverted,
     // Actions
     fetchTransactions,
     fetchTransactionById,

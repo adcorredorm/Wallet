@@ -43,6 +43,37 @@ const categoryIcon = computed(() => props.transaction.category?.icon || '📝')
 const categoryName = computed(() => props.transaction.category?.name || 'Sin categoría')
 const accountName = computed(() => props.transaction.account?.name || 'Cuenta')
 const currency = computed(() => props.transaction.account?.currency || 'USD')
+
+/**
+ * Whether this transaction carries foreign-currency metadata.
+ *
+ * Why narrow with 'original_currency' in check?
+ * original_currency only exists on LocalTransaction, not on the plain
+ * Transaction server type. The `in` operator narrows the union so
+ * TypeScript lets us safely read the field without a cast.
+ */
+const hasForeignCurrency = computed(() => {
+  if (!('original_currency' in props.transaction)) return false
+  const local = props.transaction as LocalTransaction
+  return !!local.original_currency && local.original_currency !== currency.value
+})
+
+/**
+ * Exchange rate formatted without trailing zeros.
+ *
+ * Why toFixed(10) then parseFloat then toString?
+ * exchange_rate is a floating-point number. toFixed(10) eliminates
+ * floating-point noise beyond 10 decimal places, parseFloat strips
+ * trailing zeros, and toString() returns a clean human-readable string
+ * (e.g. 4000, 1.25, 3850.75) without scientific notation for normal
+ * exchange-rate magnitudes.
+ */
+const formattedExchangeRate = computed(() => {
+  if (!('exchange_rate' in props.transaction)) return ''
+  const local = props.transaction as LocalTransaction
+  if (!local.exchange_rate) return ''
+  return parseFloat(local.exchange_rate.toFixed(10)).toString()
+})
 </script>
 
 <template>
@@ -94,6 +125,32 @@ const currency = computed(() => props.transaction.account?.currency || 'USD')
         show-sign
         :class="amountColor"
       />
+      <!--
+        Phase 5.5: Foreign-currency metadata line.
+
+        Why only when original_currency !== account currency?
+        If they match the conversion is trivial (1:1) and the line
+        would be redundant noise. We only surface it when the user
+        actually transacted in a different currency.
+
+        Layout: inline-flex keeps the three segments on one line on
+        most mobile widths. On very narrow screens (320px) text-xs
+        (~12px) plus the compact format from CurrencyDisplay fits
+        without wrapping in the vast majority of real exchange-rate
+        values.
+      -->
+      <div
+        v-if="hasForeignCurrency"
+        class="flex items-center justify-end gap-0.5 text-xs text-gray-400 dark:text-gray-500 mt-0.5"
+      >
+        <CurrencyDisplay
+          :amount="(transaction as LocalTransaction).original_amount!"
+          :currency="(transaction as LocalTransaction).original_currency!"
+          size="sm"
+        />
+        <span class="mx-1">@</span>
+        <span>{{ formattedExchangeRate }}</span>
+      </div>
     </div>
   </div>
 </template>

@@ -27,7 +27,8 @@ class TransactionCreate(BaseModel):
 
     Args:
         type: Transaction type (income or expense)
-        amount: Transaction amount (must be positive, 2 decimal places)
+        amount: Transaction amount (must be positive, in the account's native
+            currency — always the authoritative value for balance calculation)
         date: Transaction date
         account_id: Account ID for this transaction
         category_id: Category ID for this transaction
@@ -37,6 +38,13 @@ class TransactionCreate(BaseModel):
         client_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
+        original_amount: Amount in the foreign currency before conversion.
+            Required when original_currency is provided. Must be > 0.
+        original_currency: ISO 4217 code of the foreign currency (e.g. 'USD').
+            When provided, original_amount and exchange_rate are also required.
+        exchange_rate: Units of account currency per 1 unit of original_currency
+            at the time of the transaction. Required when original_currency is
+            provided. Must be > 0.
     """
 
     type: TransactionType
@@ -48,6 +56,9 @@ class TransactionCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     client_id: Optional[str] = Field(None, max_length=100)
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -65,12 +76,60 @@ class TransactionCreate(BaseModel):
             raise ValueError("Maximo 10 tags permitidos")
         return [tag[:50] for tag in v]
 
+    @model_validator(mode="after")
+    def validate_multi_currency_fields(self) -> "TransactionCreate":
+        """
+        Validate consistency of the three multi-currency fields.
+
+        Rules:
+        - If original_currency is provided, original_amount and exchange_rate
+          are both required and must be > 0.
+        - If original_amount or exchange_rate is provided without
+          original_currency, raise ValidationError (incomplete group).
+        - If none of the three are provided the transaction is treated as
+          single-currency and no further validation is needed.
+
+        Returns:
+            The validated TransactionCreate instance.
+
+        Raises:
+            ValueError: If the multi-currency fields are inconsistently
+                populated.
+        """
+        has_currency = self.original_currency is not None
+        has_amount = self.original_amount is not None
+        has_rate = self.exchange_rate is not None
+
+        if has_currency:
+            if not has_amount:
+                raise ValueError(
+                    "original_amount es requerido cuando original_currency es proporcionado"
+                )
+            if not has_rate:
+                raise ValueError(
+                    "exchange_rate es requerido cuando original_currency es proporcionado"
+                )
+            if self.original_amount <= 0:
+                raise ValueError("original_amount debe ser mayor a 0")
+            if self.exchange_rate <= 0:
+                raise ValueError("exchange_rate debe ser mayor a 0")
+        elif has_amount or has_rate:
+            raise ValueError(
+                "original_currency es requerido cuando original_amount o exchange_rate son proporcionados"
+            )
+
+        return self
+
 
 class TransactionUpdate(BaseModel):
     """
     Schema for updating an existing transaction.
 
     All fields are optional to support partial updates.
+
+    When any of the three multi-currency fields (original_amount,
+    original_currency, exchange_rate) is present, all three must be present
+    and valid.
     """
 
     type: Optional[TransactionType] = None
@@ -81,6 +140,9 @@ class TransactionUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
 
     @field_validator("amount")
     @classmethod
@@ -102,13 +164,70 @@ class TransactionUpdate(BaseModel):
             raise ValueError("Maximo 10 tags permitidos")
         return [tag[:50] for tag in v]
 
+    @model_validator(mode="after")
+    def validate_multi_currency_fields(self) -> "TransactionUpdate":
+        """
+        Validate consistency of the three multi-currency fields when any are
+        present in the update payload.
+
+        Rules mirror TransactionCreate: if any of the three are supplied, all
+        three must be supplied and original_amount / exchange_rate must be > 0.
+
+        Returns:
+            The validated TransactionUpdate instance.
+
+        Raises:
+            ValueError: If the multi-currency fields are inconsistently
+                populated.
+        """
+        has_currency = self.original_currency is not None
+        has_amount = self.original_amount is not None
+        has_rate = self.exchange_rate is not None
+
+        if has_currency or has_amount or has_rate:
+            if not has_currency:
+                raise ValueError(
+                    "original_currency es requerido cuando original_amount o exchange_rate son proporcionados"
+                )
+            if not has_amount:
+                raise ValueError(
+                    "original_amount es requerido cuando original_currency es proporcionado"
+                )
+            if not has_rate:
+                raise ValueError(
+                    "exchange_rate es requerido cuando original_currency es proporcionado"
+                )
+            if self.original_amount <= 0:
+                raise ValueError("original_amount debe ser mayor a 0")
+            if self.exchange_rate <= 0:
+                raise ValueError("exchange_rate debe ser mayor a 0")
+
+        return self
+
 
 class TransactionResponse(BaseModel):
     """
     Schema for transaction responses.
 
-    Returns:
-        Complete transaction information including metadata
+    Attributes:
+        id: Transaction UUID
+        type: Transaction type (income or expense)
+        amount: Amount in the account's native currency (authoritative for balances)
+        date: Transaction date
+        account_id: Associated account UUID
+        category_id: Associated category UUID
+        title: Optional title
+        description: Optional description
+        tags: List of tags
+        original_amount: Amount in the foreign currency (None for
+            single-currency transactions)
+        original_currency: ISO 4217 code of the foreign currency (None for
+            single-currency transactions)
+        exchange_rate: Rate applied at transaction time — units of account
+            currency per 1 unit of original_currency (None for single-currency
+            transactions)
+        created_at: Creation timestamp
+        updated_at: Last update timestamp
     """
 
     id: UUID
@@ -120,6 +239,9 @@ class TransactionResponse(BaseModel):
     title: Optional[str]
     description: Optional[str]
     tags: list[str]
+    original_amount: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     created_at: datetime
     updated_at: datetime
 

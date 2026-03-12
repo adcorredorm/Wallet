@@ -33,13 +33,19 @@ class Transaction(BaseModel):
 
     Attributes:
         type: Transaction type (income or expense)
-        amount: Transaction amount (positive decimal with 2 decimal places)
+        amount: Transaction amount (positive decimal, stored in account's currency)
         date: Transaction date
         account_id: Associated account ID
         category_id: Associated category ID
         title: Optional transaction title
         description: Optional transaction description
         tags: List of tags for categorization
+        original_amount: Amount in the original transaction currency (NULL for
+            single-currency transactions)
+        original_currency: ISO 4217 code of the original transaction currency
+            (NULL for single-currency transactions)
+        exchange_rate: Rate applied at transaction time, original currency /
+            account currency (NULL for single-currency transactions)
         account: Related account
         category: Related category
     """
@@ -47,7 +53,7 @@ class Transaction(BaseModel):
     __tablename__ = "transactions"
 
     type = Column(Enum(TransactionType), nullable=False)
-    amount = Column(Numeric(15, 2), nullable=False)
+    amount = Column(Numeric(20, 8), nullable=False)
     date = Column(Date, nullable=False)
     account_id = Column(
         UUID(as_uuid=True),
@@ -62,6 +68,9 @@ class Transaction(BaseModel):
     title = Column(String(100), nullable=True)
     description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
+    original_amount = Column(Numeric(20, 8), nullable=True)
+    original_currency = Column(String(10), nullable=True)
+    exchange_rate = Column(Numeric(20, 10), nullable=True)
 
     # Relationships
     account = relationship(

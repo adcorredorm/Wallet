@@ -14,6 +14,10 @@ export interface Transfer {
   tags: string[]
   created_at: string
   updated_at: string
+  // Cross-currency fields — present for FX transfers, absent for same-currency
+  destination_amount?: number   // Amount credited to the destination account
+  exchange_rate?: number        // FX rate applied at transfer time
+  destination_currency?: string // ISO 4217 code of the destination account's currency
   // Populated relations (optional, depends on API response)
   source_account?: {
     name: string
@@ -33,6 +37,10 @@ export interface CreateTransferDto {
   title?: string
   description?: string
   tags?: string[]
+  // Cross-currency fields — omitted for same-currency transfers
+  destination_amount?: number   // Amount received in the destination account (may differ due to FX)
+  exchange_rate?: number        // FX rate applied at the time of the transfer
+  destination_currency?: string // ISO 4217 code of the destination account's currency
 }
 
 export interface UpdateTransferDto {
@@ -43,6 +51,10 @@ export interface UpdateTransferDto {
   title?: string
   description?: string
   tags?: string[]
+  // Cross-currency fields — omitted for same-currency transfers
+  destination_amount?: number
+  exchange_rate?: number
+  destination_currency?: string
 }
 
 export interface TransferFilters {

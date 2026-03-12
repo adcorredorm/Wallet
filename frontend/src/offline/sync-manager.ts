@@ -142,7 +142,9 @@ const DEPENDENCY_FIELDS: Record<PendingMutation['entity_type'], string[]> = {
   account: [],
   transaction: ['account_id', 'category_id'],
   transfer: ['source_account_id', 'destination_account_id'],
-  category: ['parent_category_id']
+  category: ['parent_category_id'],
+  // Settings are standalone key/value pairs — no foreign-key references.
+  setting: []
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +398,9 @@ export class SyncManager {
 
       case 'category':
         return this.sendCategory(mutation, payload)
+
+      case 'setting':
+        return this.sendSetting(mutation, payload)
     }
   }
 
@@ -590,6 +595,40 @@ export class SyncManager {
     }
   }
 
+  /**
+   * Send a setting mutation to the API.
+   *
+   * Why only 'update' and not 'create' or 'delete'?
+   * Settings have upsert semantics: PUT /api/v1/settings/{key} creates the
+   * setting if it doesn't exist and replaces it if it does. The settingsStore
+   * always enqueues 'update' mutations — there is no 'create' distinction
+   * and settings are never deleted via the mutation queue.
+   *
+   * Why return a minimal { id, updated_at } object?
+   * processQueue() calls markSynced(entityType, entityId, serverResult) after
+   * this method returns. For settings, entityId is the string key
+   * ('primary_currency'). The server echoes the updated setting but we only
+   * need the id field to satisfy the markSynced signature.
+   */
+  private async sendSetting(
+    mutation: PendingMutation,
+    payload: Record<string, unknown>
+  ): Promise<{ id: string; updated_at?: string }> {
+    // Import lazily to avoid a circular dependency at module-load time.
+    // settings API is not imported at the top of this file because it was
+    // added in Phase 3.3, after the SyncManager was written. Using a dynamic
+    // import here keeps the SyncManager's import list clean.
+    const { updateSetting } = await import('@/api/settings')
+
+    const key = payload['key'] as string ?? mutation.entity_id
+    const value = payload['value']
+
+    await updateSetting(key, value)
+
+    // Return a shape compatible with markSynced's serverResult parameter.
+    return { id: key, updated_at: new Date().toISOString() }
+  }
+
   // -------------------------------------------------------------------------
   // Private: resolve temporary IDs after a successful CREATE
   // -------------------------------------------------------------------------
@@ -670,6 +709,11 @@ export class SyncManager {
       case 'transaction':
       case 'transfer':
         // Transactions and transfers do not act as FKs in other tables.
+        break
+
+      case 'setting':
+        // Settings do not act as FKs in other tables and are never created
+        // with temp-* IDs. This branch is unreachable in practice.
         break
     }
 
@@ -759,6 +803,12 @@ export class SyncManager {
         }
         break
       }
+
+      case 'setting':
+        // Settings use string keys as their primary key (e.g. 'primary_currency').
+        // They are never created with temp-* IDs — this branch is unreachable in
+        // practice, but required for TypeScript exhaustiveness.
+        break
     }
   }
 
@@ -810,6 +860,15 @@ export class SyncManager {
         break
       case 'category':
         await db.categories.update(serverResult.id, syncFields)
+        break
+
+      case 'setting':
+        // Settings rows use the key as PK (e.g. 'primary_currency').
+        // serverResult.id is the key returned by sendSetting().
+        await db.settings.update(serverResult.id, {
+          _sync_status: 'synced',
+          ...(serverResult.updated_at ? { _local_updated_at: serverResult.updated_at } : {})
+        })
         break
     }
   }
@@ -932,6 +991,7 @@ export class SyncManager {
       case 'transaction': await db.transactions.update(entityId, fields); break
       case 'transfer': await db.transfers.update(entityId, fields); break
       case 'category': await db.categories.update(entityId, fields); break
+      case 'setting': await db.settings.update(entityId, fields); break
     }
   }
 
@@ -976,6 +1036,10 @@ export class SyncManager {
         break
       case 'category':
         await db.categories.update(entityId, errorFields)
+        break
+
+      case 'setting':
+        await db.settings.update(entityId, errorFields)
         break
     }
   }

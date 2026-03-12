@@ -16,7 +16,7 @@ from app.schemas.transfer import (
 )
 from app.schemas.account import AccountResponse
 from app.services import TransferService
-from app.utils.exceptions import NotFoundError, BusinessRuleError
+from app.utils.exceptions import NotFoundError, BusinessRuleError, ValidationError
 from app.utils.responses import success_response, error_response, paginated_response
 
 transfers_bp = Blueprint("transfers", __name__, url_prefix="/api/v1/transfers")
@@ -167,6 +167,8 @@ def create_transfer():
             description=transfer_data.description,
             tags=transfer_data.tags,
             client_id=transfer_data.client_id,
+            destination_amount=transfer_data.destination_amount,
+            exchange_rate=transfer_data.exchange_rate,
         )
 
         data = TransferResponse.model_validate(transfer).model_dump(mode="json")
@@ -178,6 +180,8 @@ def create_transfer():
         return error_response("Error de validación", status_code=400, errors=e.errors())
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
+    except ValidationError as e:
+        return error_response(e.message, status_code=400)
     except BusinessRuleError as e:
         return error_response(e.message, status_code=422)
     except Exception as e:
@@ -244,6 +248,8 @@ def update_transfer(transfer_id: UUID):
             date=transfer_data.date,
             description=transfer_data.description,
             tags=transfer_data.tags,
+            destination_amount=transfer_data.destination_amount,
+            exchange_rate=transfer_data.exchange_rate,
         )
 
         data = TransferResponse.model_validate(transfer).model_dump(mode="json")
@@ -253,6 +259,8 @@ def update_transfer(transfer_id: UUID):
         return error_response("Error de validación", status_code=400, errors=e.errors())
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
+    except ValidationError as e:
+        return error_response(e.message, status_code=400)
     except Exception as e:
         return error_response(f"Error al actualizar transferencia: {str(e)}", status_code=500)
 

@@ -11,6 +11,12 @@
 
 import { ref, watch } from 'vue'
 import { formatNumber, parseFormattedNumber } from '@/utils/formatters'
+import { SUPPORTED_CURRENCIES } from '@/utils/constants'
+
+// Build a lookup map once at module level — no reactive overhead needed
+const CURRENCY_SYMBOL_MAP: Record<string, string> = Object.fromEntries(
+  SUPPORTED_CURRENCIES.map(c => [c.code, c.symbol])
+)
 
 interface Props {
   modelValue: number
@@ -81,7 +87,7 @@ function handleBlur() {
     <!-- Input with currency prefix -->
     <div class="relative">
       <span class="absolute left-4 top-1/2 -translate-y-1/2 text-dark-text-secondary">
-        {{ currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$' }}
+        {{ CURRENCY_SYMBOL_MAP[currency] ?? currency }}
       </span>
       <input
         type="text"

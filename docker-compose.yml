@@ -125,6 +125,35 @@ services:
       - /var/cache/nginx
       - /var/run
 
+  # Daily Exchange Rates Cron Sidecar
+  # Lightweight container that updates exchange rates once per day
+  # Reuses the same backend image - no new build required
+  rates_cron:
+    image: wallet-backend:latest
+    container_name: wallet_rates_cron
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
+      SQLALCHEMY_DATABASE_URI: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
+      FLASK_APP: run.py
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+    networks:
+      - wallet_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Starting exchange rates cron service (daily updates)' &&
+        while true; do
+          echo '[Rates Cron] Running flask rates update at '$(date)'' &&
+          flask rates update 2>&1 || echo '[Rates Cron] Rate fetch failed, will retry in 24h' &&
+          echo '[Rates Cron] Sleeping for 24 hours' &&
+          sleep 86400;
+        done
+      "
+
   # Optional: pgAdmin for database management
   # Web UI for managing PostgreSQL at http://localhost:5050
   # Credentials: admin@wallet.local / admin

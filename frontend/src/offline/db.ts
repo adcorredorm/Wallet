@@ -28,7 +28,9 @@ import type {
   LocalTransaction,
   LocalTransfer,
   LocalCategory,
-  PendingMutation
+  PendingMutation,
+  LocalExchangeRate,
+  LocalSetting
 } from './types'
 
 class WalletDB extends Dexie {
@@ -39,6 +41,8 @@ class WalletDB extends Dexie {
   transfers!: Table<LocalTransfer>
   categories!: Table<LocalCategory>
   pendingMutations!: Table<PendingMutation>
+  exchangeRates!: Table<LocalExchangeRate>
+  settings!: Table<LocalSetting>
 
   constructor() {
     super('WalletDB')
@@ -71,6 +75,26 @@ class WalletDB extends Dexie {
       // queued_at is indexed for explicit ordering queries in Phase 3
       pendingMutations: '++id, entity_type, entity_id, operation, queued_at'
     })
+
+    this.version(3).stores({
+      // All existing tables are carried forward unchanged so Dexie does not
+      // drop them during the upgrade.
+      accounts: 'id, server_id, type, active, _sync_status',
+      transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+      transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+      categories: 'id, server_id, type, parent_category_id, _sync_status',
+      pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+
+      // New in v3 — multi-currency support.
+      // exchangeRates: PK is the ISO 4217 code (or crypto ticker). No
+      // auto-increment because we always upsert by currency code.
+      exchangeRates: 'currency_code',
+
+      // settings: PK is a string key (e.g. 'primary_currency'). Indexed by
+      // _sync_status so the sync engine can query only dirty settings.
+      settings: 'key, _sync_status'
+    })
+    // No upgrade() function needed — both new tables start empty.
   }
 }
 

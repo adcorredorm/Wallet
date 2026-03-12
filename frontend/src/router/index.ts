@@ -149,6 +149,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/settings/SettingsView.vue'),
+      meta: {
+        title: 'Configuración',
+        showBackButton: true
+      }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

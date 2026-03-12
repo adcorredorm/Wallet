@@ -9,6 +9,8 @@ from app.models.account import Account, AccountType
 from app.models.category import Category, CategoryType
 from app.models.transaction import Transaction, TransactionType
 from app.models.transfer import Transfer
+from app.models.exchange_rate import ExchangeRate
+from app.models.user_setting import UserSetting
 
 __all__ = [
     "BaseModel",
@@ -19,4 +21,6 @@ __all__ = [
     "Transaction",
     "TransactionType",
     "Transfer",
+    "ExchangeRate",
+    "UserSetting",
 ]

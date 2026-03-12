@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from app.models import Transfer
 from app.repositories import TransferRepository, AccountRepository
-from app.utils.exceptions import NotFoundError, BusinessRuleError
+from app.utils.exceptions import NotFoundError, BusinessRuleError, ValidationError
 
 
 class TransferService:
@@ -80,29 +80,46 @@ class TransferService:
         description: str | None = None,
         tags: list[str] | None = None,
         client_id: str | None = None,
+        destination_amount: Decimal | None = None,
+        exchange_rate: Decimal | None = None,
+        destination_currency: str | None = None,
     ) -> Transfer:
         """
-        Create a new transfer.
+        Create a new transfer, handling both same-currency and cross-currency cases.
 
         If client_id is provided and a record with that key already exists in
         the database the existing transfer is returned immediately without
         inserting a duplicate row (offline-first idempotency).
 
+        For same-currency transfers, destination_amount is set equal to amount,
+        exchange_rate is set to 1, and destination_currency is left NULL.
+
+        For cross-currency transfers, destination_amount and exchange_rate must
+        be supplied by the caller. destination_currency is auto-derived from the
+        destination account's currency field.
+
         Args:
             source_account_id: Source account ID
             destination_account_id: Destination account ID
-            amount: Transfer amount
+            amount: Transfer amount in source currency (positive)
             date: Transfer date
             description: Optional description
             tags: Optional tags
             client_id: Optional client-generated idempotency key
+            destination_amount: Amount credited to destination account in its
+                currency. Required for cross-currency transfers.
+            exchange_rate: Exchange rate at transfer time. Required for
+                cross-currency transfers.
+            destination_currency: Ignored — always derived from the destination
+                account. Accepted for symmetry with the schema but not used.
 
         Returns:
             Created or pre-existing transfer instance
 
         Raises:
             NotFoundError: If source or destination account not found
-            BusinessRuleError: If accounts have different currencies
+            ValidationError: If cross-currency transfer is missing
+                destination_amount or exchange_rate
         """
         if client_id:
             existing = self.repository.get_by_client_id(client_id)
@@ -113,12 +130,21 @@ class TransferService:
         source_account = self.account_repository.get_by_id_or_fail(source_account_id)
         destination_account = self.account_repository.get_by_id_or_fail(destination_account_id)
 
-        # Validate same currency
-        if source_account.currency != destination_account.currency:
-            raise BusinessRuleError(
-                f"No se pueden transferir fondos entre cuentas con diferentes divisas. "
-                f"Cuenta origen: {source_account.currency}, Cuenta destino: {destination_account.currency}"
-            )
+        cross_currency = source_account.currency != destination_account.currency
+
+        if cross_currency:
+            # Both fields are mandatory for cross-currency transfers
+            if destination_amount is None or exchange_rate is None:
+                raise ValidationError(
+                    "destination_amount and exchange_rate are required for cross-currency transfers"
+                )
+            resolved_destination_currency = destination_account.currency
+        else:
+            # Same-currency: normalise to canonical values so balance queries
+            # can always use COALESCE(destination_amount, amount) safely.
+            destination_amount = amount
+            exchange_rate = Decimal("1")
+            resolved_destination_currency = None
 
         return self.repository.create(
             source_account_id=source_account_id,
@@ -128,6 +154,9 @@ class TransferService:
             description=description,
             tags=tags or [],
             client_id=client_id,
+            destination_amount=destination_amount,
+            exchange_rate=exchange_rate,
+            destination_currency=resolved_destination_currency,
         )
 
     def update(
@@ -137,28 +166,42 @@ class TransferService:
         date: date | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
+        destination_amount: Decimal | None = None,
+        exchange_rate: Decimal | None = None,
     ) -> Transfer:
         """
         Update an existing transfer.
 
-        Note: Cannot change source or destination accounts.
+        Source and destination accounts cannot be changed through an update.
+        Therefore the same-currency vs. cross-currency nature of the transfer
+        is fixed at creation time and cannot be altered here.
 
         Args:
             transfer_id: Transfer UUID
-            amount: New amount
+            amount: New amount in source currency
             date: New date
             description: New description
             tags: New tags
+            destination_amount: New destination amount. When provided must be > 0.
+                Only meaningful for cross-currency transfers.
+            exchange_rate: New exchange rate. When provided must be > 0.
+                Only meaningful for cross-currency transfers.
 
         Returns:
             Updated transfer instance
 
         Raises:
             NotFoundError: If transfer not found
+            ValidationError: If destination_amount or exchange_rate are <= 0
         """
         transfer = self.repository.get_by_id_or_fail(transfer_id)
 
-        update_data = {}
+        if destination_amount is not None and destination_amount <= 0:
+            raise ValidationError("destination_amount debe ser mayor a 0")
+        if exchange_rate is not None and exchange_rate <= 0:
+            raise ValidationError("exchange_rate debe ser mayor a 0")
+
+        update_data: dict = {}
         if amount is not None:
             update_data["amount"] = amount
         if date is not None:
@@ -167,6 +210,10 @@ class TransferService:
             update_data["description"] = description
         if tags is not None:
             update_data["tags"] = tags
+        if destination_amount is not None:
+            update_data["destination_amount"] = destination_amount
+        if exchange_rate is not None:
+            update_data["exchange_rate"] = exchange_rate
 
         return self.repository.update(transfer, **update_data)
 
