@@ -270,7 +270,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       updated_at: now,
       _sync_status: 'pending',
       _local_updated_at: now,
-      base_rate: txRate ?? undefined
+      base_rate: txRate
     }
 
     loading.value = true
@@ -297,7 +297,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         entity_type: 'transaction',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, base_rate: txRate ?? undefined, client_id: tempId }
+        payload: { ...data, base_rate: txRate, client_id: tempId }
       })
 
       return localTransaction
@@ -329,7 +329,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       // Step 1 — Partial IndexedDB update.
       await db.transactions.update(id, {
         ...data,
-        base_rate: updateRate ?? undefined,
+        base_rate: updateRate,
         _sync_status: 'pending',
         _local_updated_at: localUpdatedAt
       } as Parameters<typeof db.transactions.update>[1])
@@ -341,7 +341,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         transactions.value[idx] = {
           ...old,
           ...data,
-          base_rate: updateRate ?? undefined,
+          base_rate: updateRate,
           _sync_status: 'pending',
           _local_updated_at: localUpdatedAt
         } as LocalTransaction
@@ -377,7 +377,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
           entity_type: 'transaction',
           entity_id: id,
           operation: 'update',
-          payload: data as Record<string, unknown>
+          payload: { ...data, base_rate: updateRate } as Record<string, unknown>
         })
       }
     } catch (err: any) {

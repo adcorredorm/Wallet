@@ -174,7 +174,7 @@ export const useTransfersStore = defineStore('transfers', () => {
       destination_amount: data.destination_amount,
       exchange_rate: data.exchange_rate,
       destination_currency: data.destination_currency,
-      base_rate: srcRate ?? undefined
+      base_rate: srcRate
     }
 
     loading.value = true
@@ -205,7 +205,7 @@ export const useTransfersStore = defineStore('transfers', () => {
         entity_type: 'transfer',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, base_rate: srcRate ?? undefined, client_id: tempId }
+        payload: { ...data, base_rate: srcRate, client_id: tempId }
       })
 
       return localTransfer
@@ -237,7 +237,7 @@ export const useTransfersStore = defineStore('transfers', () => {
       // Step 1 — Partial IndexedDB update.
       await db.transfers.update(id, {
         ...data,
-        base_rate: updateSrcRate ?? undefined,
+        base_rate: updateSrcRate,
         _sync_status: 'pending',
         _local_updated_at: localUpdatedAt
       })
@@ -249,7 +249,7 @@ export const useTransfersStore = defineStore('transfers', () => {
         transfers.value[idx] = {
           ...old,
           ...data,
-          base_rate: updateSrcRate ?? undefined,
+          base_rate: updateSrcRate,
           _sync_status: 'pending',
           _local_updated_at: localUpdatedAt
         }
@@ -287,7 +287,7 @@ export const useTransfersStore = defineStore('transfers', () => {
           entity_type: 'transfer',
           entity_id: id,
           operation: 'update',
-          payload: data as Record<string, unknown>
+          payload: { ...data, base_rate: updateSrcRate } as Record<string, unknown>
         })
       }
     } catch (err: any) {

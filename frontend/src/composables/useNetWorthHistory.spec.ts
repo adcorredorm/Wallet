@@ -188,24 +188,29 @@ describe('useNetWorthHistory — granularity auto-selection', () => {
     mockAcc.mockResolvedValue([])
   })
 
-  it('selects day granularity for 30-day range', () => {
+  it('selects day granularity for 7-day range (1S)', () => {
+    const { granularity } = useNetWorthHistory({ rangeDays: 7 })
+    expect(granularity.value).toBe('day')
+  })
+
+  it('selects triday granularity for 30-day range (1M)', () => {
     const { granularity } = useNetWorthHistory({ rangeDays: 30 })
-    expect(granularity.value).toBe('day')
+    expect(granularity.value).toBe('triday')
   })
 
-  it('selects day granularity for exactly 90-day range', () => {
+  it('selects month granularity for 90-day range', () => {
     const { granularity } = useNetWorthHistory({ rangeDays: 90 })
-    expect(granularity.value).toBe('day')
-  })
-
-  it('selects week granularity for 180-day range', () => {
-    const { granularity } = useNetWorthHistory({ rangeDays: 180 })
-    expect(granularity.value).toBe('week')
-  })
-
-  it('selects month granularity for 400-day range', () => {
-    const { granularity } = useNetWorthHistory({ rangeDays: 400 })
     expect(granularity.value).toBe('month')
+  })
+
+  it('selects month granularity for 365-day range (1A)', () => {
+    const { granularity } = useNetWorthHistory({ rangeDays: 365 })
+    expect(granularity.value).toBe('month')
+  })
+
+  it('selects year granularity for 500-day range (Todo >15 months)', () => {
+    const { granularity } = useNetWorthHistory({ rangeDays: 500 })
+    expect(granularity.value).toBe('year')
   })
 
   it('selects year granularity for 1200-day range', () => {

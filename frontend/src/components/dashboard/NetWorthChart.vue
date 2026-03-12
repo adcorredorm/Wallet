@@ -13,7 +13,7 @@
  * app's dark theme without a runtime CSS variable lookup.
  *
  * Range presets (stock-app style):
- * Seven presets (1D / 1S / 1M / 1A / YTD / 5A / Todo) each compute a
+ * Five presets (1S / 1M / 1A / YTD / Todo) each compute a
  * rangeDays value that is fed into useNetWorthHistory. The composable's own
  * selectGranularity() function then auto-selects the appropriate granularity
  * (day / week / month / year) based on that range — no override is passed from
