@@ -62,6 +62,7 @@ const balancesByCurrency = computed(() => {
   const map = new Map<string, number>()
   for (const account of accountsStore.accountsWithBalances) {
     const curr = account.currency
+    if (!curr) continue
     map.set(curr, (map.get(curr) ?? 0) + account.balance)
   }
   return map
