@@ -192,8 +192,8 @@ const chartData = computed(() => {
         },
         fill: true,
         borderWidth: 2,
-        // Show dots only on very short ranges (≤10 pts) — hides clutter on mobile
-        pointRadius: points.length <= 10 ? 3 : 0,
+        // Show dots only for 1S (7 daily points) — cleaner on mobile for other ranges
+        pointRadius: points.length <= 7 ? 3 : 0,
         pointHoverRadius: 5,
         tension: 0.3, // slight curve for a smoother line
       }

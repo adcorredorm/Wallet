@@ -54,7 +54,7 @@ import { useTransfersStore } from '@/stores/transfers'
 // Types
 // ---------------------------------------------------------------------------
 
-export type Granularity = 'day' | 'week' | 'month' | 'year'
+export type Granularity = 'day' | 'triday' | 'week' | 'month' | 'year'
 
 export interface DataPoint {
   date: string   // ISO date string YYYY-MM-DD for the boundary
@@ -80,13 +80,14 @@ export interface UseNetWorthHistoryReturn {
 
 /**
  * Auto-select granularity from range size.
- * Targets ~7-15 data points for mobile readability.
- * ≤30 days → day (~7-30 pts), ≤180 → week (~4-26 pts),
- * ≤730 → month (~6-24 pts), >730 → year
+ * ≤7d  → day    (1S: 7 pts, 1 pt/day)
+ * ≤30d → triday (1M: ~10 pts, 1 pt/3 days)
+ * ≤730d → month (1A: 12 pts, YTD: ≤12 pts, Todo short: ~15 pts)
+ * >730d → year
  */
 function selectGranularity(days: number): Granularity {
-  if (days <= 30) return 'day'
-  if (days <= 180) return 'week'
+  if (days <= 7) return 'day'
+  if (days <= 30) return 'triday'
   if (days <= 730) return 'month'
   return 'year'
 }
@@ -114,6 +115,10 @@ function generateBoundaries(
     case 'day':
       cursor = new Date(startDate)
       advance = (d) => addDays(d, 1)
+      break
+    case 'triday':
+      cursor = new Date(startDate)
+      advance = (d) => addDays(d, 3)
       break
     case 'week':
       cursor = startOfWeek(startDate, { weekStartsOn: 1 })
