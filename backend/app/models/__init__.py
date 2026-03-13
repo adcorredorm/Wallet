@@ -11,6 +11,8 @@ from app.models.transaction import Transaction, TransactionType
 from app.models.transfer import Transfer
 from app.models.exchange_rate import ExchangeRate
 from app.models.user_setting import UserSetting
+from app.models.dashboard import Dashboard
+from app.models.dashboard_widget import DashboardWidget, WidgetType
 
 __all__ = [
     "BaseModel",
@@ -23,4 +25,7 @@ __all__ = [
     "Transfer",
     "ExchangeRate",
     "UserSetting",
+    "Dashboard",
+    "DashboardWidget",
+    "WidgetType",
 ]

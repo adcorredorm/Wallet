@@ -11,6 +11,7 @@ from app.repositories.transaction import TransactionRepository
 from app.repositories.transfer import TransferRepository
 from app.repositories.exchange_rate import ExchangeRateRepository
 from app.repositories.user_setting import SettingsRepository
+from app.repositories.dashboard import DashboardRepository
 
 __all__ = [
     "AccountRepository",
@@ -19,4 +20,5 @@ __all__ = [
     "TransferRepository",
     "ExchangeRateRepository",
     "SettingsRepository",
+    "DashboardRepository",
 ]

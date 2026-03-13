@@ -53,11 +53,12 @@
 import { db } from './db'
 import { mutationQueue } from './mutation-queue'
 import { isTempId } from './temp-id'
-import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory } from './types'
+import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget } from './types'
 import { accountsApi } from '@/api/accounts'
 import { transactionsApi } from '@/api/transactions'
 import { transfersApi } from '@/api/transfers'
 import { categoriesApi } from '@/api/categories'
+import { dashboardsApi } from '@/api/dashboards'
 import type {
   Account,
   Transaction,
@@ -840,7 +841,7 @@ export class SyncManager {
    */
   private async markSynced(
     entityType: PendingMutation['entity_type'],
-    entityId: string,
+    _entityId: string,
     serverResult: { id: string; updated_at?: string }
   ): Promise<void> {
     const syncFields = {
@@ -1162,11 +1163,12 @@ export class SyncManager {
           db.categories.bulkPut(
             items.map((item) => toLocalItem(item, item.id) as LocalCategory)
           )
-      )
+      ),
+      this.syncDashboards()
     ])
 
     results.forEach((result, index) => {
-      const entityNames = ['accounts', 'transactions', 'transfers', 'categories']
+      const entityNames = ['accounts', 'transactions', 'transfers', 'categories', 'dashboards']
       if (result.status === 'rejected') {
         console.warn(
           `[SyncManager] full-read-sync failed for ${entityNames[index]}:`,
@@ -1191,6 +1193,69 @@ export class SyncManager {
   ): Promise<void> {
     const items = await fetcher()
     await writer(items)
+  }
+
+  /**
+   * Sync dashboards and their widgets from the server to Dexie.
+   *
+   * Why a dedicated method instead of reusing syncEntityTable?
+   * Dashboards require a two-step fetch: getAll() returns a flat list of
+   * Dashboard objects (no widgets), then getById() returns DashboardWithWidgets
+   * for each dashboard. The syncEntityTable helper only handles a single flat
+   * fetch, so it cannot drive the nested widget retrieval.
+   *
+   * Why fetch widgets via getById() instead of a dedicated /widgets endpoint?
+   * The dashboards API does not expose a standalone "get all widgets" endpoint.
+   * The only way to retrieve a dashboard's widgets is through GET /dashboards/:id,
+   * which returns the dashboard with its widgets embedded. We use Promise.all
+   * to parallelise the per-dashboard fetches and keep latency low.
+   *
+   * Why prune stale records for dashboards but not for other entities?
+   * Other entities (accounts, transactions, etc.) have a mutation queue that
+   * processes deletes — when a user deletes an account offline the delete is
+   * queued and replayed on the server. Dashboards are read-only in the sync
+   * layer (no mutation queue entries), so the only mechanism to remove a
+   * server-deleted dashboard from Dexie is to diff the server IDs against the
+   * local table during fullReadSync and delete the orphans.
+   */
+  private async syncDashboards(): Promise<void> {
+    // Step 1: fetch the flat dashboard list.
+    const dashboards = await dashboardsApi.getAll()
+    const serverDashboardIds = dashboards.map((d) => d.id)
+
+    // Step 2: bulkPut all dashboards into Dexie.
+    await db.dashboards.bulkPut(
+      dashboards.map((d) => toLocalItem(d, d.id) as LocalDashboard)
+    )
+
+    // Step 3: fetch widgets for every dashboard in parallel.
+    const detailResults = await Promise.all(
+      dashboards.map((d) => dashboardsApi.getById(d.id))
+    )
+
+    // Step 4: flatten all widgets and bulkPut them.
+    const allWidgets = detailResults.flatMap((detail) => detail.widgets)
+    await db.dashboardWidgets.bulkPut(
+      allWidgets.map((w) => toLocalItem(w, w.id) as LocalDashboardWidget)
+    )
+
+    // Step 5: prune dashboards whose IDs are no longer on the server.
+    // noneOf([]) would delete everything, so guard against an empty list.
+    if (serverDashboardIds.length > 0) {
+      await db.dashboards.where('id').noneOf(serverDashboardIds).delete()
+    } else {
+      await db.dashboards.clear()
+    }
+
+    // Step 6: prune widgets belonging to dashboards that no longer exist.
+    // We key on dashboard_id (an indexed field) rather than widget id because
+    // the server only returns widgets for existing dashboards — any widget
+    // whose parent dashboard was deleted is orphaned in Dexie.
+    if (serverDashboardIds.length > 0) {
+      await db.dashboardWidgets.where('dashboard_id').noneOf(serverDashboardIds).delete()
+    } else {
+      await db.dashboardWidgets.clear()
+    }
   }
 }
 
