@@ -243,8 +243,9 @@ Then proceed.
 Use `superpowers:requesting-code-review` before closing.
 
 1. Update the main Notion entry Status to `Done`
-2. Use `git-flow` skill to tag the completed feature with the appropriate semantic version tag (e.g. `v1.1.0`)
-3. Present a final summary:
+2. **Close all sub-tickets:** search for every Notion entry whose `Parent` is the main feature page and update their Status to `Done`. A parent marked Done means all its children are Done — no exceptions.
+3. Use `git-flow` skill to tag the completed feature with the appropriate semantic version tag (e.g. `v1.1.0`)
+4. Present a final summary:
    - What was built
    - Sub-tasks completed per agent
    - Bugs found and fixed during QA
