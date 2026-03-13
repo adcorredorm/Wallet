@@ -73,6 +73,14 @@ import type {
   CreateCategoryDto,
   UpdateCategoryDto
 } from '@/types'
+import type {
+  Dashboard,
+  DashboardWidget,
+  CreateDashboardDto,
+  UpdateDashboardDto,
+  CreateWidgetDto,
+  UpdateWidgetDto,
+} from '@/types/dashboard'
 
 // ---------------------------------------------------------------------------
 // Phase 5 — Sync store integration
@@ -145,7 +153,11 @@ const DEPENDENCY_FIELDS: Record<PendingMutation['entity_type'], string[]> = {
   transfer: ['source_account_id', 'destination_account_id'],
   category: ['parent_category_id'],
   // Settings are standalone key/value pairs — no foreign-key references.
-  setting: []
+  setting: [],
+  // dashboard_widget depends on dashboard via dashboard_id — if a dashboard
+  // CREATE fails offline, any widget creates for it are blocked too.
+  dashboard: [],
+  dashboard_widget: ['dashboard_id'],
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +417,12 @@ export class SyncManager {
 
       case 'setting':
         return this.sendSetting(mutation, payload)
+
+      case 'dashboard':
+        return this.sendDashboard(mutation, payload)
+
+      case 'dashboard_widget':
+        return this.sendDashboardWidget(mutation, payload)
     }
   }
 
@@ -472,6 +490,12 @@ export class SyncManager {
 
     const category = await db.categories.get(tempId)
     if (category?.server_id) return category.server_id
+
+    const dashboard = await db.dashboards.get(tempId)
+    if (dashboard?.server_id) return dashboard.server_id
+
+    const widget = await db.dashboardWidgets.get(tempId)
+    if (widget?.server_id) return widget.server_id
 
     return undefined
   }
@@ -633,6 +657,70 @@ export class SyncManager {
     return { id: key, updated_at: new Date().toISOString() }
   }
 
+  private async sendDashboard(
+    mutation: PendingMutation,
+    payload: Record<string, unknown>
+  ): Promise<Dashboard> {
+    switch (mutation.operation) {
+      case 'create': {
+        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
+        void _id
+        return dashboardsApi.create(createPayload as unknown as CreateDashboardDto)
+      }
+
+      case 'update': {
+        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
+        void _id
+        return dashboardsApi.update(mutation.entity_id, updatePayload as unknown as UpdateDashboardDto)
+      }
+
+      case 'delete':
+        await dashboardsApi.delete(mutation.entity_id)
+        return { id: mutation.entity_id } as Dashboard
+    }
+  }
+
+  /**
+   * Send a dashboard_widget mutation to the API.
+   *
+   * Why extract dashboard_id from payload?
+   * The dashboards API requires dashboardId as a URL path parameter (not body).
+   * The store encodes it in the payload so the SyncManager can route the request
+   * to the correct endpoint. We strip it from the body before sending.
+   */
+  private async sendDashboardWidget(
+    mutation: PendingMutation,
+    payload: Record<string, unknown>
+  ): Promise<DashboardWidget> {
+    const dashboardId = payload['dashboard_id'] as string
+
+    switch (mutation.operation) {
+      case 'create': {
+        const { id: _id, dashboard_id: _did, ...createPayload } =
+          payload as Record<string, unknown> & { id?: string; dashboard_id?: string }
+        void _id
+        void _did
+        return dashboardsApi.createWidget(dashboardId, createPayload as unknown as CreateWidgetDto)
+      }
+
+      case 'update': {
+        const { id: _id, dashboard_id: _did, ...updatePayload } =
+          payload as Record<string, unknown> & { id?: string; dashboard_id?: string }
+        void _id
+        void _did
+        return dashboardsApi.updateWidget(
+          dashboardId,
+          mutation.entity_id,
+          updatePayload as unknown as UpdateWidgetDto
+        )
+      }
+
+      case 'delete':
+        await dashboardsApi.deleteWidget(dashboardId, mutation.entity_id)
+        return { id: mutation.entity_id } as DashboardWidget
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Private: resolve temporary IDs after a successful CREATE
   // -------------------------------------------------------------------------
@@ -718,6 +806,18 @@ export class SyncManager {
       case 'setting':
         // Settings do not act as FKs in other tables and are never created
         // with temp-* IDs. This branch is unreachable in practice.
+        break
+
+      case 'dashboard':
+        // Update dashboard_widget rows that reference this dashboard via dashboard_id.
+        await db.dashboardWidgets
+          .where('dashboard_id')
+          .equals(tempId)
+          .modify({ dashboard_id: realId })
+        break
+
+      case 'dashboard_widget':
+        // dashboard_widget does not act as a FK in any other table.
         break
     }
 
@@ -813,6 +913,26 @@ export class SyncManager {
         // They are never created with temp-* IDs — this branch is unreachable in
         // practice, but required for TypeScript exhaustiveness.
         break
+
+      case 'dashboard': {
+        const old = await db.dashboards.get(tempId)
+        if (old) {
+          const updated: LocalDashboard = { ...old, id: realId, server_id: realId }
+          await db.dashboards.delete(tempId)
+          await db.dashboards.put(updated)
+        }
+        break
+      }
+
+      case 'dashboard_widget': {
+        const old = await db.dashboardWidgets.get(tempId)
+        if (old) {
+          const updated: LocalDashboardWidget = { ...old, id: realId, server_id: realId }
+          await db.dashboardWidgets.delete(tempId)
+          await db.dashboardWidgets.put(updated)
+        }
+        break
+      }
     }
   }
 
@@ -873,6 +993,14 @@ export class SyncManager {
           _sync_status: 'synced',
           ...(serverResult.updated_at ? { _local_updated_at: serverResult.updated_at } : {})
         })
+        break
+
+      case 'dashboard':
+        await db.dashboards.update(serverResult.id, syncFields)
+        break
+
+      case 'dashboard_widget':
+        await db.dashboardWidgets.update(serverResult.id, syncFields)
         break
     }
   }
@@ -996,6 +1124,8 @@ export class SyncManager {
       case 'transfer': await db.transfers.update(entityId, fields); break
       case 'category': await db.categories.update(entityId, fields); break
       case 'setting': await db.settings.update(entityId, fields); break
+      case 'dashboard': await db.dashboards.update(entityId, fields); break
+      case 'dashboard_widget': await db.dashboardWidgets.update(entityId, fields); break
     }
   }
 
@@ -1044,6 +1174,14 @@ export class SyncManager {
 
       case 'setting':
         await db.settings.update(entityId, errorFields)
+        break
+
+      case 'dashboard':
+        await db.dashboards.update(entityId, errorFields)
+        break
+
+      case 'dashboard_widget':
+        await db.dashboardWidgets.update(entityId, errorFields)
         break
     }
   }
@@ -1210,13 +1348,11 @@ export class SyncManager {
    * which returns the dashboard with its widgets embedded. We use Promise.all
    * to parallelise the per-dashboard fetches and keep latency low.
    *
-   * Why prune stale records for dashboards but not for other entities?
-   * Other entities (accounts, transactions, etc.) have a mutation queue that
-   * processes deletes — when a user deletes an account offline the delete is
-   * queued and replayed on the server. Dashboards are read-only in the sync
-   * layer (no mutation queue entries), so the only mechanism to remove a
-   * server-deleted dashboard from Dexie is to diff the server IDs against the
-   * local table during fullReadSync and delete the orphans.
+   * Why prune stale records for dashboards?
+   * Dashboards are now wired into the mutation queue (like other entities).
+   * After a fullReadSync the server is authoritative, so any dashboard ID no
+   * longer returned by the server should be removed from Dexie. The diff
+   * against serverDashboardIds handles this reconciliation.
    */
   private async syncDashboards(): Promise<void> {
     // Step 1: fetch the flat dashboard list.
