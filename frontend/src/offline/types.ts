@@ -77,7 +77,7 @@ export interface LocalCategory extends Category {
  */
 export interface PendingMutation {
   id?: number                                                                    // Auto-incremented by Dexie (undefined before first insert)
-  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting'
+  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget'
   entity_id: string                                                              // Local ID (may be a temp-* UUID)
   operation: 'create' | 'update' | 'delete'
   payload: Record<string, unknown>                                  // Serialised DTO
