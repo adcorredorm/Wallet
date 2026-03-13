@@ -127,9 +127,9 @@ function aggregate(values: number[], aggregation: Aggregation): number {
     case 'count':
       return values.length
     case 'min':
-      return Math.min(...values)
+      return values.reduce((a, b) => (b < a ? b : a), values[0])
     case 'max':
-      return Math.max(...values)
+      return values.reduce((a, b) => (b > a ? b : a), values[0])
   }
 }
 
@@ -395,7 +395,10 @@ export function useWidgetData(
 // ---------------------------------------------------------------------------
 
 /**
- * Build a totals record: group key -> aggregated total across all buckets.
+ * Build a totals record: group key → single aggregate across ALL raw values
+ * in that group (not a second-pass aggregate of bucket aggregates).
+ * For 'sum': grand total. For 'avg': mean of every individual value.
+ * For 'count': total transaction count. For 'min'/'max': global extremes.
  */
 function buildTotals(
   collected: Map<string, Map<string, number[]>>,
