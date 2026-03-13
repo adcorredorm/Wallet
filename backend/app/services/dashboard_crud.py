@@ -1,0 +1,196 @@
+"""
+DashboardCrudService: business logic for Dashboard and DashboardWidget CRUD.
+
+This service persists configuration only — it never computes analytics.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+from typing import Optional
+
+from app.models.dashboard import Dashboard
+from app.models.dashboard_widget import DashboardWidget, WidgetType
+from app.repositories.dashboard import DashboardRepository
+from app.schemas.dashboard_crud import DashboardCreate, DashboardUpdate, WidgetCreate, WidgetUpdate
+from app.utils.exceptions import NotFoundError, BusinessRuleError
+
+MAX_DASHBOARDS = 10
+MAX_WIDGETS_PER_DASHBOARD = 12
+
+
+class DashboardCrudService:
+    """
+    Business logic for Dashboard and DashboardWidget CRUD.
+
+    Enforces:
+    - Maximum 10 dashboards.
+    - Maximum 12 widgets per dashboard.
+    - Single-default invariant for dashboards.
+    - client_id idempotency for dashboards and widgets.
+    - Automatic sort_order assignment when omitted.
+    """
+
+    def __init__(self) -> None:
+        self.repo = DashboardRepository()
+
+    # ------------------------------------------------------------------
+    # Dashboard CRUD
+    # ------------------------------------------------------------------
+
+    def list_dashboards(self) -> list[Dashboard]:
+        """Return all dashboards ordered by sort_order."""
+        return self.repo.get_all_ordered()
+
+    def get_dashboard(self, dashboard_id: UUID) -> Dashboard:
+        """Return a single dashboard by ID or raise NotFoundError."""
+        return self.repo.get_by_id_or_fail(dashboard_id)
+
+    def create_dashboard(self, data: DashboardCreate) -> tuple[Dashboard, bool]:
+        """
+        Create a new dashboard. Returns (instance, created: bool).
+        created=False means idempotency hit (existing record returned).
+
+        Raises:
+            BusinessRuleError: If dashboard limit (10) would be exceeded.
+        """
+        if data.client_id:
+            existing = self.repo.get_by_client_id(data.client_id)
+            if existing:
+                return existing, False
+
+        if self.repo.count_all() >= MAX_DASHBOARDS:
+            raise BusinessRuleError(
+                f"No se pueden crear más de {MAX_DASHBOARDS} dashboards."
+            )
+
+        sort_order = data.sort_order
+        if sort_order is None:
+            sort_order = self.repo.get_max_sort_order() + 1
+
+        if data.is_default:
+            self.repo.unset_default()
+
+        dashboard = self.repo.create(
+            name=data.name,
+            description=data.description,
+            display_currency=data.display_currency,
+            layout_columns=data.layout_columns,
+            is_default=data.is_default,
+            sort_order=sort_order,
+            client_id=data.client_id,
+        )
+        return dashboard, True
+
+    def update_dashboard(self, dashboard_id: UUID, data: DashboardUpdate) -> Dashboard:
+        """Update dashboard metadata. Raises NotFoundError if not found."""
+        dashboard = self.repo.get_by_id_or_fail(dashboard_id)
+
+        if data.is_default is True:
+            self.repo.unset_default()
+
+        update_fields = data.model_dump(exclude_unset=True)
+        return self.repo.update(dashboard, **update_fields)
+
+    def delete_dashboard(self, dashboard_id: UUID) -> None:
+        """Delete a dashboard and cascade widgets. Raises NotFoundError if not found."""
+        dashboard = self.repo.get_by_id_or_fail(dashboard_id)
+        self.repo.delete(dashboard)
+
+    # ------------------------------------------------------------------
+    # Widget CRUD
+    # ------------------------------------------------------------------
+
+    def list_widgets(self, dashboard_id: UUID) -> list[DashboardWidget]:
+        """Return all widgets for a dashboard. Raises NotFoundError if dashboard not found."""
+        self.repo.get_by_id_or_fail(dashboard_id)
+        return self.repo.get_widgets_for_dashboard(dashboard_id)
+
+    def create_widget(self, dashboard_id: UUID, data: WidgetCreate) -> tuple[DashboardWidget, bool]:
+        """
+        Add a widget to a dashboard. Returns (instance, created: bool).
+
+        Raises:
+            NotFoundError: If the dashboard does not exist.
+            BusinessRuleError: If widget limit (12) would be exceeded.
+        """
+        self.repo.get_by_id_or_fail(dashboard_id)
+
+        if data.client_id:
+            from app.extensions import db
+            from app.models.dashboard_widget import DashboardWidget as _W
+            existing_widget = (
+                db.session.execute(
+                    db.select(_W).where(_W.client_id == data.client_id)
+                )
+                .scalars()
+                .one_or_none()
+            )
+            if existing_widget:
+                return existing_widget, False
+
+        if self.repo.count_widgets_for_dashboard(dashboard_id) >= MAX_WIDGETS_PER_DASHBOARD:
+            raise BusinessRuleError(
+                f"No se pueden agregar más de {MAX_WIDGETS_PER_DASHBOARD} widgets por dashboard."
+            )
+
+        widget_type_enum = WidgetType(data.widget_type)
+        config_dict = data.config.model_dump(exclude_none=True) if data.config else {}
+
+        widget = self.repo.create_widget(
+            dashboard_id=dashboard_id,
+            widget_type=widget_type_enum,
+            title=data.title,
+            position_x=data.position_x,
+            position_y=data.position_y,
+            width=data.width,
+            height=data.height,
+            config=config_dict,
+            client_id=data.client_id,
+        )
+        return widget, True
+
+    def update_widget(self, dashboard_id: UUID, widget_id: UUID, data: WidgetUpdate) -> DashboardWidget:
+        """
+        Update a widget's config or layout.
+
+        Raises:
+            NotFoundError: If the dashboard or widget does not exist, or widget
+                does not belong to the specified dashboard.
+        """
+        self.repo.get_by_id_or_fail(dashboard_id)
+        widget = self.repo.get_widget(widget_id)
+        if not widget or str(widget.dashboard_id) != str(dashboard_id):
+            raise NotFoundError("DashboardWidget", str(widget_id))
+
+        update_fields: dict = {}
+        if data.widget_type is not None:
+            update_fields["widget_type"] = WidgetType(data.widget_type)
+        if data.title is not None:
+            update_fields["title"] = data.title
+        if data.position_x is not None:
+            update_fields["position_x"] = data.position_x
+        if data.position_y is not None:
+            update_fields["position_y"] = data.position_y
+        if data.width is not None:
+            update_fields["width"] = data.width
+        if data.height is not None:
+            update_fields["height"] = data.height
+        if data.config is not None:
+            update_fields["config"] = data.config.model_dump(exclude_none=True)
+
+        return self.repo.update_widget(widget, **update_fields)
+
+    def delete_widget(self, dashboard_id: UUID, widget_id: UUID) -> None:
+        """
+        Delete a widget from a dashboard.
+
+        Raises:
+            NotFoundError: If the dashboard or widget does not exist, or widget
+                does not belong to the specified dashboard.
+        """
+        self.repo.get_by_id_or_fail(dashboard_id)
+        widget = self.repo.get_widget(widget_id)
+        if not widget or str(widget.dashboard_id) != str(dashboard_id):
+            raise NotFoundError("DashboardWidget", str(widget_id))
+        self.repo.delete_widget(widget)
