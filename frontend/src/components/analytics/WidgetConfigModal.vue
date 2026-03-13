@@ -248,7 +248,7 @@ watch(() => form.group_by, (groupBy) => {
 
 // day_of_week grouping ignores granularity (data bucketed by weekday, not time)
 const granularityDisabled = computed(
-  () => isNumberWidget.value || form.group_by === 'day_of_week'
+  () => isNumberWidget.value || form.group_by === 'day_of_week' || form.widget_type === 'pie'
 )
 
 // Number widget: group_by has no effect either

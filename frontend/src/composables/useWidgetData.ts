@@ -276,7 +276,7 @@ export function useWidgetData(
           case 'account':
             return accountMap.get(tx.account_id)?.name ?? 'Desconocida'
           case 'type':
-            return tx.type
+            return tx.type === 'income' ? 'Ingreso' : 'Gasto'
           case 'day_of_week':
             return DAY_NAMES[new Date(tx.date + 'T12:00:00').getDay()]
           case 'none':

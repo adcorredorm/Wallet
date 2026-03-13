@@ -70,19 +70,12 @@ const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
   plugins: {
     legend: {
       display: true,
-      position: 'bottom' as const,
+      position: 'right' as const,
       labels: {
         color: COLOR_TICK,
         boxWidth: 12,
-        padding: 12,
-        // Limit legend text length to prevent overflow on narrow mobile screens
-        generateLabels: (chart) => {
-          const original = ChartJS.defaults.plugins.legend.labels.generateLabels(chart)
-          return original.map((item) => ({
-            ...item,
-            text: item.text.length > 20 ? item.text.slice(0, 18) + '…' : item.text,
-          }))
-        },
+        padding: 8,
+        font: { size: 11 },
       },
     },
     tooltip: {
