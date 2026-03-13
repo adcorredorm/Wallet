@@ -177,11 +177,13 @@ window.addEventListener('wallet:sync-complete', () => {
   const transactionsStore = useTransactionsStore()
   const transfersStore = useTransfersStore()
   const categoriesStore = useCategoriesStore()
+  const dashboardsStore = useDashboardsStore()
   Promise.allSettled([
     accountsStore.refreshFromDB(),
     transactionsStore.refreshFromDB(),
     transfersStore.refreshFromDB(),
-    categoriesStore.refreshFromDB()
+    categoriesStore.refreshFromDB(),
+    dashboardsStore.refreshFromDB()
   ]).then(() => {
     // Recompute account balances from the complete local transaction history.
     // After fullReadSync, IndexedDB has all transactions from the server so
