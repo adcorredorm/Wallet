@@ -841,7 +841,7 @@ export class SyncManager {
    */
   private async markSynced(
     entityType: PendingMutation['entity_type'],
-    entityId: string,
+    _entityId: string,
     serverResult: { id: string; updated_at?: string }
   ): Promise<void> {
     const syncFields = {
