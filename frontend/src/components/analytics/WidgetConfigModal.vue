@@ -213,14 +213,6 @@ const granularityOptions = [
   { value: 'year', label: 'Año' }
 ]
 
-const groupByOptions = [
-  { value: 'none', label: 'Sin agrupación' },
-  { value: 'category', label: 'Categoría' },
-  { value: 'account', label: 'Cuenta' },
-  { value: 'type', label: 'Tipo' },
-  { value: 'day_of_week', label: 'Día de la semana' }
-]
-
 const aggregationOptions = [
   { value: 'sum', label: 'Suma' },
   { value: 'avg', label: 'Promedio' },
@@ -228,6 +220,56 @@ const aggregationOptions = [
   { value: 'min', label: 'Mínimo' },
   { value: 'max', label: 'Máximo' }
 ]
+
+// ---------------------------------------------------------------------------
+// Conditional disabling of fields based on widget_type / group_by
+// ---------------------------------------------------------------------------
+
+// Number widget: granularity and group_by have no visual effect
+const isNumberWidget = computed(() => form.widget_type === 'number')
+
+// Auto-reset incompatible field values when widget type changes
+watch(() => form.widget_type, (type) => {
+  if (type === 'number') {
+    form.group_by = 'none'
+  }
+  if ((type === 'stacked_bar' || type === 'line') && form.group_by === 'day_of_week') {
+    form.group_by = 'none'
+  }
+})
+
+// Auto-reset granularity when group_by changes to day_of_week
+watch(() => form.group_by, (groupBy) => {
+  if (groupBy === 'day_of_week') {
+    // granularity is irrelevant — reset to a safe default
+    form.granularity = 'month'
+  }
+})
+
+// day_of_week grouping ignores granularity (data bucketed by weekday, not time)
+const granularityDisabled = computed(
+  () => isNumberWidget.value || form.group_by === 'day_of_week'
+)
+
+// Number widget: group_by has no effect either
+const groupByDisabled = computed(() => isNumberWidget.value)
+
+// group_by options filtered by widget type:
+// stacked_bar doesn't support day_of_week (each series must be a category/account/type)
+const groupByOptions = computed(() => {
+  const base = [
+    { value: 'none', label: 'Sin agrupación' },
+    { value: 'category', label: 'Categoría' },
+    { value: 'account', label: 'Cuenta' },
+    { value: 'type', label: 'Tipo' },
+    { value: 'day_of_week', label: 'Día de la semana' }
+  ]
+  // day_of_week doesn't make sense for time-series charts (line, stacked_bar)
+  if (form.widget_type === 'stacked_bar' || form.widget_type === 'line') {
+    return base.filter(o => o.value !== 'day_of_week')
+  }
+  return base
+})
 
 // ---------------------------------------------------------------------------
 // Save handler
@@ -239,6 +281,7 @@ async function onSave() {
   try {
     if (props.widget) {
       await store.updateWidget(props.dashboardId, props.widget.id, {
+        widget_type: form.widget_type,  // allow changing chart type when editing
         title: form.title.trim(),
         config: builtConfig.value,
       })
@@ -379,11 +422,15 @@ async function onSave() {
           v-model="form.granularity"
           label="Granularidad"
           :options="granularityOptions"
+          :disabled="granularityDisabled"
+          :title="granularityDisabled ? (isNumberWidget ? 'No aplica para widget Número' : 'No aplica con agrupación por día de semana') : undefined"
         />
         <BaseSelect
           v-model="form.group_by"
           label="Agrupar por"
           :options="groupByOptions"
+          :disabled="groupByDisabled"
+          :title="groupByDisabled ? 'No aplica para widget Número' : undefined"
         />
         <BaseSelect
           v-model="form.aggregation"

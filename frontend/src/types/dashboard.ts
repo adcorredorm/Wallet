@@ -126,6 +126,7 @@ export interface CreateWidgetDto {
 
 /** DTO for updating a widget */
 export interface UpdateWidgetDto {
+  widget_type?: WidgetType  // changing chart type is allowed when editing
   title?: string
   position_x?: number
   position_y?: number
