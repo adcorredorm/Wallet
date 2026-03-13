@@ -185,12 +185,31 @@ export function useNetWorthHistory(
   // - _rangeDays (if passed as a Ref)
   // - granularity (derived from _rangeDays or override)
   // - settingsStore.primaryCurrency
-  // - exchangeRatesStore.rates (when rates refresh, recompute with new fallback rates)
+  // - exchangeRatesStore.rates / loading (see guard below)
   watchEffect(async () => {
     // Read reactive dependencies explicitly so Vue tracks them
     const rangeDays = _rangeDays.value
     const gran = granularity.value
     const primaryCurrency = settingsStore.primaryCurrency
+
+    // Guard: wait for exchange rates to be loaded before computing.
+    //
+    // On hard refresh the Service Worker is bypassed, so the exchange rates
+    // API response goes to the real network (100–500 ms). IndexedDB reads are
+    // macrotasks, so fetchRates() resolves AFTER Vue's microtask flush that
+    // runs this watchEffect. Without this guard the first render uses
+    // rates = [] and falls back to rate=1 for every foreign-currency account,
+    // producing a visually wrong chart (e.g. –3 M COP instead of 107 M COP).
+    //
+    // Subscribing to exchangeRatesStore.loading ensures the effect re-runs
+    // automatically once loading transitions true → false with rates populated.
+    // The rates ARE stored in Dexie (exchangeRates table) and fetchRates() reads
+    // them from there on every boot — we just need to wait for that read.
+    if (exchangeRatesStore.loading) {
+      loading.value = true
+      return
+    }
+
     // Touch rates.length to subscribe to rate updates — when rates refresh,
     // fallback rate lookups may change and the chart should recompute.
     void exchangeRatesStore.rates.length
