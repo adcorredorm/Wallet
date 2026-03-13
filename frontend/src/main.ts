@@ -94,6 +94,7 @@ import { useTransfersStore } from '@/stores/transfers'
 import { useCategoriesStore } from '@/stores/categories'
 import { useSettingsStore } from '@/stores/settings'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useDashboardsStore } from '@/stores/dashboards'
 
 const { isOnline, onOnline, onOffline } = useNetworkStatus()
 

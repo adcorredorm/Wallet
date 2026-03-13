@@ -13,6 +13,10 @@ const settingsStore = useSettingsStore()
 
 const showCreate = ref(false)
 const showSettings = ref(false)
+// editMode controls whether widget repositioning/resize/delete controls are visible.
+// Off by default so the dashboard renders cleanly without UI chrome covering charts.
+// The toggle works on both desktop and mobile.
+const editMode = ref(false)
 
 onMounted(async () => {
   await store.ensureStarterDashboard()
@@ -49,18 +53,33 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- "+" button: opens DashboardCreateModal.
-           Placed in the trailing edge of the header — the conventional location
-           for primary create actions on mobile (thumb-friendly far right). -->
-      <button
-        class="header-icon-btn"
-        aria-label="Crear nuevo dashboard"
-        @click="showCreate = true"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
+      <div class="flex items-center gap-1">
+        <!-- Edit layout toggle — shows/hides widget action controls.
+             "Editar" = view mode → enter edit mode.
+             "Listo"  = edit mode → exit edit mode.
+             Works on desktop (replaces hover-triggered controls) and on
+             mobile (was previously inaccessible with no hover). -->
+        <button
+          v-if="store.currentDashboard"
+          class="header-icon-btn"
+          :class="editMode ? 'text-indigo-400' : ''"
+          :aria-label="editMode ? 'Salir de modo edición' : 'Editar layout del dashboard'"
+          @click="editMode = !editMode"
+        >
+          <span class="text-xs font-medium px-1">{{ editMode ? 'Listo' : 'Editar' }}</span>
+        </button>
+
+        <!-- "+" button: opens DashboardCreateModal. -->
+        <button
+          class="header-icon-btn"
+          aria-label="Crear nuevo dashboard"
+          @click="showCreate = true"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Dashboard Selector -->
@@ -77,7 +96,7 @@ onMounted(async () => {
     </div>
 
     <!-- Grid -->
-    <DashboardGrid v-else class="flex-1 overflow-auto p-4" />
+    <DashboardGrid v-else class="flex-1 overflow-auto p-4" :edit-mode="editMode" />
   </div>
 
   <!-- Create modal — always mounted to avoid prop reactivity issues on first render -->

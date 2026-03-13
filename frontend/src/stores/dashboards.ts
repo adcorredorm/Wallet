@@ -489,6 +489,23 @@ export const useDashboardsStore = defineStore('dashboards', () => {
     try {
       const data = await db.dashboards.toArray()
       dashboards.value = data as LocalDashboard[]
+
+      // Also refresh currentDashboard so widget IDs match the server state.
+      // Without this, after fullReadSync the store may hold stale IDs from the
+      // previous session, causing updateWidget/deleteWidget calls to 404.
+      if (currentDashboard.value) {
+        const freshWidgets = await db.dashboardWidgets
+          .where('dashboard_id')
+          .equals(currentDashboard.value.id)
+          .toArray()
+        const freshDash = data.find(d => d.id === currentDashboard.value!.id)
+        if (freshDash) {
+          currentDashboard.value = {
+            ...freshDash,
+            widgets: freshWidgets as LocalDashboardWidget[]
+          }
+        }
+      }
     } catch (err) {
       console.warn('[dashboards store] refreshFromDB failed:', err)
     }

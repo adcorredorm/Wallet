@@ -30,7 +30,7 @@
  * arithmetic shifted by 1 so the range is 1–4 not 0–3.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import { useDashboardsStore } from '@/stores/dashboards'
 import type { DashboardWidget } from '@/types/dashboard'
@@ -42,10 +42,14 @@ import type { DashboardWidget } from '@/types/dashboard'
 const props = defineProps<{
   widget: DashboardWidget
   dashboardId: string
+  widgetIndex: number    // position in sorted order (0-based)
+  totalWidgets: number   // total number of widgets
+  cols: number           // grid columns (layout_columns)
 }>()
 
 const emit = defineEmits<{
   edit: []
+  move: [direction: 'up' | 'down' | 'left' | 'right']
 }>()
 
 // ---------------------------------------------------------------------------
@@ -63,8 +67,13 @@ const store = useDashboardsStore()
 const visible = ref(false)
 const showDeleteConfirm = ref(false)
 const deleting = ref(false)
-const moving = ref(false)
-const resizing = ref(false)
+// Note: max 12 widgets per dashboard (matches backend limit MAX_WIDGETS_PER_DASHBOARD)
+
+// Derived disabled states based on index/cols instead of x/y coordinates
+const canMoveUp    = computed(() => props.widgetIndex >= props.cols)
+const canMoveDown  = computed(() => props.widgetIndex < props.totalWidgets - props.cols)
+const canMoveLeft  = computed(() => props.widgetIndex % props.cols !== 0)
+const canMoveRight = computed(() => props.widgetIndex % props.cols !== props.cols - 1 && props.widgetIndex < props.totalWidgets - 1)
 
 function toggleVisible(e: Event) {
   e.stopPropagation()
@@ -90,31 +99,14 @@ onUnmounted(() => {
 // Action handlers
 // ---------------------------------------------------------------------------
 
-async function move(dx: number, dy: number) {
-  moving.value = true
-  try {
-    await store.updateWidget(props.dashboardId, props.widget.id, {
-      position_x: Math.max(0, props.widget.position_x + dx),
-      position_y: Math.max(0, props.widget.position_y + dy),
-    })
-  } catch (e) {
-    console.error('Error moving widget:', e)
-  } finally {
-    moving.value = false
-  }
+// Emit move event to DashboardGrid which handles local swap + background API save
+function move(dx: number, dy: number) {
+  if (dy === -1) emit('move', 'up')
+  else if (dy === 1) emit('move', 'down')
+  else if (dx === -1) emit('move', 'left')
+  else if (dx === 1) emit('move', 'right')
 }
 
-async function cycleWidth() {
-  resizing.value = true
-  try {
-    const next = (props.widget.width % 4) + 1
-    await store.updateWidget(props.dashboardId, props.widget.id, { width: next })
-  } catch (e) {
-    console.error('Error resizing widget:', e)
-  } finally {
-    resizing.value = false
-  }
-}
 
 async function onConfirmDelete() {
   deleting.value = true
@@ -152,19 +144,8 @@ function onEdit() {
     :class="{ 'is-visible': visible }"
     @click.stop
   >
-    <!-- Tap-to-show trigger (mobile) — a small handle in the top-right corner.
-         On desktop this is hidden because :hover on the parent handles reveal. -->
-    <button
-      class="action-trigger"
-      aria-label="Mostrar acciones del widget"
-      @click="toggleVisible"
-    >
-      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-        <circle cx="12" cy="5" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="12" cy="19" r="1.5" />
-      </svg>
-    </button>
+    <!-- 3-dot trigger removed: overlay visibility is now controlled globally
+         by the "Editar" toggle in the dashboard header, not per-widget. -->
 
     <!-- Action buttons panel -->
     <div class="actions-panel">
@@ -173,7 +154,7 @@ function onEdit() {
         <!-- ↑ Move up -->
         <button
           class="icon-btn"
-          :disabled="moving || widget.position_y === 0"
+          :disabled="!canMoveUp"
           aria-label="Mover arriba"
           @click="move(0, -1)"
         >
@@ -182,10 +163,10 @@ function onEdit() {
           </svg>
         </button>
 
-        <!-- ← Move left -->
+        <!-- ← Move left — hidden on mobile (single-column, only up/down makes sense) -->
         <button
-          class="icon-btn"
-          :disabled="moving || widget.position_x === 0"
+          class="icon-btn mobile-hidden"
+          :disabled="!canMoveLeft"
           aria-label="Mover izquierda"
           @click="move(-1, 0)"
         >
@@ -197,7 +178,7 @@ function onEdit() {
         <!-- ↓ Move down -->
         <button
           class="icon-btn"
-          :disabled="moving"
+          :disabled="!canMoveDown"
           aria-label="Mover abajo"
           @click="move(0, 1)"
         >
@@ -206,10 +187,10 @@ function onEdit() {
           </svg>
         </button>
 
-        <!-- → Move right -->
+        <!-- → Move right — hidden on mobile (single-column, only up/down makes sense) -->
         <button
-          class="icon-btn"
-          :disabled="moving"
+          class="icon-btn mobile-hidden"
+          :disabled="!canMoveRight"
           aria-label="Mover derecha"
           @click="move(1, 0)"
         >
@@ -221,20 +202,6 @@ function onEdit() {
 
       <!-- Row 2: utility actions -->
       <div class="utility-row">
-        <!-- Resize: cycle width 1→2→3→4→1 -->
-        <button
-          class="icon-btn"
-          :disabled="resizing"
-          :aria-label="`Ancho actual: ${widget.width}. Cambiar ancho`"
-          @click="cycleWidth"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
-          </svg>
-          <span class="width-badge">{{ widget.width }}</span>
-        </button>
-
         <!-- Edit: open WidgetConfigModal -->
         <button
           class="icon-btn"
@@ -425,5 +392,19 @@ function onEdit() {
   font-weight: 700;
   color: #3b82f6;
   line-height: 1;
+}
+/*
+ * Hide left/right arrows on mobile — in single-column layout only
+ * up/down reordering makes sense. Shown again on md+ where the grid
+ * has multiple columns and horizontal moves are meaningful.
+ */
+.mobile-hidden {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .mobile-hidden {
+    display: flex;
+  }
 }
 </style>
