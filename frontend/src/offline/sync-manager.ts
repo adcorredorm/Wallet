@@ -692,7 +692,8 @@ export class SyncManager {
     mutation: PendingMutation,
     payload: Record<string, unknown>
   ): Promise<DashboardWidget> {
-    const dashboardId = payload['dashboard_id'] as string
+    const dashboardId = payload['dashboard_id'] as string | undefined
+    if (!dashboardId) throw new Error(`[SyncManager] sendDashboardWidget: missing dashboard_id in payload for entity ${mutation.entity_id}`)
 
     switch (mutation.operation) {
       case 'create': {
