@@ -44,6 +44,10 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
+  // Single-flight guard for ensureStarterDashboard to prevent concurrent calls
+  // from creating duplicate starter dashboards
+  let _ensureStarterInFlight = false
+
 
   // ---------------------------------------------------------------------------
   // Actions — Reads (stale-while-revalidate)
@@ -401,69 +405,75 @@ export const useDashboardsStore = defineStore('dashboards', () => {
    *   - Line chart: expense trend over last 90 days
    */
   async function ensureStarterDashboard() {
-    await fetchDashboards()
+    if (_ensureStarterInFlight) return
+    _ensureStarterInFlight = true
+    try {
+      await fetchDashboards()
 
-    if (dashboards.value.length > 0) return
+      if (dashboards.value.length > 0) return
 
-    const settingsStore = useSettingsStore()
+      const settingsStore = useSettingsStore()
 
-    const newDashboard = await createDashboard({
-      name: 'Mi Dashboard',
-      display_currency: settingsStore.primaryCurrency,
-      layout_columns: 2
-    })
+      const newDashboard = await createDashboard({
+        name: 'Mi Dashboard',
+        display_currency: settingsStore.primaryCurrency,
+        layout_columns: 2
+      })
 
-    // Create the 3 default widgets sequentially to preserve position order
-    await createWidget(newDashboard.id, {
-      widget_type: 'bar',
-      title: 'Gastos por Categoría (Este Mes)',
-      position_x: 0,
-      position_y: 0,
-      width: 2,
-      height: 1,
-      config: {
-        time_range: { type: 'dynamic', value: 'this_month' },
-        filters: { type: 'expense' },
-        granularity: 'month',
-        group_by: 'category',
-        aggregation: 'sum'
-      }
-    })
+      // Create the 3 default widgets sequentially to preserve position order
+      await createWidget(newDashboard.id, {
+        widget_type: 'bar',
+        title: 'Gastos por Categoría (Este Mes)',
+        position_x: 0,
+        position_y: 0,
+        width: 2,
+        height: 1,
+        config: {
+          time_range: { type: 'dynamic', value: 'this_month' },
+          filters: { type: 'expense' },
+          granularity: 'month',
+          group_by: 'category',
+          aggregation: 'sum'
+        }
+      })
 
-    await createWidget(newDashboard.id, {
-      widget_type: 'number',
-      title: 'Total Gastos (Este Mes)',
-      position_x: 0,
-      position_y: 1,
-      width: 1,
-      height: 1,
-      config: {
-        time_range: { type: 'dynamic', value: 'this_month' },
-        filters: { type: 'expense' },
-        granularity: 'month',
-        group_by: 'none',
-        aggregation: 'sum'
-      }
-    })
+      await createWidget(newDashboard.id, {
+        widget_type: 'number',
+        title: 'Total Gastos (Este Mes)',
+        position_x: 0,
+        position_y: 1,
+        width: 1,
+        height: 1,
+        config: {
+          time_range: { type: 'dynamic', value: 'this_month' },
+          filters: { type: 'expense' },
+          granularity: 'month',
+          group_by: 'none',
+          aggregation: 'sum'
+        }
+      })
 
-    await createWidget(newDashboard.id, {
-      widget_type: 'line',
-      title: 'Tendencia de Gastos (Últimos 90 días)',
-      position_x: 1,
-      position_y: 1,
-      width: 1,
-      height: 1,
-      config: {
-        time_range: { type: 'dynamic', value: 'last_90_days' },
-        filters: { type: 'expense' },
-        granularity: 'week',
-        group_by: 'none',
-        aggregation: 'sum'
-      }
-    })
+      await createWidget(newDashboard.id, {
+        widget_type: 'line',
+        title: 'Tendencia de Gastos (Últimos 90 días)',
+        position_x: 1,
+        position_y: 1,
+        width: 1,
+        height: 1,
+        config: {
+          time_range: { type: 'dynamic', value: 'last_90_days' },
+          filters: { type: 'expense' },
+          granularity: 'week',
+          group_by: 'none',
+          aggregation: 'sum'
+        }
+      })
 
-    // Load the newly created dashboard with its widgets as currentDashboard
-    await fetchDashboard(newDashboard.id)
+      // Load the newly created dashboard with its widgets as currentDashboard
+      await fetchDashboard(newDashboard.id)
+    } finally {
+      _ensureStarterInFlight = false
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -476,8 +486,12 @@ export const useDashboardsStore = defineStore('dashboards', () => {
    * pulled into Dexie by the SyncManager.
    */
   async function refreshFromDB() {
-    const data = await db.dashboards.toArray()
-    dashboards.value = data as LocalDashboard[]
+    try {
+      const data = await db.dashboards.toArray()
+      dashboards.value = data as LocalDashboard[]
+    } catch (err) {
+      console.warn('[dashboards store] refreshFromDB failed:', err)
+    }
   }
 
   // ---------------------------------------------------------------------------
