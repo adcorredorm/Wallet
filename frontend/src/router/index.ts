@@ -122,6 +122,16 @@ const router = createRouter({
       }
     },
     {
+      path: '/analytics',
+      name: 'analytics',
+      component: () => import('@/views/AnalyticsView.vue'),
+      meta: {
+        title: 'Analytics',
+        showInBottomNav: true,
+        icon: 'chart-bar'
+      }
+    },
+    {
       path: '/categories',
       name: 'categories',
       component: () => import('@/views/categories/CategoriesListView.vue'),
