@@ -44,32 +44,6 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Convert an API dashboard response to a LocalDashboard for Dexie storage.
-   * Sets _sync_status to 'synced' because the data came from the server.
-   */
-  function toLocalDashboard(dashboard: DashboardWithWidgets | LocalDashboard): LocalDashboard {
-    const now = new Date().toISOString()
-    // Strip widgets if present (DashboardWithWidgets) — Dexie stores them separately
-    const { widgets: _widgets, ...rest } = dashboard as DashboardWithWidgets & { widgets?: unknown }
-    return {
-      ...rest,
-      _sync_status: 'synced',
-      _local_updated_at: now
-    } as LocalDashboard
-  }
-
-  /**
-   * Convert an API widget response to a LocalDashboardWidget for Dexie storage.
-   */
-  function toLocalWidget(widget: LocalDashboardWidget): LocalDashboardWidget {
-    const now = new Date().toISOString()
-    return {
-      ...widget,
-      _sync_status: 'synced',
-      _local_updated_at: now
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Actions — Reads (stale-while-revalidate)
@@ -153,12 +127,6 @@ export const useDashboardsStore = defineStore('dashboards', () => {
           const now = new Date().toISOString()
 
           // Persist dashboard
-          const localDash: LocalDashboard = {
-            ...serverData,
-            widgets: undefined as never, // strip nested widgets before storing
-            _sync_status: 'synced',
-            _local_updated_at: now
-          }
           // Remove the widgets key entirely for Dexie storage
           const { widgets: serverWidgets, ...dashboardOnly } = serverData
           const dashForDexie: LocalDashboard = {
@@ -406,9 +374,10 @@ export const useDashboardsStore = defineStore('dashboards', () => {
 
       // Remove from currentDashboard if it matches
       if (currentDashboard.value?.id === dashboardId) {
+        const filteredWidgets = currentDashboard.value.widgets.filter(w => w.id !== widgetId)
         currentDashboard.value = {
           ...currentDashboard.value,
-          widgets: currentDashboard.value.widgets.filter(w => w.id !== widgetId)
+          widgets: filteredWidgets as LocalDashboardWidget[]
         }
       }
     } catch (err: any) {
