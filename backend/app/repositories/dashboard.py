@@ -98,7 +98,13 @@ class DashboardRepository(BaseRepository[Dashboard]):
         return widget
 
     def update_widget(self, widget: DashboardWidget, **kwargs) -> DashboardWidget:
-        """Update an existing DashboardWidget (accepts all values from service)."""
+        """
+        Update an existing DashboardWidget.
+
+        Unlike BaseRepository.update(), this method unconditionally applies all
+        provided keys including falsy values (0, False). The service layer is
+        responsible for only passing fields that should be changed.
+        """
         for key, value in kwargs.items():
             setattr(widget, key, value)
         db.session.commit()

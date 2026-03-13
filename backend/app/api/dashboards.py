@@ -50,6 +50,13 @@ def _serialize_widget(widget) -> dict:
 
 @dashboards_bp.route("", methods=["GET"])
 def list_dashboards():
+    """
+    List all dashboards.
+
+    Returns:
+        200: List of dashboards
+        500: Internal server error
+    """
     try:
         dashboards = _service.list_dashboards()
         return success_response(data=[_serialize_dashboard(d) for d in dashboards])
@@ -59,6 +66,17 @@ def list_dashboards():
 
 @dashboards_bp.route("", methods=["POST"])
 def create_dashboard():
+    """
+    Create a new dashboard.
+
+    Request Body:
+        DashboardCreate schema
+
+    Returns:
+        201: Dashboard created (or 200 if idempotent duplicate)
+        400: Validation error
+        500: Internal server error
+    """
     try:
         body = DashboardCreate.model_validate(request.get_json(force=True) or {})
         dashboard, created = _service.create_dashboard(body)
@@ -74,6 +92,17 @@ def create_dashboard():
 
 @dashboards_bp.route("/<uuid:dashboard_id>", methods=["GET"])
 def get_dashboard(dashboard_id: UUID):
+    """
+    Get a single dashboard with its widgets.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+
+    Returns:
+        200: Dashboard with widgets
+        404: Dashboard not found
+        500: Internal server error
+    """
     try:
         dashboard = _service.get_dashboard(dashboard_id)
         widgets = _service.list_widgets(dashboard_id)
@@ -86,6 +115,21 @@ def get_dashboard(dashboard_id: UUID):
 
 @dashboards_bp.route("/<uuid:dashboard_id>", methods=["PUT"])
 def update_dashboard(dashboard_id: UUID):
+    """
+    Update an existing dashboard.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+
+    Request Body:
+        DashboardUpdate schema
+
+    Returns:
+        200: Updated dashboard
+        400: Validation error
+        404: Dashboard not found
+        500: Internal server error
+    """
     try:
         body = DashboardUpdate.model_validate(request.get_json(force=True) or {})
         dashboard = _service.update_dashboard(dashboard_id, body)
@@ -100,9 +144,20 @@ def update_dashboard(dashboard_id: UUID):
 
 @dashboards_bp.route("/<uuid:dashboard_id>", methods=["DELETE"])
 def delete_dashboard(dashboard_id: UUID):
+    """
+    Delete a dashboard.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+
+    Returns:
+        200: Dashboard deleted successfully
+        404: Dashboard not found
+        500: Internal server error
+    """
     try:
         _service.delete_dashboard(dashboard_id)
-        return success_response(data={"message": "Dashboard eliminado correctamente."})
+        return success_response(message="Dashboard eliminado correctamente.")
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
@@ -111,6 +166,21 @@ def delete_dashboard(dashboard_id: UUID):
 
 @dashboards_bp.route("/<uuid:dashboard_id>/widgets", methods=["POST"])
 def create_widget(dashboard_id: UUID):
+    """
+    Create a new widget for a dashboard.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+
+    Request Body:
+        WidgetCreate schema
+
+    Returns:
+        201: Widget created (or 200 if idempotent duplicate)
+        400: Validation error
+        404: Dashboard not found
+        500: Internal server error
+    """
     try:
         body = WidgetCreate.model_validate(request.get_json(force=True) or {})
         widget, created = _service.create_widget(dashboard_id, body)
@@ -126,6 +196,22 @@ def create_widget(dashboard_id: UUID):
 
 @dashboards_bp.route("/<uuid:dashboard_id>/widgets/<uuid:widget_id>", methods=["PUT"])
 def update_widget(dashboard_id: UUID, widget_id: UUID):
+    """
+    Update an existing widget.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+        widget_id (UUID): Widget ID
+
+    Request Body:
+        WidgetUpdate schema
+
+    Returns:
+        200: Updated widget
+        400: Validation error
+        404: Dashboard or widget not found
+        500: Internal server error
+    """
     try:
         body = WidgetUpdate.model_validate(request.get_json(force=True) or {})
         widget = _service.update_widget(dashboard_id, widget_id, body)
@@ -140,9 +226,21 @@ def update_widget(dashboard_id: UUID, widget_id: UUID):
 
 @dashboards_bp.route("/<uuid:dashboard_id>/widgets/<uuid:widget_id>", methods=["DELETE"])
 def delete_widget(dashboard_id: UUID, widget_id: UUID):
+    """
+    Delete a widget from a dashboard.
+
+    Path Parameters:
+        dashboard_id (UUID): Dashboard ID
+        widget_id (UUID): Widget ID
+
+    Returns:
+        200: Widget deleted successfully
+        404: Dashboard or widget not found
+        500: Internal server error
+    """
     try:
         _service.delete_widget(dashboard_id, widget_id)
-        return success_response(data={"message": "Widget eliminado correctamente."})
+        return success_response(message="Widget eliminado correctamente.")
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
