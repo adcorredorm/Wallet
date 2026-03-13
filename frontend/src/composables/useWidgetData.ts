@@ -33,6 +33,7 @@ import type { LocalTransaction, LocalAccount, LocalCategory } from '@/offline'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
 import { useTransactionsStore } from '@/stores/transactions'
+import { useTransfersStore } from '@/stores/transfers'
 import type {
   DashboardWidget,
   AnalyticsResult,
@@ -147,6 +148,7 @@ export function useWidgetData(
   const exchangeRatesStore = useExchangeRatesStore()
   const settingsStore = useSettingsStore()
   const transactionsStore = useTransactionsStore()
+  const transfersStore = useTransfersStore()
 
   // Normalize to computed refs so watchEffect tracks them
   const widgetRef = computed(() => isRef(widget) ? widget.value : widget)
@@ -166,6 +168,7 @@ export function useWidgetData(
     const primaryCurrency = settingsStore.primaryCurrency
     void exchangeRatesStore.rates.length
     void transactionsStore.transactions.length
+    void transfersStore.transfers.length
 
     loading.value = true
 
@@ -313,14 +316,21 @@ export function useWidgetData(
         const groupsWithData = new Set(collected.keys())
         const labels = DAY_NAMES_ORDERED.filter((name) => groupsWithData.has(name))
 
-        const datasets = labels.map((dayName) => {
+        // Build datasets, omitting groups with all-zero aggregated values
+        const datasets: { label: string; data: number[] }[] = []
+        for (const dayName of labels) {
           const groupMap = collected.get(dayName)
           const values = groupMap?.get('_') ?? []
-          return {
-            label: dayName,
-            data: [aggregate(values, aggregation)],
+          const aggregated = aggregate(values, aggregation)
+
+          // Omit groups where the aggregated value is 0
+          if (aggregated !== 0) {
+            datasets.push({
+              label: dayName,
+              data: [aggregated],
+            })
           }
-        })
+        }
 
         result.value = {
           labels,
