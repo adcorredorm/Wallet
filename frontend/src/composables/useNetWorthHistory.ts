@@ -192,27 +192,30 @@ export function useNetWorthHistory(
     const gran = granularity.value
     const primaryCurrency = settingsStore.primaryCurrency
 
-    // Guard: wait for exchange rates to be loaded before computing.
+    // Read BOTH loading and rates.length BEFORE any early return so Vue
+    // tracks them as reactive dependencies even when we exit early.
+    // If we accessed rates.length only AFTER the guard, Vue would not
+    // subscribe to it during the early-return path — so when rates finally
+    // arrived (0 → 9) the effect would never re-run and the chart would
+    // stay stuck showing the wrong values.
+    const isRatesLoading = exchangeRatesStore.loading
+    const ratesCount = exchangeRatesStore.rates.length
+
+    // Guard: wait for exchange rates to be available before computing.
     //
-    // On hard refresh the Service Worker is bypassed, so the exchange rates
-    // API response goes to the real network (100–500 ms). IndexedDB reads are
-    // macrotasks, so fetchRates() resolves AFTER Vue's microtask flush that
-    // runs this watchEffect. Without this guard the first render uses
-    // rates = [] and falls back to rate=1 for every foreign-currency account,
-    // producing a visually wrong chart (e.g. –3 M COP instead of 107 M COP).
+    // Two cases that require waiting:
+    //   1. isRatesLoading = true  → fetchRates() is still reading IndexedDB.
+    //   2. isRatesLoading = false, ratesCount = 0 → IDB was empty on this
+    //      boot; the background API call is in-flight. We wait here and
+    //      re-run once ratesCount changes (subscribed above).
     //
-    // Subscribing to exchangeRatesStore.loading ensures the effect re-runs
-    // automatically once loading transitions true → false with rates populated.
-    // The rates ARE stored in Dexie (exchangeRates table) and fetchRates() reads
-    // them from there on every boot — we just need to wait for that read.
-    if (exchangeRatesStore.loading) {
+    // Without this guard the first render uses rate=1 for every foreign-
+    // currency account, producing a visually wrong chart on hard refresh
+    // (e.g. –3 M COP instead of 107 M COP).
+    if (isRatesLoading || ratesCount === 0) {
       loading.value = true
       return
     }
-
-    // Touch rates.length to subscribe to rate updates — when rates refresh,
-    // fallback rate lookups may change and the chart should recompute.
-    void exchangeRatesStore.rates.length
     // Subscribe to transaction/transfer store updates so the chart recomputes
     // automatically when sync completes (refreshFromDB) or when the user adds
     // a new transaction. The composable reads from Dexie directly but needs
