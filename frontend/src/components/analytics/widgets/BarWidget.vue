@@ -41,13 +41,21 @@ const { result, loading, isEmpty } = useWidgetData(
   computed(() => props.displayCurrency),
 )
 
+// day_of_week uses 1 dataset with 7 bars — give each bar its own color
+const isDayOfWeek = computed(() => props.widget.config.group_by === 'day_of_week')
+
 const chartData = computed(() => ({
   labels: result.value?.labels ?? [],
   datasets: (result.value?.datasets ?? []).map((ds, i) => ({
     label: ds.label,
     data: ds.data,
-    backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + 'cc',
-    borderColor: CHART_COLORS[i % CHART_COLORS.length],
+    // day_of_week: array of colors (one per bar); time-series: single color per dataset
+    backgroundColor: isDayOfWeek.value
+      ? ds.data.map((_, j) => CHART_COLORS[j % CHART_COLORS.length] + 'cc')
+      : CHART_COLORS[i % CHART_COLORS.length] + 'cc',
+    borderColor: isDayOfWeek.value
+      ? ds.data.map((_, j) => CHART_COLORS[j % CHART_COLORS.length])
+      : CHART_COLORS[i % CHART_COLORS.length],
     borderWidth: 1,
     borderRadius: 3,
   })),
@@ -59,7 +67,8 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
   animation: { duration: 200 },
   plugins: {
     legend: {
-      display: true,
+      // Hide legend for day_of_week: x-axis labels already identify each bar
+      display: !isDayOfWeek.value,
       labels: { color: COLOR_TICK, boxWidth: 12, padding: 12 },
     },
     tooltip: {

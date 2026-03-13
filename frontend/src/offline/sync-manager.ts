@@ -1080,7 +1080,12 @@ export class SyncManager {
       // Back-off wait — blocks the current iteration for this mutation only.
       await new Promise<void>((resolve) => setTimeout(resolve, delay))
 
-      await mutationQueue.incrementRetry(mutation.id!, String(error))
+      const errorMsg = isApiError(error)
+        ? `HTTP ${error.status}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : String(error)
+      await mutationQueue.incrementRetry(mutation.id!, errorMsg)
 
       if (nextRetryCount >= MAX_RETRIES) {
         const errorMessage = 'Max retries exceeded'

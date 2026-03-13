@@ -46,22 +46,37 @@ const { result, loading, isEmpty } = useWidgetData(
   computed(() => props.displayCurrency),
 )
 
-// Each dataset (group) becomes one arc. Its value is the sum of all time buckets
-// in that dataset — collapsing the time dimension into a single proportional value.
-const chartData = computed(() => ({
-  labels: result.value?.datasets.map((ds) => ds.label) ?? [],
-  datasets: [
-    {
-      data: result.value?.datasets.map((ds) =>
-        ds.data.reduce((acc, val) => acc + val, 0),
-      ) ?? [],
-      backgroundColor: CHART_COLORS.slice(0, result.value?.datasets.length ?? 0),
-      borderColor: '#1e293b',  // dark-bg-secondary — creates a subtle gap between arcs
-      borderWidth: 2,
-      hoverOffset: 4,
-    },
-  ],
-}))
+// day_of_week uses a different result format: labels = day names, 1 dataset with 7 values.
+// Standard format: each dataset = one group (category/account/type), labels = time buckets.
+const isDayOfWeek = computed(() => props.widget.config.group_by === 'day_of_week')
+
+const arcStyles = { borderColor: '#1e293b', borderWidth: 2, hoverOffset: 4 }
+
+const chartData = computed(() => {
+  if (!result.value) return { labels: [], datasets: [{ data: [], backgroundColor: [], ...arcStyles }] }
+
+  if (isDayOfWeek.value) {
+    // day_of_week: result.labels = 7 day names, result.datasets[0].data = 7 values
+    return {
+      labels: result.value.labels,
+      datasets: [{
+        data: result.value.datasets[0]?.data ?? [],
+        backgroundColor: CHART_COLORS.slice(0, result.value.labels.length),
+        ...arcStyles,
+      }],
+    }
+  }
+
+  // Standard: each dataset is one slice; sum its time-bucket data for the arc value
+  return {
+    labels: result.value.datasets.map((ds) => ds.label),
+    datasets: [{
+      data: result.value.datasets.map((ds) => ds.data.reduce((acc, val) => acc + val, 0)),
+      backgroundColor: CHART_COLORS.slice(0, result.value.datasets.length),
+      ...arcStyles,
+    }],
+  }
+})
 
 const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
   responsive: true,

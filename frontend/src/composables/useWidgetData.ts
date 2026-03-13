@@ -312,30 +312,22 @@ export function useWidgetData(
 
       // ── Step 7 & 8: Aggregate and format result ───────────────────────────
       if (group_by === 'day_of_week') {
-        // day_of_week: labels are weekday names that have data, ordered Mon-Sun
-        const groupsWithData = new Set(collected.keys())
-        const labels = DAY_NAMES_ORDERED.filter((name) => groupsWithData.has(name))
-
-        // Build datasets, omitting groups with all-zero aggregated values
-        const datasets: { label: string; data: number[] }[] = []
-        for (const dayName of labels) {
+        // day_of_week: labels = all 7 weekday names (Mon-Sun) as x-axis positions.
+        // ONE dataset with 7 values (0 for days that have no transactions).
+        // This allows bar/pie charts to show each day as its own column/slice,
+        // with empty days still present (per user requirement).
+        const dayData = DAY_NAMES_ORDERED.map((dayName) => {
           const groupMap = collected.get(dayName)
           const values = groupMap?.get('_') ?? []
-          const aggregated = aggregate(values, aggregation)
+          return aggregate(values, aggregation)
+        })
 
-          // Omit groups where the aggregated value is 0
-          if (aggregated !== 0) {
-            datasets.push({
-              label: dayName,
-              data: [aggregated],
-            })
-          }
-        }
+        const totalSum = dayData.reduce((a, b) => a + b, 0)
 
         result.value = {
-          labels,
-          datasets,
-          totals: buildTotals(collected, aggregation),
+          labels: DAY_NAMES_ORDERED,      // always all 7 days
+          datasets: [{ label: '', data: dayData }],  // 1 dataset, 7 values
+          totals: { '': totalSum },
           metadata: {
             date_from: dateFrom,
             date_to: dateTo,
