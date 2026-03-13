@@ -107,7 +107,7 @@ function moveWidget(widgetId: string, direction: 'up' | 'down' | 'left' | 'right
 function gridStyle(w: { width: number; height: number }) {
   return {
     gridColumn: `auto / span ${w.width}`,
-    minHeight: `${w.height * 160}px`,
+    minHeight: `${w.height * 200}px`,  // 200px fits action controls (~180px) with breathing room
   }
 }
 
@@ -153,7 +153,7 @@ function closeConfigModal() {
 
     <button
       v-if="props.editMode"
-      class="add-widget-btn mt-3"
+      class="add-widget-btn mt-16"
       @click="addingWidget = true"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
