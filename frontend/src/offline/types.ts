@@ -24,6 +24,7 @@ import type { Account } from '@/types/account'
 import type { Transaction } from '@/types/transaction'
 import type { Transfer } from '@/types/transfer'
 import type { Category } from '@/types/category'
+import type { Dashboard, DashboardWidget } from '@/types/dashboard'
 
 // Union literal — intentionally not an enum so it can be used as a plain
 // string comparison without a runtime import.
@@ -130,4 +131,16 @@ export interface LocalSetting {
   updated_at: string       // ISO timestamp of the last server sync
   _sync_status: SyncStatus // Offline-first sync state (same pattern as other entities)
   _local_updated_at: string // ISO timestamp for LWW conflict resolution
+}
+
+export interface LocalDashboard extends Dashboard {
+  server_id?: string
+  _sync_status: SyncStatus
+  _local_updated_at: string
+}
+
+export interface LocalDashboardWidget extends DashboardWidget {
+  server_id?: string
+  _sync_status: SyncStatus
+  _local_updated_at: string
 }

@@ -23,6 +23,8 @@
  * - Version 3 adds exchangeRates and settings tables for multi-currency support.
  * - Version 4 introduces base_rate on transactions/transfers; clears all tables
  *   (test data only) so no records exist without base_rate.
+ * - Version 5 adds dashboards and dashboardWidgets tables for the customizable
+ *   analytics dashboard feature (Fase B). New tables start empty — no upgrade needed.
  */
 
 import Dexie, { type Table } from 'dexie'
@@ -33,7 +35,9 @@ import type {
   LocalCategory,
   PendingMutation,
   LocalExchangeRate,
-  LocalSetting
+  LocalSetting,
+  LocalDashboard,
+  LocalDashboardWidget
 } from './types'
 
 class WalletDB extends Dexie {
@@ -46,6 +50,8 @@ class WalletDB extends Dexie {
   pendingMutations!: Table<PendingMutation>
   exchangeRates!: Table<LocalExchangeRate>
   settings!: Table<LocalSetting>
+  dashboards!: Table<LocalDashboard>
+  dashboardWidgets!: Table<LocalDashboardWidget>
 
   constructor() {
     super('WalletDB')
@@ -126,6 +132,21 @@ class WalletDB extends Dexie {
           tx.table('settings').clear()
         ])
       })
+
+    this.version(5).stores({
+      // All existing tables carried forward
+      accounts: 'id, server_id, type, active, _sync_status',
+      transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+      transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+      categories: 'id, server_id, type, parent_category_id, _sync_status',
+      pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+      exchangeRates: 'currency_code',
+      settings: 'key, _sync_status',
+      // New in v5 — dashboard configuration cache
+      dashboards: 'id, server_id, is_default, sort_order, _sync_status',
+      dashboardWidgets: 'id, server_id, dashboard_id, _sync_status'
+    })
+    // No upgrade() needed — new tables start empty
   }
 }
 

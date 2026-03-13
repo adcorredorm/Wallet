@@ -26,5 +26,7 @@ export type {
   PendingMutation,
   SyncStatus,
   LocalExchangeRate,
-  LocalSetting
+  LocalSetting,
+  LocalDashboard,
+  LocalDashboardWidget
 } from './types'
