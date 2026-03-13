@@ -24,12 +24,6 @@ class Dashboard(BaseModel):
     """
 
     __tablename__ = "dashboards"
-    __table_args__ = (
-        CheckConstraint(
-            "layout_columns >= 1 AND layout_columns <= 4",
-            name="ck_dashboards_layout_columns",
-        ),
-    )
 
     name = Column(String(100), nullable=False)
     description = Column(String(500), nullable=True)
@@ -37,3 +31,15 @@ class Dashboard(BaseModel):
     layout_columns = Column(Integer, nullable=False, default=2)
     is_default = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        CheckConstraint(
+            "layout_columns >= 1 AND layout_columns <= 4",
+            name="ck_dashboards_layout_columns",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the dashboard."""
+        default_marker = " [default]" if self.is_default else ""
+        return f"<Dashboard '{self.name}'{default_marker}>"

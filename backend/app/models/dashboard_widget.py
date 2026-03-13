@@ -50,12 +50,6 @@ class DashboardWidget(BaseModel):
     """
 
     __tablename__ = "dashboard_widgets"
-    __table_args__ = (
-        CheckConstraint("width >= 1 AND width <= 4", name="ck_widgets_width"),
-        CheckConstraint("height >= 1 AND height <= 3", name="ck_widgets_height"),
-        CheckConstraint("position_x >= 0", name="ck_widgets_position_x"),
-        CheckConstraint("position_y >= 0", name="ck_widgets_position_y"),
-    )
 
     dashboard_id = Column(
         UUID(as_uuid=True),
@@ -72,3 +66,14 @@ class DashboardWidget(BaseModel):
     config = Column(JSONB, nullable=False, default=dict)
 
     dashboard = relationship("Dashboard", backref="widgets")
+
+    __table_args__ = (
+        CheckConstraint("width >= 1 AND width <= 4", name="ck_widgets_width"),
+        CheckConstraint("height >= 1 AND height <= 3", name="ck_widgets_height"),
+        CheckConstraint("position_x >= 0", name="ck_widgets_position_x"),
+        CheckConstraint("position_y >= 0", name="ck_widgets_position_y"),
+    )
+
+    def __repr__(self) -> str:
+        """String representation of the dashboard widget."""
+        return f"<DashboardWidget {self.widget_type.value} '{self.title}'>"
