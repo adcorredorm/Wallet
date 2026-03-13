@@ -156,6 +156,16 @@ function closeConfigModal() {
     opacity: 1;
     pointer-events: auto;
   }
+
+  /* Hide the action trigger until the widget is hovered (desktop only) */
+  .widget-item :deep(.action-trigger) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .widget-item:hover :deep(.action-trigger) {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /*
