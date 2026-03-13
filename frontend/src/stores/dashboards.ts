@@ -2,15 +2,14 @@
  * Dashboards Store
  *
  * Manages the state for user-defined analytics dashboards and their widgets.
- * Follows the same offline-first patterns as the accounts store, but with a
- * key difference: write operations (create/update/delete) use direct API calls
- * rather than the mutation queue. Dashboards are configuration data, not
- * financial records — they don't need offline-first write semantics because
- * the user is configuring an analytics view, which inherently requires
- * connectivity to be useful.
+ * Follows the same offline-first patterns as accounts/transactions/transfers:
  *
- * Read operations still follow stale-while-revalidate: IndexedDB is read
- * first for instant cold-start, then the API is fetched in the background.
+ *   Read  — stale-while-revalidate: IndexedDB is read first for instant cold-start,
+ *            then the API is fetched in the background and Dexie is updated.
+ *   Write — three-step mutation queue pattern:
+ *             1. Write optimistic record to Dexie (_sync_status: 'pending')
+ *             2. Update Pinia reactive state immediately (zero-latency UI)
+ *             3. Enqueue a PendingMutation for background sync via SyncManager
  *
  * ensureStarterDashboard() is called on first visit to /analytics and creates
  * a default dashboard with 3 expense widgets if the user has none.
@@ -19,7 +18,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { dashboardsApi } from '@/api/dashboards'
-import { db } from '@/offline'
+import { db, mutationQueue } from '@/offline'
+import { generateTempId } from '@/offline/temp-id'
 import { useSettingsStore } from '@/stores/settings'
 import type {
   DashboardWithWidgets,
@@ -186,8 +186,9 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   // ---------------------------------------------------------------------------
 
   /**
-   * Create a new dashboard via the API, then persist to Dexie and update state.
-   * Defaults display_currency to the user's primaryCurrency if not provided.
+   * Create a dashboard — offline-first.
+   * Generates a local UUID, persists to Dexie immediately, then syncs to API
+   * in background. On success, reconciles the server-assigned ID.
    */
   async function createDashboard(dto: CreateDashboardDto) {
     const settingsStore = useSettingsStore()
@@ -199,16 +200,33 @@ export const useDashboardsStore = defineStore('dashboards', () => {
     loading.value = true
     error.value = null
     try {
-      const created = await dashboardsApi.create(payload)
+      const tempId = generateTempId()
       const now = new Date().toISOString()
-      const localDash: LocalDashboard = {
-        ...created,
-        _sync_status: 'synced',
-        _local_updated_at: now
+      const optimistic: LocalDashboard = {
+        id: tempId,
+        name: payload.name,
+        description: payload.description ?? null,
+        display_currency: payload.display_currency,
+        layout_columns: payload.layout_columns ?? 2,
+        is_default: payload.is_default ?? false,
+        sort_order: payload.sort_order ?? 0,
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending',
+        _local_updated_at: now,
       }
-      await db.dashboards.put(localDash)
-      dashboards.value.push(localDash)
-      return created
+
+      await db.dashboards.put(optimistic)
+      dashboards.value.push(optimistic)
+
+      await mutationQueue.enqueue({
+        entity_type: 'dashboard',
+        entity_id: tempId,
+        operation: 'create',
+        payload: { ...payload, client_id: tempId } as Record<string, unknown>,
+      })
+
+      return optimistic
     } catch (err: any) {
       error.value = err.message || 'Error al crear dashboard'
       throw err
@@ -218,36 +236,52 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   }
 
   /**
-   * Update an existing dashboard via the API, then update Dexie and state.
+   * Update a dashboard — offline-first.
+   * Merges changes into Dexie immediately, then syncs to API in background.
    */
   async function updateDashboard(id: string, dto: UpdateDashboardDto) {
     loading.value = true
     error.value = null
     try {
-      const updated = await dashboardsApi.update(id, dto)
+      const existing = await db.dashboards.get(id)
+      if (!existing) throw new Error('Dashboard not found in local DB')
+
       const now = new Date().toISOString()
-      const localDash: LocalDashboard = {
-        ...updated,
-        _sync_status: 'synced',
-        _local_updated_at: now
+      const patch = {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.display_currency !== undefined && { display_currency: dto.display_currency }),
+        ...(dto.layout_columns !== undefined && { layout_columns: dto.layout_columns }),
+        ...(dto.is_default !== undefined && { is_default: dto.is_default }),
+        ...(dto.sort_order !== undefined && { sort_order: dto.sort_order }),
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
       }
-      await db.dashboards.put(localDash)
 
-      // Update in dashboards list
+      await db.dashboards.update(id, patch)
+      const optimistic: LocalDashboard = { ...existing, ...patch }
+
       const idx = dashboards.value.findIndex(d => d.id === id)
-      if (idx >= 0) {
-        dashboards.value[idx] = localDash
-      }
-
-      // Update currentDashboard if it's the one being edited
+      if (idx >= 0) dashboards.value[idx] = optimistic
       if (currentDashboard.value?.id === id) {
-        currentDashboard.value = {
-          ...localDash,
-          widgets: currentDashboard.value.widgets
-        }
+        currentDashboard.value = { ...optimistic, widgets: currentDashboard.value.widgets }
       }
 
-      return updated
+      // Merge into pending CREATE if one exists (avoids POST + PATCH round-trip)
+      const pendingCreate = await mutationQueue.findPendingCreate('dashboard', id)
+      if (pendingCreate?.id != null) {
+        await mutationQueue.updatePayload(pendingCreate.id, { ...pendingCreate.payload, ...dto })
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'dashboard',
+          entity_id: id,
+          operation: 'update',
+          payload: dto as Record<string, unknown>,
+        })
+      }
+
+      return optimistic
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar dashboard'
       throw err
@@ -257,31 +291,32 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   }
 
   /**
-   * Delete a dashboard via the API, then remove from Dexie and state.
-   * Also deletes all widgets belonging to the dashboard from Dexie.
+   * Delete a dashboard — offline-first.
+   * Removes from Dexie and state immediately, then deletes from API in background.
    */
   async function deleteDashboard(id: string) {
     loading.value = true
     error.value = null
     try {
-      await dashboardsApi.delete(id)
-
-      // Remove dashboard from Dexie
       await db.dashboards.delete(id)
+      const widgetIds = await db.dashboardWidgets.where('dashboard_id').equals(id).primaryKeys()
+      if (widgetIds.length > 0) await db.dashboardWidgets.bulkDelete(widgetIds)
 
-      // Remove all widgets for this dashboard from Dexie
-      const widgetIds = await db.dashboardWidgets
-        .where('dashboard_id')
-        .equals(id)
-        .primaryKeys()
-      if (widgetIds.length > 0) {
-        await db.dashboardWidgets.bulkDelete(widgetIds)
-      }
-
-      // Update reactive state
       dashboards.value = dashboards.value.filter(d => d.id !== id)
-      if (currentDashboard.value?.id === id) {
-        currentDashboard.value = null
+      if (currentDashboard.value?.id === id) currentDashboard.value = null
+
+      // If there is a pending CREATE (dashboard never reached server), cancel it
+      const pendingCreate = await mutationQueue.findPendingCreate('dashboard', id)
+      if (pendingCreate?.id != null) {
+        await mutationQueue.remove(pendingCreate.id)
+        // No DELETE mutation needed — entity never existed on server
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'dashboard',
+          entity_id: id,
+          operation: 'delete',
+          payload: {},
+        })
       }
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar dashboard'
@@ -292,34 +327,53 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Actions — Widget CRUD (direct API calls)
+  // Actions — Widget CRUD (offline-first)
   // ---------------------------------------------------------------------------
 
   /**
-   * Create a widget in a dashboard via the API, persist to Dexie, add to state.
+   * Create a widget — offline-first.
+   * Generates a local UUID, persists to Dexie immediately, then syncs to API
+   * in background. On success, reconciles the server-assigned ID.
    */
   async function createWidget(dashboardId: string, dto: CreateWidgetDto) {
     loading.value = true
     error.value = null
     try {
-      const created = await dashboardsApi.createWidget(dashboardId, dto)
+      const tempId = generateTempId()
       const now = new Date().toISOString()
-      const localWidget: LocalDashboardWidget = {
-        ...created,
-        _sync_status: 'synced',
-        _local_updated_at: now
+      const optimistic: LocalDashboardWidget = {
+        id: tempId,
+        dashboard_id: dashboardId,
+        widget_type: dto.widget_type,
+        title: dto.title,
+        position_x: dto.position_x ?? 0,
+        position_y: dto.position_y ?? 0,
+        width: dto.width ?? 1,
+        height: dto.height ?? 1,
+        config: dto.config,
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending',
+        _local_updated_at: now,
       }
-      await db.dashboardWidgets.put(localWidget)
 
-      // Add to currentDashboard if it matches
+      await db.dashboardWidgets.put(optimistic)
       if (currentDashboard.value?.id === dashboardId) {
         currentDashboard.value = {
           ...currentDashboard.value,
-          widgets: [...currentDashboard.value.widgets, localWidget]
+          widgets: [...currentDashboard.value.widgets, optimistic],
         }
       }
 
-      return created
+      await mutationQueue.enqueue({
+        entity_type: 'dashboard_widget',
+        entity_id: tempId,
+        operation: 'create',
+        // dashboard_id is included so SyncManager can route to the correct endpoint
+        payload: { ...dto, dashboard_id: dashboardId, client_id: tempId } as Record<string, unknown>,
+      })
+
+      return optimistic
     } catch (err: any) {
       error.value = err.message || 'Error al crear widget'
       throw err
@@ -329,35 +383,60 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   }
 
   /**
-   * Update a widget via the API, persist to Dexie, update in state.
+   * Update a widget — offline-first.
+   *
+   * 1. Merge dto into existing Dexie record and persist immediately (_sync_status: 'pending').
+   * 2. Update reactive state so the UI reflects the change instantly.
+   * 3. Fire API call in background; on success mark as 'synced'. On failure, leave
+   *    as 'pending' — the next fetchDashboard revalidation will reconcile.
    */
   async function updateWidget(dashboardId: string, widgetId: string, dto: UpdateWidgetDto) {
     loading.value = true
     error.value = null
     try {
-      const updated = await dashboardsApi.updateWidget(dashboardId, widgetId, dto)
-      const now = new Date().toISOString()
-      const localWidget: LocalDashboardWidget = {
-        ...updated,
-        _sync_status: 'synced',
-        _local_updated_at: now
-      }
-      await db.dashboardWidgets.put(localWidget)
+      const existing = await db.dashboardWidgets.get(widgetId)
+      if (!existing) throw new Error('Widget not found in local DB')
 
-      // Update in currentDashboard if it matches
+      const now = new Date().toISOString()
+      const patch = {
+        ...(dto.widget_type !== undefined && { widget_type: dto.widget_type }),
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.config !== undefined && { config: dto.config }),
+        ...(dto.position_x !== undefined && { position_x: dto.position_x }),
+        ...(dto.position_y !== undefined && { position_y: dto.position_y }),
+        ...(dto.width !== undefined && { width: dto.width }),
+        ...(dto.height !== undefined && { height: dto.height }),
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
+      }
+
+      await db.dashboardWidgets.update(widgetId, patch)
+      const optimistic: LocalDashboardWidget = { ...existing, ...patch }
+
       if (currentDashboard.value?.id === dashboardId) {
         const widgetIdx = currentDashboard.value.widgets.findIndex(w => w.id === widgetId)
         if (widgetIdx >= 0) {
           const newWidgets = [...currentDashboard.value.widgets]
-          newWidgets[widgetIdx] = localWidget
-          currentDashboard.value = {
-            ...currentDashboard.value,
-            widgets: newWidgets
-          }
+          newWidgets[widgetIdx] = optimistic
+          currentDashboard.value = { ...currentDashboard.value, widgets: newWidgets }
         }
       }
 
-      return updated
+      const pendingCreate = await mutationQueue.findPendingCreate('dashboard_widget', widgetId)
+      if (pendingCreate?.id != null) {
+        await mutationQueue.updatePayload(pendingCreate.id, { ...pendingCreate.payload, ...dto })
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'dashboard_widget',
+          entity_id: widgetId,
+          operation: 'update',
+          // dashboard_id is needed by SyncManager to build the correct URL
+          payload: { ...dto, dashboard_id: dashboardId } as Record<string, unknown>,
+        })
+      }
+
+      return optimistic
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar widget'
       throw err
@@ -367,22 +446,34 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   }
 
   /**
-   * Delete a widget via the API, remove from Dexie, remove from state.
+   * Delete a widget — offline-first.
+   * Removes from Dexie and state immediately, then deletes from API in background.
    */
   async function deleteWidget(dashboardId: string, widgetId: string) {
     loading.value = true
     error.value = null
     try {
-      await dashboardsApi.deleteWidget(dashboardId, widgetId)
       await db.dashboardWidgets.delete(widgetId)
-
-      // Remove from currentDashboard if it matches
       if (currentDashboard.value?.id === dashboardId) {
-        const filteredWidgets = currentDashboard.value.widgets.filter(w => w.id !== widgetId)
         currentDashboard.value = {
           ...currentDashboard.value,
-          widgets: filteredWidgets as LocalDashboardWidget[]
+          widgets: currentDashboard.value.widgets.filter(
+            w => w.id !== widgetId
+          ) as LocalDashboardWidget[],
         }
+      }
+
+      const pendingCreate = await mutationQueue.findPendingCreate('dashboard_widget', widgetId)
+      if (pendingCreate?.id != null) {
+        await mutationQueue.remove(pendingCreate.id)
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'dashboard_widget',
+          entity_id: widgetId,
+          operation: 'delete',
+          // dashboard_id is required by SyncManager to build the DELETE URL
+          payload: { dashboard_id: dashboardId },
+        })
       }
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar widget'
