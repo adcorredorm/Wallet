@@ -13,13 +13,18 @@ from sqlalchemy import (
     Enum,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from app.models.base import BaseModel
 
 
-class WidgetType(enum.Enum):
-    """Supported chart / display types for a widget."""
+class WidgetType(str, enum.Enum):
+    """Supported chart / display types for a widget.
+
+    Inheriting from str ensures SQLAlchemy uses the enum VALUE (lowercase)
+    when persisting to PostgreSQL, not the enum NAME (uppercase). This matches
+    the PostgreSQL enum type created by migration 006 which uses lowercase values.
+    """
 
     LINE = "line"
     PIE = "pie"
@@ -57,7 +62,14 @@ class DashboardWidget(BaseModel):
         nullable=False,
         index=True,
     )
-    widget_type = Column(Enum(WidgetType), nullable=False)
+    widget_type = Column(
+        # values_callable tells SQLAlchemy to use the enum VALUES (lowercase: 'bar')
+        # rather than the enum NAMES (uppercase: 'BAR') when persisting to PostgreSQL.
+        # This matches the PostgreSQL enum type created in migration 006 which uses
+        # lowercase values ('line', 'bar', 'pie', 'stacked_bar', 'number').
+        Enum(WidgetType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
     title = Column(String(100), nullable=False)
     position_x = Column(Integer, nullable=False, default=0)
     position_y = Column(Integer, nullable=False, default=0)
@@ -65,7 +77,12 @@ class DashboardWidget(BaseModel):
     height = Column(Integer, nullable=False, default=1)
     config = Column(JSONB, nullable=False, default=dict)
 
-    dashboard = relationship("Dashboard", backref="widgets")
+    # passive_deletes=True lets the DB ON DELETE CASCADE handle widget removal
+    # when a dashboard is deleted, instead of SQLAlchemy nullifying dashboard_id.
+    dashboard = relationship(
+        "Dashboard",
+        backref=backref("widgets", passive_deletes=True)
+    )
 
     __table_args__ = (
         CheckConstraint("width >= 1 AND width <= 4", name="ck_widgets_width"),
