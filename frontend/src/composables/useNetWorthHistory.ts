@@ -80,15 +80,15 @@ export interface UseNetWorthHistoryReturn {
 
 /**
  * Auto-select granularity from range size.
- * ≤7d   → day    (1S: 7 pts, 1 pt/day)
- * ≤30d  → triday (1M: ~10 pts, 1 pt/3 days)
- * ≤456d → month  (1A: 12 pts, YTD: ≤12 pts, Todo ≤15 months: ≤15 pts)
- * >456d → year   (Todo >15 months: 1 pt/year)
+ * ≤7d  → day    (1S: 7 pts, 1 pt/day)
+ * ≤30d → triday (1M: ~10 pts, 1 pt/3 days)
+ * ≤730d → month (1A: 12 pts, YTD: ≤12 pts, Todo short: ~15 pts)
+ * >730d → year
  */
 function selectGranularity(days: number): Granularity {
   if (days <= 7) return 'day'
   if (days <= 30) return 'triday'
-  if (days <= 456) return 'month'
+  if (days <= 730) return 'month'
   return 'year'
 }
 
@@ -185,24 +185,12 @@ export function useNetWorthHistory(
   // - _rangeDays (if passed as a Ref)
   // - granularity (derived from _rangeDays or override)
   // - settingsStore.primaryCurrency
-  // - exchangeRatesStore.rates / exchangeRatesStore.loading
+  // - exchangeRatesStore.rates (when rates refresh, recompute with new fallback rates)
   watchEffect(async () => {
     // Read reactive dependencies explicitly so Vue tracks them
     const rangeDays = _rangeDays.value
     const gran = granularity.value
     const primaryCurrency = settingsStore.primaryCurrency
-
-    // Guard: if exchange rates are still loading from IndexedDB on first boot,
-    // skip this run and wait. This prevents the hard-refresh race condition where
-    // watchEffect fires before fetchRates() resolves — without this guard, every
-    // foreign-currency account would use rate=1, producing a wrong net worth chart.
-    // Subscribing to exchangeRatesStore.loading here ensures watchEffect re-runs
-    // automatically once loading transitions false → rates are available.
-    if (exchangeRatesStore.loading) {
-      loading.value = true
-      return
-    }
-
     // Touch rates.length to subscribe to rate updates — when rates refresh,
     // fallback rate lookups may change and the chart should recompute.
     void exchangeRatesStore.rates.length
