@@ -49,6 +49,7 @@ import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useTransfersStore } from '@/stores/transfers'
+import { useSyncStore } from '@/stores/sync'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,6 +154,7 @@ export function useNetWorthHistory(
   const settingsStore = useSettingsStore()
   const transactionsStore = useTransactionsStore()
   const transfersStore = useTransfersStore()
+  const syncStore = useSyncStore()
 
   // Resolve reactive options to plain computed values
   const _rangeDays = computed<number>(() => {
@@ -192,27 +194,28 @@ export function useNetWorthHistory(
     const gran = granularity.value
     const primaryCurrency = settingsStore.primaryCurrency
 
-    // Read BOTH loading and rates.length BEFORE any early return so Vue
-    // tracks them as reactive dependencies even when we exit early.
-    // If we accessed rates.length only AFTER the guard, Vue would not
-    // subscribe to it during the early-return path — so when rates finally
-    // arrived (0 → 9) the effect would never re-run and the chart would
-    // stay stuck showing the wrong values.
+    // Read ALL reactive dependencies BEFORE any early return so Vue tracks
+    // them even on the early-return path and re-runs when they change.
     const isRatesLoading = exchangeRatesStore.loading
     const ratesCount = exchangeRatesStore.rates.length
+    // Subscribe to sync state: re-run when isSyncing transitions true→false
+    // so the chart recomputes with fresh IndexedDB data after fullReadSync.
+    // This fixes the hard-refresh bug where the chart shows stale -3M values
+    // and never self-corrects (the transactions.length stays constant at 5
+    // even after sync because the same 5 records are overwritten in place).
+    const isSyncing = syncStore.isSyncing
 
-    // Guard: wait for exchange rates to be available before computing.
-    //
-    // Two cases that require waiting:
-    //   1. isRatesLoading = true  → fetchRates() is still reading IndexedDB.
-    //   2. isRatesLoading = false, ratesCount = 0 → IDB was empty on this
-    //      boot; the background API call is in-flight. We wait here and
-    //      re-run once ratesCount changes (subscribed above).
-    //
-    // Without this guard the first render uses rate=1 for every foreign-
-    // currency account, producing a visually wrong chart on hard refresh
-    // (e.g. –3 M COP instead of 107 M COP).
+    // Guard 1: wait for exchange rates (would produce rate=1 for USD otherwise)
     if (isRatesLoading || ratesCount === 0) {
+      loading.value = true
+      return
+    }
+
+    // Guard 2: wait for the initial fullReadSync to complete on hard refresh.
+    // processQueue() sets isSyncing=true synchronously before its first await,
+    // so by the time the first watchEffect microtask fires, isSyncing is already
+    // true. The chart will recompute once isSyncing goes false (sync done).
+    if (isSyncing) {
       loading.value = true
       return
     }
