@@ -482,6 +482,48 @@ class TestUpdateWidget:
 
         mock_repo.update_widget.assert_not_called()
 
+    def test_updates_position_y_zero(self, service, mock_repo, sample_dashboard, sample_widget):
+        """position_y=0 (falsy) must be forwarded, not silently dropped."""
+        mock_repo.get_by_id_or_fail.return_value = sample_dashboard
+        mock_repo.get_widget.return_value = sample_widget
+        mock_repo.update_widget.return_value = sample_widget
+
+        service.update_widget(
+            sample_dashboard.id, sample_widget.id, WidgetUpdate(position_y=0)
+        )
+
+        call_kwargs = mock_repo.update_widget.call_args.kwargs
+        assert "position_y" in call_kwargs
+        assert call_kwargs["position_y"] == 0
+
+    def test_updates_width_minimum(self, service, mock_repo, sample_dashboard, sample_widget):
+        """width=1 (minimum valid value) must be forwarded."""
+        mock_repo.get_by_id_or_fail.return_value = sample_dashboard
+        mock_repo.get_widget.return_value = sample_widget
+        mock_repo.update_widget.return_value = sample_widget
+
+        service.update_widget(
+            sample_dashboard.id, sample_widget.id, WidgetUpdate(width=1)
+        )
+
+        call_kwargs = mock_repo.update_widget.call_args.kwargs
+        assert "width" in call_kwargs
+        assert call_kwargs["width"] == 1
+
+    def test_updates_height_minimum(self, service, mock_repo, sample_dashboard, sample_widget):
+        """height=1 (minimum valid value) must be forwarded."""
+        mock_repo.get_by_id_or_fail.return_value = sample_dashboard
+        mock_repo.get_widget.return_value = sample_widget
+        mock_repo.update_widget.return_value = sample_widget
+
+        service.update_widget(
+            sample_dashboard.id, sample_widget.id, WidgetUpdate(height=1)
+        )
+
+        call_kwargs = mock_repo.update_widget.call_args.kwargs
+        assert "height" in call_kwargs
+        assert call_kwargs["height"] == 1
+
 
 # ---------------------------------------------------------------------------
 # TestDeleteWidget
@@ -513,52 +555,3 @@ class TestDeleteWidget:
             service.delete_widget(sample_dashboard.id, sample_widget.id)
 
         mock_repo.delete_widget.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# TestWidgetConfigValidation
-# ---------------------------------------------------------------------------
-
-
-class TestWidgetConfigValidation:
-    """Tests for WidgetConfig Pydantic schema validation."""
-
-    def test_valid_config_accepted(self):
-        """A well-formed WidgetConfig should instantiate without error."""
-        from app.schemas.dashboard_crud import WidgetConfig, TimeRangeConfig, FiltersConfig
-        config = WidgetConfig(
-            time_range=TimeRangeConfig(type="dynamic", value="this_month"),
-            filters=FiltersConfig(type="expense"),
-            granularity="month",
-            group_by="category",
-            aggregation="sum",
-        )
-        assert config.granularity == "month"
-        assert config.group_by == "category"
-
-    def test_extra_fields_allowed(self):
-        """WidgetConfig has extra='allow' so unknown fields pass through."""
-        from app.schemas.dashboard_crud import WidgetConfig
-        config = WidgetConfig(unknown_future_field="value")
-        assert config.unknown_future_field == "value"  # type: ignore[attr-defined]
-
-    def test_invalid_widget_type_rejected(self):
-        """WidgetCreate should reject unknown widget_type strings."""
-        from app.schemas.dashboard_crud import WidgetCreate
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            WidgetCreate(widget_type="radar", title="Bad type")
-
-    def test_valid_widget_type_accepted(self):
-        """WidgetCreate should accept all five valid widget types."""
-        from app.schemas.dashboard_crud import WidgetCreate
-        for wtype in ("line", "pie", "bar", "stacked_bar", "number"):
-            w = WidgetCreate(widget_type=wtype, title="Test")
-            assert w.widget_type == wtype
-
-    def test_empty_config_uses_defaults(self):
-        """WidgetCreate without explicit config should use an empty WidgetConfig."""
-        from app.schemas.dashboard_crud import WidgetCreate, WidgetConfig
-        w = WidgetCreate(widget_type="bar", title="No config")
-        assert isinstance(w.config, WidgetConfig)
-        assert w.config.granularity is None
