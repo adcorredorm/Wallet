@@ -56,6 +56,16 @@ class DashboardRepository(BaseRepository[Dashboard]):
         """Get a single DashboardWidget by ID."""
         return db.session.get(DashboardWidget, widget_id)
 
+    def get_widget_by_client_id(self, client_id: str) -> Optional[DashboardWidget]:
+        """Get a DashboardWidget by its client_id idempotency key."""
+        return (
+            db.session.execute(
+                db.select(DashboardWidget).where(DashboardWidget.client_id == client_id)
+            )
+            .scalars()
+            .one_or_none()
+        )
+
     def get_widgets_for_dashboard(self, dashboard_id: UUID) -> list[DashboardWidget]:
         """Return all widgets for a dashboard ordered by position."""
         return (
@@ -88,10 +98,9 @@ class DashboardRepository(BaseRepository[Dashboard]):
         return widget
 
     def update_widget(self, widget: DashboardWidget, **kwargs) -> DashboardWidget:
-        """Update an existing DashboardWidget (skips None values)."""
+        """Update an existing DashboardWidget (accepts all values from service)."""
         for key, value in kwargs.items():
-            if value is not None:
-                setattr(widget, key, value)
+            setattr(widget, key, value)
         db.session.commit()
         db.session.refresh(widget)
         return widget

@@ -117,15 +117,7 @@ class DashboardCrudService:
         self.repo.get_by_id_or_fail(dashboard_id)
 
         if data.client_id:
-            from app.extensions import db
-            from app.models.dashboard_widget import DashboardWidget as _W
-            existing_widget = (
-                db.session.execute(
-                    db.select(_W).where(_W.client_id == data.client_id)
-                )
-                .scalars()
-                .one_or_none()
-            )
+            existing_widget = self.repo.get_widget_by_client_id(data.client_id)
             if existing_widget:
                 return existing_widget, False
 
