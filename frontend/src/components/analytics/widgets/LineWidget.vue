@@ -37,25 +37,14 @@ import {
   Legend,
   Filler,
   type ChartOptions,
+  type TooltipItem,
 } from 'chart.js'
 import type { DashboardWidget } from '@/types/dashboard'
 import { useWidgetData } from '@/composables/useWidgetData'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import { CHART_COLORS, COLOR_GRID, COLOR_TICK, COLOR_TOOLTIP_BG, COLOR_TOOLTIP_TEXT } from '@/utils/chartColors'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
-
-// ── Color palette — dark-mode safe, consistent across all widget types ────────
-// These match the brand palette defined in the system prompt and tailwind.config.
-const CHART_COLORS = [
-  '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6',
-  '#8b5cf6', '#f97316', '#14b8a6', '#ec4899', '#84cc16',
-]
-
-// Chart.js grid/tick colors — from dark-bg-tertiary and dark-text-tertiary
-const COLOR_GRID = 'rgba(51, 65, 85, 0.5)'
-const COLOR_TICK = '#94a3b8'
-const COLOR_TOOLTIP_BG = '#1e293b'
-const COLOR_TOOLTIP_TEXT = '#f1f5f9'
 
 const props = defineProps<{
   widget: DashboardWidget
@@ -82,7 +71,7 @@ const chartData = computed(() => ({
   })),
 }))
 
-const chartOptions: ChartOptions<'line'> = {
+const chartOptions = computed<ChartOptions<'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: { duration: 200 },
@@ -99,6 +88,16 @@ const chartOptions: ChartOptions<'line'> = {
       bodyColor: COLOR_TOOLTIP_TEXT,
       borderColor: 'rgba(51, 65, 85, 0.8)',
       borderWidth: 1,
+      callbacks: {
+        label: (context: TooltipItem<'line'>) => {
+          const value = context.parsed.y ?? 0
+          return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: props.displayCurrency,
+            maximumFractionDigits: 0,
+          }).format(value)
+        },
+      },
     },
   },
   scales: {
@@ -112,7 +111,7 @@ const chartOptions: ChartOptions<'line'> = {
       ticks: { color: COLOR_TICK },
     },
   },
-}
+}))
 </script>
 
 <template>

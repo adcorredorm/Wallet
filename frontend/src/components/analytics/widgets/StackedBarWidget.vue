@@ -24,22 +24,14 @@ import {
   Tooltip,
   Legend,
   type ChartOptions,
+  type TooltipItem,
 } from 'chart.js'
 import type { DashboardWidget } from '@/types/dashboard'
 import { useWidgetData } from '@/composables/useWidgetData'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
+import { CHART_COLORS, COLOR_GRID, COLOR_TICK, COLOR_TOOLTIP_BG, COLOR_TOOLTIP_TEXT } from '@/utils/chartColors'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
-
-const CHART_COLORS = [
-  '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6',
-  '#8b5cf6', '#f97316', '#14b8a6', '#ec4899', '#84cc16',
-]
-
-const COLOR_GRID = 'rgba(51, 65, 85, 0.5)'
-const COLOR_TICK = '#94a3b8'
-const COLOR_TOOLTIP_BG = '#1e293b'
-const COLOR_TOOLTIP_TEXT = '#f1f5f9'
 
 const props = defineProps<{
   widget: DashboardWidget
@@ -64,7 +56,7 @@ const chartData = computed(() => ({
 }))
 
 // stacked: true on both axes is the key difference from BarWidget
-const chartOptions: ChartOptions<'bar'> = {
+const chartOptions = computed<ChartOptions<'bar'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: { duration: 200 },
@@ -81,6 +73,16 @@ const chartOptions: ChartOptions<'bar'> = {
       bodyColor: COLOR_TOOLTIP_TEXT,
       borderColor: 'rgba(51, 65, 85, 0.8)',
       borderWidth: 1,
+      callbacks: {
+        label: (context: TooltipItem<'bar'>) => {
+          const value = context.parsed.y ?? 0
+          return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: props.displayCurrency,
+            maximumFractionDigits: 0,
+          }).format(value)
+        },
+      },
     },
   },
   scales: {
@@ -96,7 +98,7 @@ const chartOptions: ChartOptions<'bar'> = {
       ticks: { color: COLOR_TICK },
     },
   },
-}
+}))
 </script>
 
 <template>

@@ -101,7 +101,7 @@ function assignBucket(date: string, granularity: AnalyticsGranularity): string {
     case 'day':
       return date
     case 'week':
-      return format(startOfISOWeek(d), "yyyy-'W'II")
+      return format(startOfISOWeek(d), "RRRR-'W'II")
     case 'month':
       return format(d, 'yyyy-MM')
     case 'quarter':
