@@ -237,15 +237,17 @@ async function onSave() {
   if (!form.title.trim()) return
   saving.value = true
   try {
-    const dto = {
-      widget_type: form.widget_type,
-      title: form.title.trim(),
-      config: builtConfig.value
-    }
     if (props.widget) {
-      await store.updateWidget(props.dashboardId, props.widget.id, dto)
+      await store.updateWidget(props.dashboardId, props.widget.id, {
+        title: form.title.trim(),
+        config: builtConfig.value,
+      })
     } else {
-      await store.createWidget(props.dashboardId, dto)
+      await store.createWidget(props.dashboardId, {
+        widget_type: form.widget_type,
+        title: form.title.trim(),
+        config: builtConfig.value
+      })
     }
     emit('close')
   } catch (e) {
