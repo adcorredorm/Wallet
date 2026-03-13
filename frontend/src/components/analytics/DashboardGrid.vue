@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useDashboardsStore } from '@/stores/dashboards'
 import WidgetRenderer from '@/components/analytics/WidgetRenderer.vue'
+import WidgetActions from '@/components/analytics/WidgetActions.vue'
+import WidgetConfigModal from '@/components/analytics/WidgetConfigModal.vue'
+import type { DashboardWidget } from '@/types/dashboard'
 
 const store = useDashboardsStore()
 const dashboard = computed(() => store.currentDashboard)
+
+// Widget being edited via WidgetConfigModal.
+// null means no editing is in progress (modal closed).
+const editingWidget = ref<DashboardWidget | null>(null)
+
+// Controls the "Agregar widget" flow — opens WidgetConfigModal in create mode.
+const addingWidget = ref(false)
 
 /**
  * Returns the inline CSS grid placement styles for a widget.
@@ -27,6 +37,11 @@ function gridStyle(w: { position_x: number; position_y: number; width: number; h
     minHeight: `${w.height * 160}px`,
   }
 }
+
+function closeConfigModal() {
+  addingWidget.value = false
+  editingWidget.value = null
+}
 </script>
 
 <template>
@@ -41,15 +56,26 @@ function gridStyle(w: { position_x: number; position_y: number; width: number; h
       class="grid gap-3 grid-cols-1"
       :style="{ '--grid-cols': dashboard.layout_columns }"
     >
+      <!--
+        Each widget cell is position: relative so WidgetActions can use
+        position: absolute to overlay the full cell. The `group` Tailwind class
+        enables the CSS sibling/parent hover trick: on desktop we use
+        `.widget-item:hover .widget-actions` to reveal the overlay without JS.
+      -->
       <div
         v-for="widget in dashboard.widgets"
         :key="widget.id"
-        class="widget-item rounded-lg overflow-hidden"
+        class="widget-item rounded-lg overflow-hidden relative"
         :style="gridStyle(widget)"
       >
         <WidgetRenderer
           :widget="widget"
           :display-currency="dashboard.display_currency"
+        />
+        <WidgetActions
+          :widget="widget"
+          :dashboard-id="dashboard.id"
+          @edit="editingWidget = widget"
         />
       </div>
     </div>
@@ -58,6 +84,33 @@ function gridStyle(w: { position_x: number; position_y: number; width: number; h
     <div v-if="dashboard.widgets.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
       <p class="text-dark-text-secondary text-sm">Este dashboard no tiene widgets aún.</p>
     </div>
+
+    <!--
+      "Agregar widget" button.
+      Full-width on mobile to maximise the tap target. min-height 44px per
+      touch target requirement. Dashed border communicates an additive action
+      (same convention as Notion, Figma, Linear) without a heavy filled button
+      that would compete visually with the widgets above.
+    -->
+    <button
+      class="add-widget-btn mt-3"
+      @click="addingWidget = true"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      Agregar widget
+    </button>
+
+    <!-- WidgetConfigModal: shared for both create (addingWidget) and edit (editingWidget).
+         The `widget` prop being null puts the modal in create mode.
+         The `widget` prop being set puts it in edit mode (pre-populated form). -->
+    <WidgetConfigModal
+      :open="addingWidget || editingWidget !== null"
+      :dashboard-id="dashboard.id"
+      :widget="editingWidget"
+      @close="closeConfigModal"
+    />
   </div>
 </template>
 
@@ -90,5 +143,47 @@ function gridStyle(w: { position_x: number; position_y: number; width: number; h
     grid-column: unset !important;
     grid-row: unset !important;
   }
+
+  /*
+   * Desktop hover reveal for WidgetActions overlay.
+   * When the mouse enters the widget cell (.widget-item), we reveal the
+   * .widget-actions child by setting its opacity and pointer-events.
+   * This is a pure CSS approach — no JS involved on desktop.
+   * The trigger button (three dots) inside WidgetActions also triggers the
+   * same reveal via its own .is-visible class for mobile touch.
+   */
+  .widget-item:hover :deep(.widget-actions) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/*
+ * "Agregar widget" button.
+ * Full width, dashed border, minimum 44px height.
+ * Text + icon centred for clear affordance.
+ */
+.add-widget-btn {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1.5px dashed #334155;
+  background-color: transparent;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  padding: 0.5rem 1rem;
+}
+
+.add-widget-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.05);
 }
 </style>
