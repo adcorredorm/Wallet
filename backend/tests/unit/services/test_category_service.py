@@ -363,3 +363,46 @@ class TestDelete:
             category_service.delete(uuid4())
 
         mock_repository.delete.assert_not_called()
+
+
+class TestArchive:
+    """Tests for CategoryService.archive."""
+
+    def test_archive_sets_active_false(self, category_service, mock_repository, sample_category):
+        """Should call repository.update with active=False when category exists."""
+        mock_repository.get_by_id_or_fail.return_value = sample_category
+        mock_repository.update.return_value = sample_category
+        category_service.archive(sample_category.id)
+        mock_repository.update.assert_called_once_with(sample_category, active=False)
+
+    def test_archive_not_found_raises(self, category_service, mock_repository):
+        """Should raise NotFoundError when the category does not exist."""
+        from uuid import uuid4 as _uuid4
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Category", str(_uuid4()))
+        with pytest.raises(NotFoundError):
+            category_service.archive(uuid4())
+
+
+class TestHardDelete:
+    """Tests for CategoryService.hard_delete."""
+
+    def test_hard_delete_success(self, category_service, mock_repository, sample_category):
+        """Should delete when the category has no subcategories and no transactions."""
+        mock_repository.get_by_id_or_fail.return_value = sample_category
+        mock_repository.has_transactions.return_value = False
+        category_service.hard_delete(sample_category.id)
+        mock_repository.delete.assert_called_once_with(sample_category)
+
+    def test_hard_delete_with_subcategories_raises(self, category_service, mock_repository, sample_category):
+        """Should raise BusinessRuleError when category has subcategories."""
+        sample_category.subcategories.count.return_value = 1
+        mock_repository.get_by_id_or_fail.return_value = sample_category
+        with pytest.raises(BusinessRuleError):
+            category_service.hard_delete(sample_category.id)
+
+    def test_hard_delete_with_transactions_raises(self, category_service, mock_repository, sample_category):
+        """Should raise BusinessRuleError when category has transactions."""
+        mock_repository.get_by_id_or_fail.return_value = sample_category
+        mock_repository.has_transactions.return_value = True
+        with pytest.raises(BusinessRuleError):
+            category_service.hard_delete(sample_category.id)

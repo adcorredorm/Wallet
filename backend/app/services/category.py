@@ -16,12 +16,18 @@ class CategoryService:
         """Initialize category service with repository."""
         self.repository = CategoryRepository()
 
-    def get_all(self, type: str | None = None) -> list[Category]:
+    def get_all(
+        self,
+        type: str | None = None,
+        include_archived: bool = False,
+    ) -> list[Category]:
         """
         Get all categories, optionally filtered by type.
 
         Args:
             type: Optional category type filter (income, expense, both)
+            include_archived: When True, return both active and archived categories.
+                When False (default), return only active categories.
 
         Returns:
             List of categories
@@ -30,7 +36,7 @@ class CategoryService:
             from app.models.category import CategoryType
 
             return self.repository.get_by_type(CategoryType(type))
-        return self.repository.get_all()
+        return self.repository.get_all(include_archived=include_archived)
 
     def get_by_id(self, category_id: UUID) -> Category:
         """
@@ -142,6 +148,7 @@ class CategoryService:
         icon: str | None = None,
         color: str | None = None,
         parent_category_id: UUID | None = None,
+        active: bool | None = None,
     ) -> Category:
         """
         Update an existing category.
@@ -153,6 +160,7 @@ class CategoryService:
             icon: New icon identifier
             color: New color
             parent_category_id: New parent category ID
+            active: When provided, sets the active/archived flag directly
 
         Returns:
             Updated category instance
@@ -190,12 +198,30 @@ class CategoryService:
             update_data["color"] = color
         if parent_category_id is not None:
             update_data["parent_category_id"] = parent_category_id
+        if active is not None:
+            update_data["active"] = active
 
         return self.repository.update(category, **update_data)
 
-    def delete(self, category_id: UUID) -> None:
+    def archive(self, category_id: UUID) -> None:
         """
-        Delete a category.
+        Archive a category by setting active=False.
+
+        Does not check for subcategories or transactions — archiving is
+        non-destructive and can always be reversed.
+
+        Args:
+            category_id: Category UUID
+
+        Raises:
+            NotFoundError: If category not found
+        """
+        category = self.repository.get_by_id_or_fail(category_id)
+        self.repository.update(category, active=False)
+
+    def hard_delete(self, category_id: UUID) -> None:
+        """
+        Permanently delete a category from the database.
 
         Args:
             category_id: Category UUID
@@ -219,3 +245,18 @@ class CategoryService:
             )
 
         self.repository.delete(category)
+
+    def delete(self, category_id: UUID) -> None:
+        """
+        Delete a category.
+
+        Delegates to hard_delete for backward compatibility.
+
+        Args:
+            category_id: Category UUID
+
+        Raises:
+            NotFoundError: If category not found
+            BusinessRuleError: If category has transactions or subcategories
+        """
+        self.hard_delete(category_id)
