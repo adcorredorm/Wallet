@@ -84,6 +84,38 @@ class CategoryRepository(BaseRepository[Category]):
             .options(selectinload(Category.subcategories))
         ).scalar_one_or_none()
 
+    def get_all_active(self) -> list[Category]:
+        """
+        Get all active (non-archived) categories.
+
+        Returns:
+            List of categories where active is True
+        """
+        return (
+            db.session.execute(db.select(Category).where(Category.active == True))
+            .scalars()
+            .all()
+        )
+
+    def get_all(self, include_archived: bool = False) -> list[Category]:
+        """
+        Get all categories.
+
+        Args:
+            include_archived: When True, return all categories regardless of
+                active flag. When False (default), return only active categories.
+
+        Returns:
+            List of categories
+        """
+        if include_archived:
+            return (
+                db.session.execute(db.select(Category))
+                .scalars()
+                .all()
+            )
+        return self.get_all_active()
+
     def has_transactions(self, category_id: UUID) -> bool:
         """
         Check if a category has associated transactions.
