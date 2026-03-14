@@ -45,7 +45,10 @@ class TestingConfig(Config):
     """Testing environment configuration."""
 
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = "postgresql://wallet_user:wallet_password@localhost:5432/wallet_test_db"
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql://wallet_user:wallet_password@db:5432/wallet_test_db"
+    )
 
 
 class ProductionConfig(Config):
