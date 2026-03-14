@@ -147,6 +147,27 @@ class WalletDB extends Dexie {
       dashboardWidgets: 'id, server_id, dashboard_id, _sync_status'
     })
     // No upgrade() needed — new tables start empty
+
+    this.version(6)
+      .stores({
+        accounts: 'id, server_id, type, active, _sync_status',
+        transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+        transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+        // New in v6 — index categories.active for archive/hard-delete filtering
+        categories: 'id, server_id, type, active, parent_category_id, _sync_status',
+        pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+        exchangeRates: 'currency_code',
+        settings: 'key, _sync_status',
+        dashboards: 'id, server_id, is_default, sort_order, _sync_status',
+        dashboardWidgets: 'id, server_id, dashboard_id, _sync_status'
+      })
+      .upgrade(tx => {
+        return tx.table('categories').toCollection().modify((cat: Record<string, unknown>) => {
+          if (cat['active'] === undefined) {
+            cat['active'] = true
+          }
+        })
+      })
   }
 }
 
