@@ -8,7 +8,7 @@ organization through parent-child relationships.
 import enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, String, Enum, ForeignKey, Index
+from sqlalchemy import Boolean, Column, String, Enum, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -36,6 +36,7 @@ class Category(BaseModel):
         icon: Optional icon identifier
         color: Optional color in hex format (#RRGGBB)
         parent_category_id: Optional parent category ID for subcategories
+        active: Whether the category is active (False = archived/soft-deleted)
         parent_category: Parent category relationship
         subcategories: Child categories relationship
         transactions: Related transactions
@@ -52,6 +53,7 @@ class Category(BaseModel):
         ForeignKey("categories.id"),
         nullable=True,
     )
+    active = Column(Boolean, nullable=False, default=True)
 
     # Relationships
     parent_category = relationship(
@@ -74,6 +76,7 @@ class Category(BaseModel):
     __table_args__ = (
         Index("idx_categories_type", "type"),
         Index("idx_categories_parent", "parent_category_id"),
+        Index("idx_categories_active", "active"),
     )
 
     def __repr__(self) -> str:
