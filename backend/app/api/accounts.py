@@ -249,6 +249,30 @@ def delete_account(account_id: UUID):
         return error_response(f"Error al archivar cuenta: {str(e)}", status_code=500)
 
 
+@accounts_bp.route("/<uuid:account_id>/permanent", methods=["DELETE"])
+def hard_delete_account(account_id: UUID):
+    """
+    Permanently delete an account (hard delete — irreversible).
+
+    Only succeeds if the account has no transactions or transfers.
+
+    Path Parameters:
+        account_id (UUID): Account ID
+
+    Returns:
+        200: Account permanently deleted
+        404: Account not found
+        422: Account has transactions or transfers
+    """
+    try:
+        account_service.delete(account_id)
+        return success_response(message="Cuenta eliminada permanentemente")
+    except NotFoundError as e:
+        return error_response(e.message, status_code=404)
+    except BusinessRuleError as e:
+        return error_response(e.message, status_code=422)
+
+
 @accounts_bp.route("/<uuid:account_id>/balance", methods=["GET"])
 def get_account_balance(account_id: UUID):
     """
