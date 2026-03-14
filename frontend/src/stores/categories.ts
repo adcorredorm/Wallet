@@ -221,12 +221,13 @@ export const useCategoriesStore = defineStore('categories', () => {
       //     filter applied server-side.
       const localData = await fetchAllWithRevalidation(
         db.categories,
-        () => categoriesApi.getAll(type),
+        () => categoriesApi.getAll(type, true),
         (freshItems) => {
           // Background revalidation succeeded — replace with correctly
           // filtered server data.
           categories.value = freshItems
-        }
+        },
+        { cleanupOrphans: false }
       )
 
       // Apply client-side filter on the stale local data so the UI shows
@@ -444,10 +445,14 @@ export const useCategoriesStore = defineStore('categories', () => {
       const now = new Date().toISOString()
       let cascaded = 0
 
-      // Find active children of the target category.
-      const activeChildren = categories.value.filter(
-        c => c.parent_category_id === id && c.active !== false
-      )
+      // Find active children directly from Dexie — avoids a race condition
+      // where a concurrent background revalidation replaces categories.value
+      // between loop iterations, causing only the first child to be archived.
+      const activeChildren = await db.categories
+        .where('parent_category_id')
+        .equals(id)
+        .filter(c => c.active !== false)
+        .toArray()
 
       // Archive each active child first.
       for (const child of activeChildren) {

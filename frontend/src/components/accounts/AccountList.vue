@@ -61,11 +61,6 @@ function getBalance(accountId: string): number {
           :balance="getBalance(account.id)"
           @click="emit('account-click', account)"
         />
-        <!-- Archived badge -->
-        <span
-          v-if="account.active === false"
-          class="text-xs text-gray-400 dark:text-gray-500 ml-1"
-        >Archivada</span>
       </div>
     </div>
   </div>

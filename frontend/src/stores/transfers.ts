@@ -61,7 +61,8 @@ export const useTransfersStore = defineStore('transfers', () => {
         () => transfersApi.getAll(appliedFilters),
         (freshItems) => {
           transfers.value = freshItems
-        }
+        },
+        { cleanupOrphans: false }
       )
 
       transfers.value = localData
@@ -117,7 +118,8 @@ export const useTransfersStore = defineStore('transfers', () => {
         () => transfersApi.getByAccount(accountId, customFilters),
         (freshItems) => {
           transfers.value = freshItems
-        }
+        },
+        { cleanupOrphans: false }
       )
 
       // Narrow the stale result to transfers involving this account.

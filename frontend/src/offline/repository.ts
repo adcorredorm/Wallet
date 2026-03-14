@@ -136,8 +136,12 @@ export async function fetchAllWithRevalidation<
 >(
   table: Table<TLocal>,
   apiFetcher: () => Promise<TServer[]>,
-  onFreshData: (freshItems: TLocal[]) => void
+  onFreshData: (freshItems: TLocal[]) => void,
+  options?: { cleanupOrphans?: boolean }
 ): Promise<TLocal[]> {
+  // cleanupOrphans defaults to true. Set to false when the fetcher uses
+  // pagination/filters and may not return ALL records — otherwise synced
+  // records outside the current page would be incorrectly deleted as orphans.
   // Step 1 — Read from IndexedDB immediately (no network round-trip).
   // This is what makes the UI feel instant. The result may be an empty array
   // on the very first load — that is intentional and expected.
@@ -164,10 +168,14 @@ export async function fetchAllWithRevalidation<
         // Remove orphaned synced records: items in IndexedDB that the server
         // no longer returns AND are not pending local changes. These are stale
         // records (e.g. deleted server-side, or left over from test data).
-        const serverIds = new Set(localMapped.map((item) => item.id))
-        const orphanedIds = (await table.where('_sync_status').anyOf(['synced', 'error']).primaryKeys())
-          .filter((id) => !serverIds.has(id as string))
-        if (orphanedIds.length > 0) await table.bulkDelete(orphanedIds)
+        // Skipped when cleanupOrphans=false (paginated fetches where the server
+        // response is a subset of all records).
+        if (options?.cleanupOrphans !== false) {
+          const serverIds = new Set(localMapped.map((item) => item.id))
+          const orphanedIds = (await table.where('_sync_status').anyOf(['synced', 'error']).primaryKeys())
+            .filter((id) => !serverIds.has(id as string))
+          if (orphanedIds.length > 0) await table.bulkDelete(orphanedIds)
+        }
 
         // Re-read the full table from IndexedDB after bulkPut.
         //

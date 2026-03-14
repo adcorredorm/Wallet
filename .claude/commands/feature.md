@@ -111,12 +111,22 @@ Otherwise, proceed directly to Phase 3.
 
 ## Phase 3: Agent implementation plans
 
+Each agent must save its plan to a **unique file path** to avoid overwriting other agents' plans. Use this naming convention:
+
+`docs/superpowers/plans/YYYY-MM-DD-<feature-slug>-<agent-name>.md`
+
+Where:
+- `<feature-slug>` is a short kebab-case name derived from the feature title (e.g. `archive-delete-accounts`)
+- `<agent-name>` is the agent identifier (e.g. `backend-architect`, `nico-front`, `docker-manager`)
+
 For each sub-task that has an agent (not `User` tagged), launch the corresponding agent with:
 
 > "Review the following ADD and your assigned sub-task. Use `superpowers:brainstorming` to explore the problem space and confirm your approach, then use `superpowers:writing-plans` to produce a detailed implementation plan before writing any code:
 >
 > **ADD**: [paste relevant sections of the ADD]
 > **Your sub-task**: [sub-task description and acceptance criteria]
+>
+> Save your plan to: `docs/superpowers/plans/YYYY-MM-DD-<feature-slug>-<agent-name>.md`
 >
 > Your plan must include:
 > 1. Files to create or modify (with brief reason for each)
@@ -175,7 +185,12 @@ If an agent fails, returns incomplete work, or gets blocked:
 2. Re-launch with: the original approved plan + the full error or incomplete output + explicit instruction: "Continue from [last completed step]. Do not redo previous steps."
 3. If the agent fails a second time, pause and report to the user with a clear description of what failed and what was attempted
 
-Each agent is responsible for updating its own Notion ticket status (`In Progress` → `Done`) and adding notes. The orchestrator should verify after each agent completes — if a ticket was not updated by the agent, update it from here using the page IDs saved in Phase 2.
+Each agent is responsible for updating its own Notion ticket status (`In Progress` → `Done`) and adding notes **when dispatched as a single agent for the full sub-ticket**.
+
+When using `superpowers:subagent-driven-development` (multiple small chunk agents per sub-ticket), the **orchestrator** is responsible for Notion updates — individual chunk agents do not own the ticket. In this case:
+- Update the sub-ticket Status to `In Progress` before the first chunk starts
+- Add progress notes to the ticket body after each chunk completes
+- Update Status to `Done` after all chunks for that sub-ticket are verified
 
 ---
 

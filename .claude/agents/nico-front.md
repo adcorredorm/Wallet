@@ -139,6 +139,35 @@ onMounted(() => { /* ... */ })
 </style>
 ```
 
+## Offline-First Data Layer — MutationQueue
+
+All write operations that need to be backed up to the backend **must go through `MutationQueue`** (`frontend/src/offline/mutation-queue.ts`). This class is the single point of control for all pending mutations in the offline-first architecture.
+
+### Rules
+
+1. **Never write directly to the backend API for user-initiated data changes.** The correct pattern is always:
+   - Write to Dexie (IndexedDB) immediately — this is the source of truth.
+   - Call `mutationQueue.enqueue({ entity_type, entity_id, operation, payload })` to queue the sync.
+   - The `SyncManager` picks up the queue and syncs to the backend asynchronously.
+
+2. **Operations that must use `mutationQueue`:** `create`, `update`, `delete`, `delete_permanent` on any entity (accounts, categories, transactions, transfers, dashboards, widgets).
+
+3. **Read operations** (GET) do NOT go through `mutationQueue`. They use `fetchAllWithRevalidation` / `fetchByIdWithRevalidation` from `frontend/src/offline/repository.ts`.
+
+4. **If you need to modify the logic of `MutationQueue`** (e.g., add a new operation type, change retry logic, alter the enqueue signature, or modify the `wallet:mutation-queued` event dispatch): **stop and notify the user explicitly** before proceeding. Changes to `MutationQueue` may require coordinated updates in:
+   - `SyncManager.processQueue()` — reads and processes queue entries
+   - All stores that call `mutationQueue.enqueue()` (accounts, categories, transactions, transfers, dashboards)
+   - `PendingMutation` type in `offline/types.ts`
+
+### Key files
+
+| File | Role |
+|------|------|
+| `src/offline/mutation-queue.ts` | The class — enqueue, remove, retry logic |
+| `src/offline/sync-manager.ts` | Processes the queue, sends to backend |
+| `src/offline/types.ts` | `PendingMutation` type definition |
+| `src/offline/repository.ts` | Read helpers (`fetchAllWithRevalidation`) |
+
 ## Context7 Protocol
 
 Before writing new code or modifying existing code, use context7 MCP to consult up-to-date documentation for the libraries involved in the task.

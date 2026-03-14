@@ -155,7 +155,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
         () => transactionsApi.getAll(appliedFilters),
         (freshItems) => {
           transactions.value = [...freshItems].sort(byDateDesc)
-        }
+        },
+        { cleanupOrphans: false }
       )
 
       transactions.value = [...localData].sort(byDateDesc)

@@ -168,6 +168,17 @@ window.addEventListener('wallet:mutation-queued', () => {
   }
 })
 
+// Periodic sync every 30 seconds.
+// Handles the case where the backend goes down and comes back up without
+// the device losing internet connectivity — the browser never fires an
+// 'online' event in that scenario, so pending/error mutations would be
+// stuck until the next page load. This poll recovers them automatically.
+setInterval(() => {
+  if (isOnline.value) {
+    syncManager.processQueue()
+  }
+}, 30_000)
+
 // After the SyncManager completes a full sync cycle (queue flushed +
 // fullReadSync written to IndexedDB), refresh all reactive stores from the
 // fresh local data so the UI reflects the authoritative server state —

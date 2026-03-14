@@ -169,17 +169,19 @@ function goToTransaction(transaction: any) {
                re-enables the hover surface for the tooltip without re-enabling the button. -->
           <span
             v-if="hasMovements"
-            :title="'No se puede borrar una cuenta con movimientos. Usa Archivar.'"
-            class="inline-flex"
+            class="relative inline-flex group"
           >
             <BaseButton
               variant="danger"
               size="sm"
               :disabled="true"
-              class="opacity-50 cursor-not-allowed"
+              class="opacity-50 cursor-not-allowed pointer-events-none"
             >
               Borrar permanentemente
             </BaseButton>
+            <span class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-md bg-yellow-900/90 border border-yellow-600/50 px-3 py-2 text-xs text-yellow-200 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-center z-10">
+              ⚠ No se puede borrar una cuenta con movimientos. Usa Archivar.
+            </span>
           </span>
           <BaseButton
             v-else

@@ -148,6 +148,10 @@ const convertedBalance = computed<number | null>(() => {
               v-if="'_sync_status' in account"
               :status="(account as LocalAccount)._sync_status"
             />
+            <span
+              v-if="account.active === false"
+              class="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-700 text-gray-400"
+            >Archivada</span>
           </div>
           <p class="text-sm text-dark-text-secondary">
             {{ accountTypeLabel }} • {{ account.currency }}

@@ -60,6 +60,18 @@ const groupsWithChildren = () =>
 /** Standalone categories (no children) */
 const standaloneGroups = () =>
   categoriesStore.categoryTree.filter(g => g.children.length === 0)
+
+/** Archived categories pre-enriched with their parent name (one lookup per item,
+ *  not two). Looks in all categories including archived so an archived child
+ *  correctly shows its archived parent. */
+const archivedCategoriesWithParent = computed(() =>
+  categoriesStore.archivedCategories.map(cat => ({
+    ...cat,
+    parentName: cat.parent_category_id
+      ? (categoriesStore.categories.find(c => c.id === cat.parent_category_id)?.name ?? null)
+      : null
+  }))
+)
 </script>
 
 <template>
@@ -233,7 +245,7 @@ const standaloneGroups = () =>
         Archivadas ({{ categoriesStore.archivedCategories.length }})
       </h2>
       <div
-        v-for="category in categoriesStore.archivedCategories"
+        v-for="category in archivedCategoriesWithParent"
         :key="category.id"
         class="rounded-xl bg-dark-bg-secondary border border-dark-bg-tertiary/50
                flex items-center px-4 py-3 gap-3 cursor-pointer opacity-50
@@ -250,9 +262,13 @@ const standaloneGroups = () =>
         <!-- Icon -->
         <span class="text-xl flex-shrink-0">{{ category.icon || '📁' }}</span>
 
-        <!-- Name + Archivada badge -->
+        <!-- Name + parent + Archivada badge -->
         <span class="font-medium truncate flex-1 min-w-0">
           {{ category.name }}
+          <span
+            v-if="category.parentName"
+            class="text-xs text-dark-text-tertiary ml-1 mr-1"
+          >· {{ category.parentName }}</span>
           <span class="text-xs text-gray-400 dark:text-gray-500 ml-1">Archivada</span>
         </span>
 

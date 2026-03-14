@@ -368,6 +368,17 @@ export class SyncManager {
       syncStore.setSyncing(false)
       syncStore.setLastSyncAt(new Date().toISOString())
       // ─────────────────────────────────────────────────────────────────
+
+      // If mutations were enqueued while this run was processing (e.g. a
+      // cascade archive that enqueues N mutations while the first one is
+      // already being sent), those enqueue() calls fired wallet:mutation-queued
+      // events that were silently dropped because processing was still true.
+      // Re-dispatch the event so main.ts picks up the remaining mutations.
+      const leftover = await mutationQueue.count()
+      if (leftover > 0) {
+        console.log(`[SyncManager] ${leftover} mutation(s) queued during processing — re-dispatching wallet:mutation-queued.`)
+        window.dispatchEvent(new CustomEvent('wallet:mutation-queued'))
+      }
     }
   }
 
@@ -1301,7 +1312,7 @@ export class SyncManager {
 
     const results = await Promise.allSettled([
       this.syncEntityTable(
-        () => accountsApi.getAll(),
+        () => accountsApi.getAll(false),
         (items) =>
           db.accounts.bulkPut(
             items.map((item) => toLocalItem(item, item.id) as LocalAccount)
@@ -1322,7 +1333,7 @@ export class SyncManager {
           )
       ),
       this.syncEntityTable(
-        () => categoriesApi.getAll(),
+        () => categoriesApi.getAll(undefined, true),
         (items) =>
           db.categories.bulkPut(
             items.map((item) => toLocalItem(item, item.id) as LocalCategory)

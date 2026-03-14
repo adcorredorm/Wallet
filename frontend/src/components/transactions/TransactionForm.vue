@@ -388,6 +388,23 @@ function handleSubmit() {
       required
     />
 
+    <!-- Cuenta -->
+    <AccountSelect
+      v-model="form.account_id"
+      :accounts="accounts"
+      :error="errors.account_id"
+      required
+    />
+
+    <!-- Categoría (filtered by type) -->
+    <CategorySelect
+      v-model="form.category_id"
+      :categories="categories"
+      :filter-type="form.type"
+      :error="errors.category_id"
+      required
+    />
+
     <!-- Título -->
     <BaseInput
       v-model="form.title"
@@ -408,23 +425,6 @@ function handleSubmit() {
       label="Fecha"
       :error="errors.date"
       :max="formatDateForInput(new Date())"
-      required
-    />
-
-    <!-- Cuenta -->
-    <AccountSelect
-      v-model="form.account_id"
-      :accounts="accounts"
-      :error="errors.account_id"
-      required
-    />
-
-    <!-- Categoría (filtered by type) -->
-    <CategorySelect
-      v-model="form.category_id"
-      :categories="categories"
-      :filter-type="form.type"
-      :error="errors.category_id"
       required
     />
 

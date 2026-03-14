@@ -6,7 +6,7 @@
  * Archive/hard-delete/restore pattern replaces the previous single Eliminar button.
  */
 
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCategoriesStore, useUiStore } from '@/stores'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -44,6 +44,14 @@ const category = computed(() =>
 )
 
 const isArchived = computed(() => category.value?.active === false)
+
+// Parent category name — looks in ALL categories (including archived) so
+// an archived category that has an archived parent still shows the parent name.
+const parentCategoryName = computed(() => {
+  const parentId = category.value?.parent_category_id
+  if (!parentId) return null
+  return categoriesStore.categories.find(c => c.id === parentId)?.name ?? null
+})
 
 const form = reactive({
   name: '',
@@ -104,9 +112,12 @@ const parentOptions = computed(() => {
     }))
 })
 
-// Reset parent when type changes
+// Reset parent when type changes — but only after the form is fully initialized.
+// During onMounted, form.type is set programmatically before parent_category_id,
+// which would cause the watcher to fire asynchronously and wipe the parent.
+const formInitialized = ref(false)
 watch(() => form.type, () => {
-  form.parent_category_id = ''
+  if (formInitialized.value) form.parent_category_id = ''
 })
 
 onMounted(async () => {
@@ -127,6 +138,10 @@ onMounted(async () => {
     form.color = category.value.color || '#3b82f6'
     form.parent_category_id = category.value.parent_category_id ?? ''
   }
+
+  // Allow the type watcher to run after initialization is complete.
+  await nextTick()
+  formInitialized.value = true
 
   // Async transaction count — determines whether hard-delete is available.
   // We query IndexedDB directly to mirror the guard inside hardDeleteCategory.
@@ -160,6 +175,7 @@ function validateForm(): boolean {
 }
 
 async function handleSubmit() {
+  if (isArchived.value) return
   if (!validateForm()) return
 
   try {
@@ -258,17 +274,19 @@ async function restoreCategory() {
                on <button>. A wrapping <span> keeps the hover surface alive. -->
           <span
             v-if="hardDeleteDisabled"
-            :title="hardDeleteTooltip"
-            class="inline-flex"
+            class="relative inline-flex group"
           >
             <BaseButton
               variant="danger"
               size="sm"
               :disabled="true"
-              class="opacity-50 cursor-not-allowed"
+              class="opacity-50 cursor-not-allowed pointer-events-none"
             >
               Borrar permanentemente
             </BaseButton>
+            <span class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-md bg-yellow-900/90 border border-yellow-600/50 px-3 py-2 text-xs text-yellow-200 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-center z-10">
+              ⚠ {{ hardDeleteTooltip }}
+            </span>
           </span>
           <BaseButton
             v-else
@@ -295,6 +313,15 @@ async function restoreCategory() {
     </div>
 
     <BaseCard>
+      <!-- Archived banner -->
+      <div
+        v-if="isArchived"
+        class="mb-4 flex items-start gap-2 rounded-lg bg-yellow-900/30 border border-yellow-700/40 px-4 py-3 text-sm text-yellow-300"
+      >
+        <span class="shrink-0 mt-0.5">⚠</span>
+        <span>Esta categoría está archivada. Los campos están deshabilitados. Usa el botón <strong>Activar</strong> para poder editarla.</span>
+      </div>
+
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Nombre -->
         <BaseInput
@@ -302,6 +329,7 @@ async function restoreCategory() {
           label="Nombre"
           placeholder="Ej: Alimentación"
           :error="errors.name"
+          :disabled="isArchived"
           required
         />
 
@@ -311,26 +339,37 @@ async function restoreCategory() {
           label="Tipo"
           :options="CATEGORY_TYPES"
           :error="errors.type"
+          :disabled="isArchived"
           required
         />
 
         <!-- Categoría padre -->
         <div>
-          <BaseSelect
-            v-model="form.parent_category_id"
-            label="Categoría padre (opcional)"
-            :options="[
-              { value: '', label: 'Ninguna (categoría raíz)' },
-              ...parentOptions
-            ]"
-            :disabled="!form.type || hasChildren"
-          />
-          <p v-if="!form.type" class="mt-1 text-xs text-dark-text-secondary">
-            Selecciona un tipo primero
-          </p>
-          <p v-else-if="hasChildren" class="mt-1 text-xs text-dark-text-secondary">
-            Esta categoría tiene subcategorías y no puede convertirse en subcategoría
-          </p>
+          <!-- Archived: show parent as read-only text (archived parents are
+               excluded from parentOptions so the dropdown would show empty) -->
+          <template v-if="isArchived">
+            <label class="label">Categoría padre (opcional)</label>
+            <p class="mt-1 text-sm text-dark-text-secondary">
+              {{ parentCategoryName ?? 'Ninguna (categoría raíz)' }}
+            </p>
+          </template>
+          <template v-else>
+            <BaseSelect
+              v-model="form.parent_category_id"
+              label="Categoría padre (opcional)"
+              :options="[
+                { value: '', label: 'Ninguna (categoría raíz)' },
+                ...parentOptions
+              ]"
+              :disabled="!form.type || hasChildren"
+            />
+            <p v-if="!form.type" class="mt-1 text-xs text-dark-text-secondary">
+              Selecciona un tipo primero
+            </p>
+            <p v-else-if="hasChildren" class="mt-1 text-xs text-dark-text-secondary">
+              Esta categoría tiene subcategorías y no puede convertirse en subcategoría
+            </p>
+          </template>
         </div>
 
         <!-- Icono -->
@@ -341,11 +380,13 @@ async function restoreCategory() {
               v-for="icon in CATEGORY_ICONS"
               :key="icon"
               type="button"
+              :disabled="isArchived"
               :class="[
-                'p-2 rounded-lg text-2xl hover:bg-dark-bg-tertiary transition-colors',
+                'p-2 rounded-lg text-2xl transition-colors',
+                isArchived ? 'opacity-40 cursor-not-allowed' : 'hover:bg-dark-bg-tertiary',
                 form.icon === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
               ]"
-              @click="form.icon = icon"
+              @click="!isArchived && (form.icon = icon)"
             >
               {{ icon }}
             </button>
@@ -360,18 +401,20 @@ async function restoreCategory() {
               v-for="color in CATEGORY_COLORS"
               :key="color"
               type="button"
+              :disabled="isArchived"
               :class="[
                 'w-10 h-10 rounded-lg transition-transform',
+                isArchived ? 'opacity-40 cursor-not-allowed' : '',
                 form.color === color ? 'ring-2 ring-white scale-110' : ''
               ]"
               :style="{ backgroundColor: color }"
-              @click="form.color = color"
+              @click="!isArchived && (form.color = color)"
             ></button>
           </div>
         </div>
 
-        <!-- Actions -->
-        <div class="flex gap-3 pt-4 flex-col md:flex-row">
+        <!-- Actions: hidden when archived (only Activar button in header is relevant) -->
+        <div v-if="!isArchived" class="flex gap-3 pt-4 flex-col md:flex-row">
           <BaseButton
             type="submit"
             variant="primary"
@@ -388,6 +431,11 @@ async function restoreCategory() {
             @click="handleCancel"
           >
             Cancelar
+          </BaseButton>
+        </div>
+        <div v-else class="pt-4">
+          <BaseButton type="button" variant="ghost" full-width @click="handleCancel">
+            Volver
           </BaseButton>
         </div>
       </form>

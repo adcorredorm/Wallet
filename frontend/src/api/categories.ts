@@ -11,8 +11,10 @@ export const categoriesApi = {
    * Get all categories
    * @param tipo - Filter by category type (optional)
    */
-  getAll(type?: CategoryType): Promise<Category[]> {
-    const params = type ? { type } : {}
+  getAll(type?: CategoryType, includeArchived = false): Promise<Category[]> {
+    const params: Record<string, unknown> = {}
+    if (type) params.type = type
+    if (includeArchived) params.include_archived = true
     return apiClient.get('/categories', { params })
   },
 

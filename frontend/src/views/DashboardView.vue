@@ -40,7 +40,7 @@ const uiStore = useUiStore()
 const loading = ref(true)
 
 const accountsWithBalances = computed(() =>
-  accountsStore.accountsWithBalances as (Account & { balance: number })[]
+  (accountsStore.accountsWithBalances as (Account & { balance: number })[]).filter(a => a.active !== false)
 )
 
 const recentTransactions = computed(() =>

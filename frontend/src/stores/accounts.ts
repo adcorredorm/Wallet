@@ -133,7 +133,8 @@ export const useAccountsStore = defineStore('accounts', () => {
             }
             return normalized
           })
-        }
+        },
+        { cleanupOrphans: false }
       )
 
       // Populate the store with whatever came back (local cache or first-load
