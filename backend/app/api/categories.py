@@ -52,6 +52,7 @@ def list_categories():
 
     Query Parameters:
         type (str): Filter by category type (income, expense, both)
+        include_archived (bool): Include archived/inactive categories (default: false)
 
     Returns:
         200: List of categories
@@ -59,7 +60,8 @@ def list_categories():
     """
     try:
         type = request.args.get("type")
-        categories = category_service.get_all(type=type)
+        include_archived = request.args.get("include_archived", "false").lower() == "true"
+        categories = category_service.get_all(type=type, include_archived=include_archived)
 
         data = [
             CategoryResponse.model_validate(cat).model_dump(mode="json")
@@ -207,6 +209,7 @@ def update_category(category_id: UUID):
             icon=category_data.icon,
             color=category_data.color,
             parent_category_id=category_data.parent_category_id,
+            active=category_data.active,
         )
 
         data = CategoryResponse.model_validate(category).model_dump(mode="json")
@@ -225,20 +228,46 @@ def update_category(category_id: UUID):
 @categories_bp.route("/<uuid:category_id>", methods=["DELETE"])
 def delete_category(category_id: UUID):
     """
-    Delete a category.
+    Archive a category (soft delete — sets active to False).
 
     Path Parameters:
         category_id (UUID): Category ID
 
     Returns:
-        200: Category deleted successfully
+        200: Category archived successfully
+        404: Category not found
+        422: Business rule violation
+        500: Internal server error
+    """
+    try:
+        category_service.archive(category_id)
+        return success_response(message="Categoría archivada exitosamente")
+
+    except NotFoundError as e:
+        return error_response(e.message, status_code=404)
+    except BusinessRuleError as e:
+        return error_response(e.message, status_code=422)
+    except Exception as e:
+        return error_response(f"Error al archivar categoria: {str(e)}", status_code=500)
+
+
+@categories_bp.route("/<uuid:category_id>/permanent", methods=["DELETE"])
+def hard_delete_category(category_id: UUID):
+    """
+    Permanently delete a category (hard delete — irreversible).
+
+    Path Parameters:
+        category_id (UUID): Category ID
+
+    Returns:
+        200: Category permanently deleted
         404: Category not found
         422: Category has subcategories or transactions
         500: Internal server error
     """
     try:
-        category_service.delete(category_id)
-        return success_response(message="Categoria eliminada exitosamente")
+        category_service.hard_delete(category_id)
+        return success_response(message="Categoría eliminada permanentemente")
 
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
