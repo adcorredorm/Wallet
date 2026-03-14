@@ -79,7 +79,7 @@ export interface PendingMutation {
   id?: number                                                                    // Auto-incremented by Dexie (undefined before first insert)
   entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget'
   entity_id: string                                                              // Local ID (may be a temp-* UUID)
-  operation: 'create' | 'update' | 'delete'
+  operation: 'create' | 'update' | 'delete' | 'delete_permanent'
   payload: Record<string, unknown>                                  // Serialised DTO
   queued_at: string                                                 // ISO timestamp — FIFO ordering key
   retry_count: number
