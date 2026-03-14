@@ -87,27 +87,28 @@ git commit -m "feat(sync): add syncClient for cursor-aware incremental sync requ
 
 - [ ] **Step 1: Escribir tests para `initialSyncComplete`**
 
-Agregar al final de `frontend/src/composables/useSyncStatus.spec.ts`:
+Revisar el patrón de imports existente en `useSyncStatus.spec.ts` (usa `createPinia/setActivePinia` en `beforeEach`). Agregar al final del archivo siguiendo ese patrón:
 
 ```ts
 describe('syncStore — initialSyncComplete', () => {
-  it('is false by default', () => {
-    const { createPinia, setActivePinia } = require('pinia')
+  beforeEach(() => {
     setActivePinia(createPinia())
-    const { useSyncStore } = require('@/stores/sync')
+  })
+
+  it('is false by default', () => {
     const store = useSyncStore()
     expect(store.initialSyncComplete).toBe(false)
   })
 
   it('becomes true after setInitialSyncComplete(true)', () => {
-    const { createPinia, setActivePinia } = require('pinia')
-    setActivePinia(createPinia())
-    const { useSyncStore } = require('@/stores/sync')
     const store = useSyncStore()
     store.setInitialSyncComplete(true)
     expect(store.initialSyncComplete).toBe(true)
   })
 })
+```
+
+Verificar los imports al inicio del spec file e importar `useSyncStore` si no está ya importado.
 ```
 
 - [ ] **Step 2: Verificar que los tests fallan**
@@ -132,7 +133,7 @@ function setInitialSyncComplete(value: boolean): void {
 
 En el `return` del store, agregar junto a los demás campos:
 ```ts
-initialSyncComplete: readonly(initialSyncComplete),
+initialSyncComplete: readonly(initialSyncComplete),  // readonly — spec intencional, no copiar el patrón de isSyncing que devuelve el ref crudo
 setInitialSyncComplete,
 ```
 
