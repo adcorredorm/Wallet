@@ -16,6 +16,7 @@ export interface Category {
   icon?: string
   color?: string  // Hex color code (#RRGGBB)
   parent_category_id?: string
+  active: boolean
   created_at: string
   updated_at: string
 }
@@ -34,4 +35,5 @@ export interface UpdateCategoryDto {
   icon?: string
   color?: string
   parent_category_id?: string
+  active?: boolean
 }
