@@ -56,5 +56,13 @@ export const accountsApi = {
    */
   delete(id: string): Promise<void> {
     return apiClient.delete(`/accounts/${id}`)
+  },
+
+  /**
+   * Permanently delete an account (hard delete - removes from database)
+   * @param id - Account UUID
+   */
+  hardDelete(id: string): Promise<void> {
+    return apiClient.delete(`/accounts/${id}/permanent`)
   }
 }

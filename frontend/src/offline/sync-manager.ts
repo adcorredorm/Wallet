@@ -551,6 +551,10 @@ export class SyncManager {
         // is a no-op because the entity has already been removed from the
         // reactive store — we still call it for consistency.
         return { id: mutation.entity_id } as Account
+
+      case 'delete_permanent':
+        await accountsApi.hardDelete(mutation.entity_id)
+        return { id: mutation.entity_id } as Account
     }
   }
 
@@ -574,6 +578,9 @@ export class SyncManager {
       case 'delete':
         await transactionsApi.delete(mutation.entity_id)
         return { id: mutation.entity_id } as Transaction
+
+      case 'delete_permanent':
+        throw new Error(`delete_permanent not supported for transaction`)
     }
   }
 
@@ -597,6 +604,9 @@ export class SyncManager {
       case 'delete':
         await transfersApi.delete(mutation.entity_id)
         return { id: mutation.entity_id } as Transfer
+
+      case 'delete_permanent':
+        throw new Error(`delete_permanent not supported for transfer`)
     }
   }
 
@@ -619,6 +629,10 @@ export class SyncManager {
 
       case 'delete':
         await categoriesApi.delete(mutation.entity_id)
+        return { id: mutation.entity_id } as Category
+
+      case 'delete_permanent':
+        await categoriesApi.hardDelete(mutation.entity_id)
         return { id: mutation.entity_id } as Category
     }
   }
@@ -677,6 +691,9 @@ export class SyncManager {
       case 'delete':
         await dashboardsApi.delete(mutation.entity_id)
         return { id: mutation.entity_id } as Dashboard
+
+      case 'delete_permanent':
+        throw new Error(`delete_permanent not supported for dashboard`)
     }
   }
 
@@ -719,6 +736,9 @@ export class SyncManager {
       case 'delete':
         await dashboardsApi.deleteWidget(dashboardId, mutation.entity_id)
         return { id: mutation.entity_id } as DashboardWidget
+
+      case 'delete_permanent':
+        throw new Error(`delete_permanent not supported for dashboard_widget`)
     }
   }
 

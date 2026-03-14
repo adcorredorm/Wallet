@@ -50,10 +50,27 @@ export const categoriesApi = {
   },
 
   /**
-   * Delete a category
+   * Archive a category (soft delete - sets active to false)
+   * @param id - Category UUID
+   */
+  archive(id: string): Promise<void> {
+    return apiClient.delete(`/categories/${id}`)
+  },
+
+  /**
+   * Delete a category (soft delete - sets active to false)
+   * Alias for archive() kept for backward compatibility
    * @param id - Category UUID
    */
   delete(id: string): Promise<void> {
     return apiClient.delete(`/categories/${id}`)
+  },
+
+  /**
+   * Permanently delete a category (hard delete - removes from database)
+   * @param id - Category UUID
+   */
+  hardDelete(id: string): Promise<void> {
+    return apiClient.delete(`/categories/${id}/permanent`)
   }
 }
