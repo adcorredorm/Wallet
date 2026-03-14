@@ -84,9 +84,17 @@ export const useCategoriesStore = defineStore('categories', () => {
     activeCategories.value.filter(cat => !cat.parent_category_id)
   )
 
-  // Helper to get subcategories of a parent
+  // Helper to get ACTIVE subcategories of a parent.
+  // Why filter active !== false?
+  // Archived subcategories should not count toward the "has active subcategories"
+  // guard in CategoryEditView, and the tree/cascade UI only cares about live
+  // children. Using active !== false mirrors the convention used elsewhere in
+  // this store (activeCategories computed) and guards against older IndexedDB
+  // records where active may be undefined.
   const getSubcategories = (parentId: string) =>
-    categories.value.filter(cat => cat.parent_category_id === parentId)
+    categories.value.filter(
+      cat => cat.parent_category_id === parentId && cat.active !== false
+    )
 
   /**
    * categoryTree — groups all ACTIVE categories into a 2-level hierarchy.

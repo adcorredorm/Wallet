@@ -2,7 +2,8 @@
 /**
  * Category Edit View
  *
- * Form to edit existing category
+ * Form to edit existing category.
+ * Archive/hard-delete/restore pattern replaces the previous single Eliminar button.
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
@@ -17,6 +18,7 @@ import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import { CATEGORY_TYPES, CATEGORY_ICONS, CATEGORY_COLORS } from '@/utils/constants'
 import { required, minLength, maxLength } from '@/utils/validators'
 import type { UpdateCategoryDto, CategoryType } from '@/types'
+import { db } from '@/offline'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,12 +26,24 @@ const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
 const categoryId = route.params.id as string
+
+// Dialog visibility refs
+const showArchiveDialog = ref(false)
 const showDeleteDialog = ref(false)
+
+// Loading refs per action
+const archiving = ref(false)
 const deleting = ref(false)
+
+// Whether this category has any transactions — resolved async on mount.
+// Default true keeps the hard-delete button disabled until we confirm it is safe.
+const hasTransactions = ref(true)
 
 const category = computed(() =>
   categoriesStore.categories.find(c => c.id === categoryId)
 )
+
+const isArchived = computed(() => category.value?.active === false)
 
 const form = reactive({
   name: '',
@@ -44,10 +58,41 @@ const errors = reactive({
   type: ''
 })
 
-// Whether this category has subcategories (cannot become a child itself)
-const hasChildren = computed(() =>
-  categoriesStore.getSubcategories(categoryId).length > 0
+// Active subcategories — getSubcategories now only returns active ones after the store fix.
+// Why computed instead of ref + onMounted?
+// categoriesStore.categories is reactive: if the user archives a subcategory in
+// another tab / via another action the count updates automatically without a
+// page reload. A computed over a reactive store ref is the idiomatic approach.
+const activeSubcategoryCount = computed(() =>
+  categoriesStore.getSubcategories(categoryId).length
 )
+
+// Whether this category has children (used to disable the parent selector)
+const hasChildren = computed(() => activeSubcategoryCount.value > 0)
+
+// Whether the hard-delete button should be disabled
+const hardDeleteDisabled = computed(
+  () => hasTransactions.value || activeSubcategoryCount.value > 0
+)
+
+// Tooltip for disabled hard-delete button
+const hardDeleteTooltip = computed(() => {
+  if (hasTransactions.value) {
+    return 'No se puede borrar una categoría con transacciones. Usa Archivar.'
+  }
+  if (activeSubcategoryCount.value > 0) {
+    return 'No se puede borrar una categoría con subcategorías activas. Usa Archivar.'
+  }
+  return ''
+})
+
+// Archive dialog message — varies depending on whether there are active subcategories
+const archiveDialogMessage = computed(() => {
+  if (activeSubcategoryCount.value > 0) {
+    return `Archivar esta categoría también archivará sus ${activeSubcategoryCount.value} subcategoría${activeSubcategoryCount.value > 1 ? 's' : ''}. ¿Continuar?`
+  }
+  return '¿Archivar esta categoría? Dejará de aparecer en los formularios, pero todas las transacciones asociadas se conservarán intactas en el historial.'
+})
 
 // Eligible parent categories for the current type, excluding self and own children
 const parentOptions = computed(() => {
@@ -82,6 +127,15 @@ onMounted(async () => {
     form.color = category.value.color || '#3b82f6'
     form.parent_category_id = category.value.parent_category_id ?? ''
   }
+
+  // Async transaction count — determines whether hard-delete is available.
+  // We query IndexedDB directly to mirror the guard inside hardDeleteCategory.
+  try {
+    const txCount = await db.transactions.where('category_id').equals(categoryId).count()
+    hasTransactions.value = txCount > 0
+  } catch {
+    // On error leave hasTransactions = true so hard-delete stays disabled (safe default)
+  }
 })
 
 function validateForm(): boolean {
@@ -109,9 +163,6 @@ async function handleSubmit() {
   if (!validateForm()) return
 
   try {
-    // For edit: always include parent_category_id.
-    // Empty string clears the parent (unparents); a value sets it.
-    // The store will persist this to IndexedDB and the mutation queue.
     const data: UpdateCategoryDto = {
       name: form.name.trim(),
       type: form.type,
@@ -119,8 +170,6 @@ async function handleSubmit() {
       color: form.color || undefined,
       parent_category_id: form.parent_category_id || undefined
     }
-    // When user explicitly selected "no parent", we need to clear it
-    // in IndexedDB. We pass empty string which the offline layer stores.
     if (!form.parent_category_id && category.value?.parent_category_id) {
       (data as Record<string, unknown>).parent_category_id = ''
     }
@@ -137,11 +186,25 @@ function handleCancel() {
   router.back()
 }
 
-async function confirmDelete() {
+async function confirmArchive() {
+  archiving.value = true
+  try {
+    await categoriesStore.archiveCategory(categoryId)
+    uiStore.showSuccess('Categoría archivada exitosamente')
+    router.push('/categories')
+  } catch (error: any) {
+    uiStore.showError(error.message || 'Error al archivar categoría')
+  } finally {
+    archiving.value = false
+    showArchiveDialog.value = false
+  }
+}
+
+async function confirmHardDelete() {
   deleting.value = true
   try {
-    await categoriesStore.deleteCategory(categoryId)
-    uiStore.showSuccess('Categoría eliminada exitosamente')
+    await categoriesStore.hardDeleteCategory(categoryId)
+    uiStore.showSuccess('Categoría eliminada permanentemente')
     router.push('/categories')
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al eliminar categoría')
@@ -150,16 +213,85 @@ async function confirmDelete() {
     showDeleteDialog.value = false
   }
 }
+
+async function restoreCategory() {
+  try {
+    await categoriesStore.restoreCategory(categoryId)
+    uiStore.showSuccess('Categoría activada exitosamente')
+    // Stay on the page — category becomes active again
+  } catch (error: any) {
+    uiStore.showError(error.message || 'Error al activar categoría')
+  }
+}
 </script>
 
 <template>
   <div v-if="category" class="space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Editar Categoría</h1>
-      <BaseButton variant="danger" size="sm" @click="showDeleteDialog = true">
-        Eliminar
-      </BaseButton>
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-2xl font-bold truncate">Editar Categoría</h1>
+        <!-- Archived badge — visible only when category is archived -->
+        <span
+          v-if="isArchived"
+          class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
+        >
+          Archivada
+        </span>
+      </div>
+
+      <div class="flex gap-2 shrink-0">
+        <!-- Active category: show Archive + Hard Delete buttons -->
+        <template v-if="!isArchived">
+          <!-- Archive button — always enabled for active categories -->
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :loading="archiving"
+            @click="showArchiveDialog = true"
+          >
+            Archivar
+          </BaseButton>
+
+          <!-- Hard delete: wrap in span to show tooltip even when disabled.
+               disabled attribute suppresses hover events (and therefore title tooltips)
+               on <button>. A wrapping <span> keeps the hover surface alive. -->
+          <span
+            v-if="hardDeleteDisabled"
+            :title="hardDeleteTooltip"
+            class="inline-flex"
+          >
+            <BaseButton
+              variant="danger"
+              size="sm"
+              :disabled="true"
+              class="opacity-50 cursor-not-allowed"
+            >
+              Borrar permanentemente
+            </BaseButton>
+          </span>
+          <BaseButton
+            v-else
+            variant="danger"
+            size="sm"
+            :loading="deleting"
+            @click="showDeleteDialog = true"
+          >
+            Borrar permanentemente
+          </BaseButton>
+        </template>
+
+        <!-- Archived category: show single Activar button -->
+        <BaseButton
+          v-else
+          variant="primary"
+          size="sm"
+          :loading="categoriesStore.loading"
+          @click="restoreCategory"
+        >
+          Activar
+        </BaseButton>
+      </div>
     </div>
 
     <BaseCard>
@@ -261,14 +393,27 @@ async function confirmDelete() {
       </form>
     </BaseCard>
 
-    <!-- Delete confirmation dialog -->
+    <!-- Archive confirmation dialog -->
+    <ConfirmDialog
+      :show="showArchiveDialog"
+      variant="warning"
+      title="Archivar categoría"
+      :message="archiveDialogMessage"
+      confirm-text="Archivar"
+      :loading="archiving"
+      @confirm="confirmArchive"
+      @cancel="showArchiveDialog = false"
+    />
+
+    <!-- Hard delete confirmation dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Eliminar categoría"
-      :message="`¿Estás seguro de que deseas eliminar la categoría '${category.name}'? Esta acción no se puede deshacer.`"
-      confirm-text="Eliminar"
+      variant="danger"
+      title="Borrar permanentemente"
+      message="¿Borrar esta categoría permanentemente? Esta acción no se puede deshacer."
+      confirm-text="Borrar"
       :loading="deleting"
-      @confirm="confirmDelete"
+      @confirm="confirmHardDelete"
       @cancel="showDeleteDialog = false"
     />
   </div>

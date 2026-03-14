@@ -2,7 +2,8 @@
 /**
  * Account Detail View
  *
- * Shows account details and transactions
+ * Shows account details and transactions.
+ * Archive/hard-delete/restore pattern replaces the previous single Eliminar button.
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -17,6 +18,7 @@ import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
 import TransactionList from '@/components/transactions/TransactionList.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import { formatAccountType } from '@/utils/formatters'
+import { db } from '@/offline'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,12 +29,25 @@ const exchangeRatesStore = useExchangeRatesStore()
 const settingsStore = useSettingsStore()
 
 const accountId = route.params.id as string
+
+// Dialog visibility refs — one per action type
+const showArchiveDialog = ref(false)
 const showDeleteDialog = ref(false)
+
+// Loading refs — tracked independently so each button shows its own spinner
+const archiving = ref(false)
 const deleting = ref(false)
+
+// Whether this account has any transactions or transfers.
+// Computed async on mount; hard-delete is disabled until this resolves (false by default
+// keeps the button disabled until we know it is safe to enable).
+const hasMovements = ref(true)
 
 const account = computed(() =>
   accountsStore.accounts.find(a => a.id === accountId)
 )
+
+const isArchived = computed(() => account.value?.active === false)
 
 const balance = computed(() =>
   accountsStore.getAccountBalance(accountId)
@@ -51,6 +66,19 @@ onMounted(async () => {
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar cuenta')
     router.push('/accounts')
+    return
+  }
+
+  // Check for movements so we can enable/disable the hard-delete button.
+  // We query IndexedDB directly — same approach the store's hardDeleteAccount uses —
+  // so the check is consistent with the guard inside the store action.
+  try {
+    const txCount = await db.transactions.where('account_id').equals(accountId).count()
+    const transferFromCount = await db.transfers.where('source_account_id').equals(accountId).count()
+    const transferToCount = await db.transfers.where('destination_account_id').equals(accountId).count()
+    hasMovements.value = txCount + transferFromCount + transferToCount > 0
+  } catch {
+    // On error leave hasMovements = true so the button stays disabled (safe default)
   }
 })
 
@@ -58,17 +86,42 @@ function editAccount() {
   router.push(`/accounts/${accountId}/edit`)
 }
 
-async function confirmDelete() {
+async function confirmArchive() {
+  archiving.value = true
+  try {
+    await accountsStore.archiveAccount(accountId)
+    uiStore.showSuccess('Cuenta archivada exitosamente')
+    router.push('/accounts')
+  } catch (error: any) {
+    uiStore.showError(error.message || 'Error al archivar cuenta')
+  } finally {
+    archiving.value = false
+    showArchiveDialog.value = false
+  }
+}
+
+async function confirmHardDelete() {
   deleting.value = true
   try {
-    await accountsStore.deleteAccount(accountId)
-    uiStore.showSuccess('Cuenta eliminada exitosamente')
+    await accountsStore.hardDeleteAccount(accountId)
+    uiStore.showSuccess('Cuenta eliminada permanentemente')
     router.push('/accounts')
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al eliminar cuenta')
   } finally {
     deleting.value = false
     showDeleteDialog.value = false
+  }
+}
+
+async function restoreAccount() {
+  try {
+    await accountsStore.restoreAccount(accountId)
+    uiStore.showSuccess('Cuenta activada exitosamente')
+    // Stay on the page — the account becomes active again, the badge disappears
+    // and the archive/delete buttons reappear.
+  } catch (error: any) {
+    uiStore.showError(error.message || 'Error al activar cuenta')
   }
 }
 
@@ -81,13 +134,73 @@ function goToTransaction(transaction: any) {
   <div v-if="account" class="space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">{{ account.name }}</h1>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <h1 class="text-2xl font-bold truncate">{{ account.name }}</h1>
+        <!-- Archived badge — visible only when account is archived -->
+        <span
+          v-if="isArchived"
+          class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
+        >
+          Archivada
+        </span>
+      </div>
+
+      <div class="flex gap-2 shrink-0">
+        <!-- Edit button — always visible -->
         <BaseButton variant="secondary" size="sm" @click="editAccount">
           Editar
         </BaseButton>
-        <BaseButton variant="danger" size="sm" @click="showDeleteDialog = true">
-          Eliminar
+
+        <!-- Active account: show Archive + Hard Delete buttons -->
+        <template v-if="!isArchived">
+          <!-- Archive button — always enabled for active accounts -->
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :loading="archiving"
+            @click="showArchiveDialog = true"
+          >
+            Archivar
+          </BaseButton>
+
+          <!-- Hard delete: wrap in a span to show tooltip even when button is disabled.
+               Why a wrapper span? The HTML spec prevents pointer events (including hover
+               that triggers title tooltips) on disabled buttons. A wrapper span
+               re-enables the hover surface for the tooltip without re-enabling the button. -->
+          <span
+            v-if="hasMovements"
+            :title="'No se puede borrar una cuenta con movimientos. Usa Archivar.'"
+            class="inline-flex"
+          >
+            <BaseButton
+              variant="danger"
+              size="sm"
+              :disabled="true"
+              class="opacity-50 cursor-not-allowed"
+            >
+              Borrar permanentemente
+            </BaseButton>
+          </span>
+          <BaseButton
+            v-else
+            variant="danger"
+            size="sm"
+            :loading="deleting"
+            @click="showDeleteDialog = true"
+          >
+            Borrar permanentemente
+          </BaseButton>
+        </template>
+
+        <!-- Archived account: show single Activar button -->
+        <BaseButton
+          v-else
+          variant="primary"
+          size="sm"
+          :loading="accountsStore.loading"
+          @click="restoreAccount"
+        >
+          Activar
         </BaseButton>
       </div>
     </div>
@@ -163,14 +276,27 @@ function goToTransaction(transaction: any) {
       />
     </div>
 
-    <!-- Delete confirmation dialog -->
+    <!-- Archive confirmation dialog -->
+    <ConfirmDialog
+      :show="showArchiveDialog"
+      variant="warning"
+      title="Archivar cuenta"
+      message="¿Archivar esta cuenta? La cuenta dejará de aparecer en tus balances y en el dashboard, pero todos tus movimientos anteriores (transacciones y transferencias) se conservarán intactos en el historial."
+      confirm-text="Archivar"
+      :loading="archiving"
+      @confirm="confirmArchive"
+      @cancel="showArchiveDialog = false"
+    />
+
+    <!-- Hard delete confirmation dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      title="Eliminar cuenta"
-      :message="`¿Estás seguro de que deseas eliminar la cuenta '${account.name}'? Esta acción no se puede deshacer.`"
-      confirm-text="Eliminar"
+      variant="danger"
+      title="Borrar permanentemente"
+      message="¿Borrar esta cuenta permanentemente? Esta acción no se puede deshacer."
+      confirm-text="Borrar"
       :loading="deleting"
-      @confirm="confirmDelete"
+      @confirm="confirmHardDelete"
       @cancel="showDeleteDialog = false"
     />
   </div>
