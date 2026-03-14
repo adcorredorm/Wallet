@@ -2,6 +2,7 @@
 Account service containing business logic for account operations.
 """
 
+from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
 
@@ -76,6 +77,31 @@ class AccountService:
             List of tuples (account, balance)
         """
         accounts = self.get_all(include_archived=include_archived)
+        return [
+            (account, self.repository.calculate_balance(account.id))
+            for account in accounts
+        ]
+
+    def get_all_with_balances_since(
+        self, updated_since: datetime
+    ) -> list[tuple[Account, Decimal]]:
+        """
+        Return accounts modified since updated_since with balances.
+
+        Always includes archived accounts (to propagate active=False changes).
+        Used by incremental sync.
+
+        Args:
+            updated_since: Cutoff timestamp (naive UTC, inclusive). Only accounts
+                with updated_at >= updated_since are returned.
+
+        Returns:
+            List of tuples (account, balance) for accounts modified since the cutoff.
+        """
+        accounts = self.repository.get_all(
+            updated_since=updated_since,
+            include_archived=True,
+        )
         return [
             (account, self.repository.calculate_balance(account.id))
             for account in accounts

@@ -24,17 +24,23 @@ class ExchangeRateRepository:
     there is no client_id idempotency column on this table.
     """
 
-    def get_all(self) -> list[ExchangeRate]:
+    def get_all(self, updated_since: datetime | None = None) -> list[ExchangeRate]:
         """
-        Return all exchange rate rows ordered alphabetically by currency_code.
+        Return all exchange rate rows ordered alphabetically by currency_code,
+        optionally filtered by modification time.
+
+        Args:
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all rows.
 
         Returns:
             List of ExchangeRate instances, ordered by currency_code ascending.
         """
+        query = db.select(ExchangeRate).order_by(ExchangeRate.currency_code)
+        if updated_since is not None:
+            query = query.where(ExchangeRate.updated_at >= updated_since)
         return (
-            db.session.execute(
-                db.select(ExchangeRate).order_by(ExchangeRate.currency_code)
-            )
+            db.session.execute(query)
             .scalars()
             .all()
         )

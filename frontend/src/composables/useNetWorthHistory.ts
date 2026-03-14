@@ -204,6 +204,10 @@ export function useNetWorthHistory(
     // and never self-corrects (the transactions.length stays constant at 5
     // even after sync because the same 5 records are overwritten in place).
     const isSyncing = syncStore.isSyncing
+    const initialSyncComplete = syncStore.initialSyncComplete
+    // Read unconditionally so Vue tracks these deps in all watchEffect executions
+    const txCount = transactionsStore.transactions.length
+    const tfCount = transfersStore.transfers.length
 
     // Guard 1: wait for exchange rates (would produce rate=1 for USD otherwise)
     if (isRatesLoading || ratesCount === 0) {
@@ -211,20 +215,14 @@ export function useNetWorthHistory(
       return
     }
 
-    // Guard 2: wait for the initial fullReadSync to complete on hard refresh.
-    // processQueue() sets isSyncing=true synchronously before its first await,
-    // so by the time the first watchEffect microtask fires, isSyncing is already
-    // true. The chart will recompute once isSyncing goes false (sync done).
-    if (isSyncing) {
+    // Guard 2: show skeleton only on first sync when Dexie has no data.
+    // txCount/tfCount are read unconditionally above so Vue tracks them
+    // even when this branch is skipped on runs where isSyncing=false.
+    // If Dexie has data from previous sessions → render immediately.
+    if (!initialSyncComplete && isSyncing && txCount === 0 && tfCount === 0) {
       loading.value = true
       return
     }
-    // Subscribe to transaction/transfer store updates so the chart recomputes
-    // automatically when sync completes (refreshFromDB) or when the user adds
-    // a new transaction. The composable reads from Dexie directly but needs
-    // this reactive dep to know when Dexie has new data.
-    void transactionsStore.transactions.length
-    void transfersStore.transfers.length
 
     loading.value = true
 

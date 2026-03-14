@@ -3,7 +3,7 @@ Accounts API endpoints.
 """
 
 from datetime import datetime, timezone
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from app.schemas.account import (
 from app.services import AccountService
 from app.utils.exceptions import NotFoundError, ValidationError, BusinessRuleError
 from app.utils.responses import success_response, error_response
+from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 accounts_bp = Blueprint("accounts", __name__, url_prefix="/api/v1/accounts")
 account_service = AccountService()
@@ -50,14 +51,48 @@ def list_accounts():
     """
     List all accounts.
 
+    When the ``If-Sync-Cursor`` request header is present and valid the endpoint
+    operates in incremental sync mode: only accounts modified since the cursor
+    timestamp are returned as a flat list.  If nothing has changed, 304 is
+    returned with no body.  A fresh ``X-Sync-Cursor`` header is always included
+    in the response so the client can advance its cursor.
+
+    Request Headers:
+        If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
+
     Query Parameters:
-        include_archived (bool): Include inactive accounts (default: false)
+        include_archived (bool): Include inactive accounts (default: false).
+            Ignored in incremental mode (archived accounts are always included
+            so that deletions propagate to the client).
 
     Returns:
-        200: List of accounts with balances
+        200: List of accounts with balances (full sync or incremental with changes)
+        304: No changes since cursor (incremental mode only)
         500: Internal server error
     """
     try:
+        updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        new_cursor = encode_cursor()
+
+        if updated_since is not None:
+            # INCREMENTAL MODE — return only changed accounts as a flat list
+            accounts_with_balances = account_service.get_all_with_balances_since(updated_since)
+            if not accounts_with_balances:
+                resp = make_response("", 304)
+                resp.headers["X-Sync-Cursor"] = new_cursor
+                return resp
+            data = [
+                {
+                    **AccountResponse.model_validate(account).model_dump(mode="json"),
+                    "balance": str(balance),
+                }
+                for account, balance in accounts_with_balances
+            ]
+            resp = make_response(jsonify({"success": True, "data": data}), 200)
+            resp.headers["X-Sync-Cursor"] = new_cursor
+            return resp
+
+        # FULL SYNC MODE — existing behaviour
         include_archived = request.args.get("include_archived", "false").lower() == "true"
 
         accounts_with_balances = account_service.get_all_with_balances(
@@ -73,7 +108,10 @@ def list_accounts():
             for account, balance in accounts_with_balances
         ]
 
-        return success_response(data=data)
+        body, status = success_response(data=data)
+        resp = make_response(jsonify(body), status)
+        resp.headers["X-Sync-Cursor"] = new_cursor
+        return resp
 
     except Exception as e:
         return error_response(f"Error al listar cuentas: {str(e)}", status_code=500)

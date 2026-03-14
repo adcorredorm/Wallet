@@ -53,7 +53,8 @@
 import { db } from './db'
 import { mutationQueue } from './mutation-queue'
 import { isTempId } from './temp-id'
-import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget } from './types'
+import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget, LocalExchangeRate } from './types'
+import { syncClient } from '@/api/sync-client'
 import { accountsApi } from '@/api/accounts'
 import { transactionsApi } from '@/api/transactions'
 import { transfersApi } from '@/api/transfers'
@@ -265,7 +266,7 @@ export class SyncManager {
       const mutations = await mutationQueue.getAll()
 
       if (mutations.length === 0) {
-        console.log('[SyncManager] Queue is empty. Running full-read-sync anyway.')
+        console.log('[SyncManager] Queue is empty. Running sync (full or incremental).')
       }
 
       for (const mutation of mutations) {
@@ -336,11 +337,16 @@ export class SyncManager {
         }
       }
 
-      // After all (non-blocked) mutations are processed, re-fetch the full
-      // state from the server. This ensures IndexedDB reflects any changes
-      // made by other devices or server-side side-effects (e.g. recalculated
-      // balances, auto-generated fields).
-      await this.fullReadSync()
+      // After all (non-blocked) mutations are processed, re-fetch the state
+      // from the server. If Dexie is empty (fresh install / cleared DB) run a
+      // full sync; otherwise run an incremental sync using stored cursors.
+      const dexieIsEmpty = await this.isDexieEmpty()
+      if (dexieIsEmpty) {
+        console.log('[SyncManager] Dexie is empty — running full sync.')
+        await this.fullReadSync()
+      } else {
+        await this.incrementalSync()
+      }
 
       // Notify the app that IndexedDB is now fully up to date so the reactive
       // stores can refresh their state from local storage without firing extra
@@ -367,6 +373,7 @@ export class SyncManager {
       // setLastSyncAt records the wall-clock time for the "Sincronizado" label.
       syncStore.setSyncing(false)
       syncStore.setLastSyncAt(new Date().toISOString())
+      syncStore.setInitialSyncComplete(true)
       // ─────────────────────────────────────────────────────────────────
 
       // If mutations were enqueued while this run was processing (e.g. a
@@ -379,6 +386,32 @@ export class SyncManager {
         console.log(`[SyncManager] ${leftover} mutation(s) queued during processing — re-dispatching wallet:mutation-queued.`)
         window.dispatchEvent(new CustomEvent('wallet:mutation-queued'))
       }
+    }
+  }
+
+  /**
+   * Force a complete re-download of all data from the server.
+   * Clears all incremental sync cursors and runs fullReadSync.
+   * Called from the Settings UI "Forzar sincronización completa" button.
+   */
+  async forceFullSync(): Promise<void> {
+    if (this.processing) {
+      console.log('[SyncManager] forceFullSync: sync already in progress, skipping.')
+      return
+    }
+    this.processing = true
+    const syncStore = getSyncStore()
+    syncStore.setSyncing(true)
+    try {
+      await this.clearSyncCursors()
+      await this.fullReadSync()
+      window.dispatchEvent(new CustomEvent('wallet:sync-complete'))
+      console.log('[SyncManager] Force full sync complete.')
+    } finally {
+      this.processing = false
+      syncStore.setSyncing(false)
+      syncStore.setLastSyncAt(new Date().toISOString())
+      syncStore.setInitialSyncComplete(true)
     }
   }
 
@@ -1307,73 +1340,263 @@ export class SyncManager {
    * should not prevent the other types from syncing. allSettled logs the
    * failure and continues.
    */
+  /**
+   * Returns true if Dexie has no financial data — indicates fresh install or cleared DB.
+   * Used to decide full vs incremental sync.
+   */
+  private async isDexieEmpty(): Promise<boolean> {
+    const [accounts, transactions, transfers] = await Promise.all([
+      db.accounts.count(),
+      db.transactions.count(),
+      db.transfers.count(),
+    ])
+    return accounts === 0 && transactions === 0 && transfers === 0
+  }
+
+  /** Read a sync cursor from Dexie settings. Returns undefined if not set. */
+  private async getSyncCursor(entity: string): Promise<string | undefined> {
+    const entry = await db.settings.get(`__sync__cursor_${entity}`)
+    return entry?.value as string | undefined
+  }
+
+  /** Persist a sync cursor to Dexie settings. */
+  private async saveSyncCursor(entity: string, cursor: string): Promise<void> {
+    const now = new Date().toISOString()
+    await db.settings.put({
+      key: `__sync__cursor_${entity}`,
+      value: cursor,
+      updated_at: now,
+      _sync_status: 'synced',
+      _local_updated_at: now,
+    })
+  }
+
+  /** Clear all __sync__cursor_* entries (call before a forced full sync). */
+  private async clearSyncCursors(): Promise<void> {
+    const keys = [
+      '__sync__cursor_transactions',
+      '__sync__cursor_transfers',
+      '__sync__cursor_accounts',
+      '__sync__cursor_categories',
+      '__sync__cursor_dashboards',
+      '__sync__cursor_exchange_rates',
+    ]
+    await db.settings.bulkDelete(keys)
+  }
+
   private async fullReadSync(): Promise<void> {
     console.log('[SyncManager] Starting full-read-sync.')
 
+    // Helper: fetch entity list via syncClient (not apiClient — we need response headers).
+    const syncEntity = async <T extends { id: string; updated_at: string }>(
+      url: string,
+      cursorKey: string,
+      writer: (items: T[]) => Promise<unknown>,
+    ): Promise<void> => {
+      const response = await syncClient.get<{ success: boolean; data: T[] | { items: T[] } }>(url)
+      const raw = response.data.data
+      const items: T[] = Array.isArray(raw) ? raw : (raw as any).items ?? []
+      await writer(items)
+      const cursor = response.headers['x-sync-cursor']
+      if (cursor) await this.saveSyncCursor(cursorKey, cursor)
+    }
+
     const results = await Promise.allSettled([
-      this.syncEntityTable(
-        () => accountsApi.getAll(false),
-        (items) =>
-          db.accounts.bulkPut(
-            items.map((item) => toLocalItem(item, item.id) as LocalAccount)
-          )
+      syncEntity<LocalAccount>(
+        '/accounts?include_archived=true',
+        'accounts',
+        (items) => db.accounts.bulkPut(items.map((item) => toLocalItem(item, item.id) as LocalAccount)),
       ),
-      this.syncEntityTable(
-        () => transactionsApi.getAll({ limit: 10000 } as any),
-        (items) =>
-          db.transactions.bulkPut(
-            items.map((item) => toLocalItem(item, item.id) as LocalTransaction)
-          )
+      syncEntity<LocalTransaction>(
+        '/transactions?limit=10000',
+        'transactions',
+        (items) => db.transactions.bulkPut(items.map((item) => toLocalItem(item, item.id) as LocalTransaction)),
       ),
-      this.syncEntityTable(
-        () => transfersApi.getAll({ limit: 10000 } as any),
-        (items) =>
-          db.transfers.bulkPut(
-            items.map((item) => toLocalItem(item, item.id) as LocalTransfer)
-          )
+      syncEntity<LocalTransfer>(
+        '/transfers?limit=10000',
+        'transfers',
+        (items) => db.transfers.bulkPut(items.map((item) => toLocalItem(item, item.id) as LocalTransfer)),
       ),
-      this.syncEntityTable(
-        () => categoriesApi.getAll(undefined, true),
-        (items) =>
-          db.categories.bulkPut(
-            items.map((item) => toLocalItem(item, item.id) as LocalCategory)
-          )
+      syncEntity<LocalCategory>(
+        '/categories?include_archived=true',
+        'categories',
+        (items) => db.categories.bulkPut(items.map((item) => toLocalItem(item, item.id) as LocalCategory)),
       ),
-      this.syncDashboards()
+      // Exchange rates: special writer — LocalExchangeRate has no `id` field,
+      // incompatible with toLocalItem. Map server fields directly.
+      (async () => {
+        const erResp = await syncClient.get<{ success: boolean; data: any }>('/exchange-rates')
+        const erCursor = erResp.headers['x-sync-cursor']
+        if (erCursor) await this.saveSyncCursor('exchange_rates', erCursor)
+        const erRaw = erResp.data.data
+        const erItems: any[] = Array.isArray(erRaw) ? erRaw : (erRaw as any)?.rates ?? []
+        if (erItems.length > 0) {
+          const now = new Date().toISOString()
+          await db.exchangeRates.bulkPut(
+            erItems.map((r: any): LocalExchangeRate => ({
+              currency_code: r.currency_code,
+              rate_to_usd: r.rate_to_usd,
+              source: r.source,
+              fetched_at: r.fetched_at ?? now,
+              updated_at: now,
+            }))
+          )
+        }
+      })(),
+      this.syncDashboards(),
     ])
 
     results.forEach((result, index) => {
-      const entityNames = ['accounts', 'transactions', 'transfers', 'categories', 'dashboards']
+      const names = ['accounts', 'transactions', 'transfers', 'categories', 'exchange_rates', 'dashboards']
       if (result.status === 'rejected') {
-        console.warn(
-          `[SyncManager] full-read-sync failed for ${entityNames[index]}:`,
-          result.reason
-        )
+        console.warn(`[SyncManager] full-read-sync failed for ${names[index]}:`, result.reason)
       } else {
-        console.log(`[SyncManager] full-read-sync completed for ${entityNames[index]}.`)
+        console.log(`[SyncManager] full-read-sync completed for ${names[index]}.`)
       }
     })
   }
 
-  /**
-   * Fetch a single entity collection from the API and persist it to IndexedDB.
-   *
-   * Extracted as a generic helper to avoid repeating the try/catch and type
-   * constraint in fullReadSync. The generic T ensures both the fetcher return
-   * type and the writer input type are compatible without casting.
-   */
-  private async syncEntityTable<T extends { id: string; updated_at: string }>(
-    fetcher: () => Promise<T[]>,
-    writer: (items: T[]) => Promise<unknown>
-  ): Promise<void> {
-    const items = await fetcher()
-    await writer(items)
+  private async incrementalSync(): Promise<void> {
+    console.log('[SyncManager] Starting incremental sync.')
+
+    type EntityConfig = {
+      url: string
+      cursorKey: string
+      writer: (items: any[]) => Promise<unknown>
+    }
+
+    const entities: EntityConfig[] = [
+      {
+        url: '/accounts',
+        cursorKey: 'accounts',
+        writer: (items) => db.accounts.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalAccount)),
+      },
+      {
+        url: '/transactions',
+        cursorKey: 'transactions',
+        writer: (items) => db.transactions.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalTransaction)),
+      },
+      {
+        url: '/transfers',
+        cursorKey: 'transfers',
+        writer: (items) => db.transfers.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalTransfer)),
+      },
+      {
+        url: '/categories',
+        cursorKey: 'categories',
+        writer: (items) => db.categories.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalCategory)),
+      },
+    ]
+
+    // Include exchange_rates and dashboards in allSettled so a failure in
+    // any single entity does not propagate and abort the remaining syncs.
+    const results = await Promise.allSettled([
+      ...entities.map(async ({ url, cursorKey, writer }) => {
+        const cursor = await this.getSyncCursor(cursorKey)
+        const headers: Record<string, string> = {}
+        if (cursor) headers['If-Sync-Cursor'] = cursor
+
+        const response = await syncClient.get<{ success: boolean; data: any[] }>(url, { headers })
+        const newCursor = response.headers['x-sync-cursor']
+        if (newCursor) await this.saveSyncCursor(cursorKey, newCursor)
+
+        if (response.status === 304) {
+          console.log(`[SyncManager] incremental: no changes for ${cursorKey}`)
+          return
+        }
+
+        const items: any[] = Array.isArray(response.data.data)
+          ? response.data.data
+          : (response.data.data as any)?.items ?? []
+        await writer(items)
+        console.log(`[SyncManager] incremental: ${items.length} record(s) updated for ${cursorKey}`)
+      }),
+      // Exchange rates handled separately (no id field, incompatible with toLocalItem)
+      this.incrementalSyncExchangeRates(),
+      // Dashboards: re-fetches widget details for changed dashboards
+      this.incrementalSyncDashboards(),
+    ])
+
+    const entityNames = [...entities.map((e) => e.cursorKey), 'exchange_rates', 'dashboards']
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn(`[SyncManager] incremental sync failed for ${entityNames[index]}:`, result.reason)
+      }
+    })
+  }
+
+  private async incrementalSyncExchangeRates(): Promise<void> {
+    const cursor = await this.getSyncCursor('exchange_rates')
+    const headers: Record<string, string> = {}
+    if (cursor) headers['If-Sync-Cursor'] = cursor
+
+    const response = await syncClient.get<{ success: boolean; data: any }>('/exchange-rates', { headers })
+    const newCursor = response.headers['x-sync-cursor']
+    if (newCursor) await this.saveSyncCursor('exchange_rates', newCursor)
+
+    if (response.status === 304) {
+      console.log('[SyncManager] incremental: no exchange rate changes')
+      return
+    }
+
+    const items: any[] = Array.isArray(response.data.data)
+      ? response.data.data
+      : (response.data.data as any)?.rates ?? []
+
+    if (items.length > 0) {
+      const now = new Date().toISOString()
+      await db.exchangeRates.bulkPut(
+        items.map((r: any): LocalExchangeRate => ({
+          currency_code: r.currency_code,
+          rate_to_usd: r.rate_to_usd,
+          source: r.source,
+          fetched_at: r.fetched_at ?? now,
+          updated_at: now,
+        }))
+      )
+    }
+  }
+
+  private async incrementalSyncDashboards(): Promise<void> {
+    const cursor = await this.getSyncCursor('dashboards')
+    const headers: Record<string, string> = {}
+    if (cursor) headers['If-Sync-Cursor'] = cursor
+
+    const response = await syncClient.get<{ success: boolean; data: any[] }>('/dashboards', { headers })
+    const newCursor = response.headers['x-sync-cursor']
+    if (newCursor) await this.saveSyncCursor('dashboards', newCursor)
+
+    if (response.status === 304) {
+      console.log('[SyncManager] incremental: no dashboard changes')
+      return
+    }
+
+    const dashboards: any[] = response.data.data ?? []
+    await db.dashboards.bulkPut(dashboards.map((d) => toLocalItem(d, d.id) as LocalDashboard))
+
+    if (dashboards.length > 0) {
+      // Use allSettled so a 404 on a single dashboard (deleted between list + detail
+      // fetch) does not abort widget syncing for the remaining dashboards.
+      const detailResults = await Promise.allSettled(
+        dashboards.map((d) => dashboardsApi.getById(d.id))
+      )
+      const allWidgets = detailResults
+        .filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof dashboardsApi.getById>>> => r.status === 'fulfilled')
+        .flatMap((r) => r.value.widgets)
+      if (allWidgets.length > 0) {
+        await db.dashboardWidgets.bulkPut(
+          allWidgets.map((w) => toLocalItem(w, w.id) as LocalDashboardWidget)
+        )
+      }
+    }
+    // Note: incremental sync does not prune deleted dashboards — that is handled
+    // by the periodic full sync or when isDexieEmpty() triggers a full sync.
   }
 
   /**
    * Sync dashboards and their widgets from the server to Dexie.
    *
-   * Why a dedicated method instead of reusing syncEntityTable?
+   * Why a dedicated method instead of using syncEntity inline?
    * Dashboards require a two-step fetch: getAll() returns a flat list of
    * Dashboard objects (no widgets), then getById() returns DashboardWithWidgets
    * for each dashboard. The syncEntityTable helper only handles a single flat
@@ -1392,18 +1615,19 @@ export class SyncManager {
    * against serverDashboardIds handles this reconciliation.
    */
   private async syncDashboards(): Promise<void> {
-    // Step 1: fetch the flat dashboard list.
-    const dashboards = await dashboardsApi.getAll()
-    const serverDashboardIds = dashboards.map((d) => d.id)
+    // Step 1: fetch the flat dashboard list via syncClient to capture response headers.
+    const response = await syncClient.get<{ success: boolean; data: any[] }>('/dashboards')
+    const dashboards: any[] = response.data.data ?? []
+    const serverDashboardIds = dashboards.map((d: any) => d.id)
 
     // Step 2: bulkPut all dashboards into Dexie.
     await db.dashboards.bulkPut(
-      dashboards.map((d) => toLocalItem(d, d.id) as LocalDashboard)
+      dashboards.map((d: any) => toLocalItem(d, d.id) as LocalDashboard)
     )
 
     // Step 3: fetch widgets for every dashboard in parallel.
     const detailResults = await Promise.all(
-      dashboards.map((d) => dashboardsApi.getById(d.id))
+      dashboards.map((d: any) => dashboardsApi.getById(d.id))
     )
 
     // Step 4: flatten all widgets and bulkPut them.
@@ -1429,6 +1653,10 @@ export class SyncManager {
     } else {
       await db.dashboardWidgets.clear()
     }
+
+    // Step 7: persist cursor for future incremental syncs.
+    const cursor = response.headers['x-sync-cursor']
+    if (cursor) await this.saveSyncCursor('dashboards', cursor)
   }
 }
 

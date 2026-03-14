@@ -4,7 +4,7 @@ Transaction repository for database operations.
 
 from typing import Optional
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
@@ -106,6 +106,7 @@ class TransactionRepository(BaseRepository[Transaction]):
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         tags: Optional[list[str]] = None,
+        updated_since: Optional[datetime] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Transaction], int]:
@@ -119,6 +120,8 @@ class TransactionRepository(BaseRepository[Transaction]):
             date_from: Filter by start date (inclusive)
             date_to: Filter by end date (inclusive)
             tags: Filter by tags (any match)
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all matching records.
             limit: Maximum results per page
             offset: Number of results to skip
 
@@ -141,6 +144,8 @@ class TransactionRepository(BaseRepository[Transaction]):
         if tags:
             # PostgreSQL array overlap operator
             filters.append(Transaction.tags.overlap(tags))
+        if updated_since is not None:
+            filters.append(Transaction.updated_at >= updated_since)
 
         # Count total matching records
         count_query = db.select(db.func.count()).select_from(Transaction)

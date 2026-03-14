@@ -6,8 +6,11 @@ This service persists configuration only — it never computes analytics.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import Optional
+
+import sqlalchemy as sa
 
 from app.models.dashboard import Dashboard
 from app.models.dashboard_widget import DashboardWidget, WidgetType
@@ -38,9 +41,17 @@ class DashboardCrudService:
     # Dashboard CRUD
     # ------------------------------------------------------------------
 
-    def list_dashboards(self) -> list[Dashboard]:
-        """Return all dashboards ordered by sort_order."""
-        return self.repo.get_all_ordered()
+    def list_dashboards(self, updated_since: datetime | None = None) -> list[Dashboard]:
+        """Return all dashboards ordered by sort_order.
+
+        Args:
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all dashboards.
+
+        Returns:
+            List of Dashboard instances ordered by sort_order ascending.
+        """
+        return self.repo.get_all_ordered(updated_since=updated_since)
 
     def get_dashboard(self, dashboard_id: UUID) -> Dashboard:
         """Return a single dashboard by ID or raise NotFoundError."""
@@ -98,6 +109,26 @@ class DashboardCrudService:
         self.repo.delete(dashboard)
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _touch_dashboard(self, dashboard_id: UUID) -> None:
+        """Update Dashboard.updated_at to now after a widget mutation.
+
+        Called after every widget create/update/delete so the incremental sync
+        cursor detects widget changes via the parent dashboard timestamp.
+
+        Args:
+            dashboard_id: Primary key of the dashboard to touch.
+        """
+        db.session.execute(
+            sa.update(Dashboard)
+            .where(Dashboard.id == dashboard_id)
+            .values(updated_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        )
+        db.session.commit()
+
+    # ------------------------------------------------------------------
     # Widget CRUD
     # ------------------------------------------------------------------
 
@@ -140,6 +171,7 @@ class DashboardCrudService:
             config=config_dict,
             client_id=data.client_id,
         )
+        self._touch_dashboard(dashboard_id)
         return widget, True
 
     def update_widget(self, dashboard_id: UUID, widget_id: UUID, data: WidgetUpdate) -> DashboardWidget:
@@ -171,7 +203,9 @@ class DashboardCrudService:
         if data.config is not None:
             update_fields["config"] = data.config.model_dump(exclude_none=True)
 
-        return self.repo.update_widget(widget, **update_fields)
+        updated_widget = self.repo.update_widget(widget, **update_fields)
+        self._touch_dashboard(dashboard_id)
+        return updated_widget
 
     def delete_widget(self, dashboard_id: UUID, widget_id: UUID) -> None:
         """
@@ -186,3 +220,4 @@ class DashboardCrudService:
         if not widget or str(widget.dashboard_id) != str(dashboard_id):
             raise NotFoundError("DashboardWidget", str(widget_id))
         self.repo.delete_widget(widget)
+        self._touch_dashboard(dashboard_id)

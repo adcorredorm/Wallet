@@ -35,14 +35,19 @@ class ExchangeRateService:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_all(self) -> list[ExchangeRate]:
+    def get_all(self, updated_since: datetime | None = None) -> list[ExchangeRate]:
         """
-        Return all stored exchange rates ordered by currency code.
+        Return all stored exchange rates ordered by currency code,
+        optionally filtered by modification time.
+
+        Args:
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all rates.
 
         Returns:
             List of ExchangeRate instances.
         """
-        return self.repository.get_all()
+        return self.repository.get_all(updated_since=updated_since)
 
     def get_last_updated(self) -> Optional[datetime]:
         """

@@ -2,6 +2,7 @@
 Account repository for database operations.
 """
 
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from decimal import Decimal
@@ -113,6 +114,33 @@ class AccountRepository(BaseRepository[Account]):
 
         balance = Decimal(str(income)) - Decimal(str(expenses)) + Decimal(str(transfers_in)) - Decimal(str(transfers_out))
         return balance
+
+    def get_all(
+        self,
+        updated_since: datetime | None = None,
+        include_archived: bool = False,
+    ) -> list[Account]:
+        """
+        Get all accounts, optionally filtered by modification time and archived status.
+
+        Follows the same signature convention as CategoryRepository.get_all and
+        BaseRepository.get_all (updated_since optional kwarg).
+
+        Args:
+            updated_since: If provided, only return accounts with updated_at >= value
+                (naive UTC, inclusive). None returns all matching accounts.
+            include_archived: When True, include inactive (archived) accounts.
+                For incremental sync, pass True to propagate active=False changes.
+
+        Returns:
+            List of Account instances.
+        """
+        query = db.select(Account)
+        if updated_since is not None:
+            query = query.where(Account.updated_at >= updated_since)
+        if not include_archived:
+            query = query.where(Account.active == True)
+        return db.session.execute(query).scalars().all()
 
     def soft_delete(self, account_id: UUID) -> Account:
         """

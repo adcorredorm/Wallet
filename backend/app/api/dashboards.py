@@ -14,7 +14,7 @@ Endpoints:
 
 from uuid import UUID
 
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, make_response, request
 from pydantic import ValidationError
 
 from app.services.dashboard_crud import DashboardCrudService
@@ -29,6 +29,7 @@ from app.schemas.dashboard_crud import (
 )
 from app.utils.responses import success_response, error_response
 from app.utils.exceptions import WalletException
+from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 dashboards_bp = Blueprint("dashboards", __name__, url_prefix="/api/v1/dashboards")
 _service = DashboardCrudService()
@@ -53,13 +54,42 @@ def list_dashboards():
     """
     List all dashboards.
 
+    When the ``If-Sync-Cursor`` request header is present and valid the endpoint
+    operates in incremental sync mode: only dashboards modified since the cursor
+    timestamp are returned as a flat list.  If nothing has changed, 304 is
+    returned with no body.  A fresh ``X-Sync-Cursor`` header is always included
+    so the client can advance its cursor.
+
+    Request Headers:
+        If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
+
     Returns:
         200: List of dashboards
+        304: No changes since cursor (incremental mode only)
         500: Internal server error
     """
     try:
+        updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        new_cursor = encode_cursor()
+
+        if updated_since is not None:
+            # INCREMENTAL MODE
+            dashboards = _service.list_dashboards(updated_since=updated_since)
+            if not dashboards:
+                resp = make_response("", 304)
+                resp.headers["X-Sync-Cursor"] = new_cursor
+                return resp
+            data = [_serialize_dashboard(d) for d in dashboards]
+            resp = make_response(jsonify({"success": True, "data": data}), 200)
+            resp.headers["X-Sync-Cursor"] = new_cursor
+            return resp
+
+        # FULL SYNC MODE
         dashboards = _service.list_dashboards()
-        return success_response(data=[_serialize_dashboard(d) for d in dashboards])
+        body, status = success_response(data=[_serialize_dashboard(d) for d in dashboards])
+        resp = make_response(jsonify(body), status)
+        resp.headers["X-Sync-Cursor"] = new_cursor
+        return resp
     except Exception as exc:
         return error_response(f"Error al listar dashboards: {exc}", status_code=500)
 

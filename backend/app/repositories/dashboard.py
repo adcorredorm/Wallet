@@ -2,6 +2,7 @@
 Dashboard repository for CRUD configuration data.
 """
 
+from datetime import datetime
 from uuid import UUID
 from typing import Optional
 
@@ -19,15 +20,20 @@ class DashboardRepository(BaseRepository[Dashboard]):
     def __init__(self) -> None:
         super().__init__(Dashboard)
 
-    def get_all_ordered(self) -> list[Dashboard]:
-        """Return all dashboards ordered by sort_order ascending."""
-        return (
-            db.session.execute(
-                db.select(Dashboard).order_by(Dashboard.sort_order.asc())
-            )
-            .scalars()
-            .all()
-        )
+    def get_all_ordered(self, updated_since: datetime | None = None) -> list[Dashboard]:
+        """Return dashboards ordered by sort_order, optionally filtered by updated_at.
+
+        Args:
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all dashboards.
+
+        Returns:
+            List of Dashboard instances ordered by sort_order ascending.
+        """
+        query = db.select(Dashboard).order_by(Dashboard.sort_order.asc())
+        if updated_since is not None:
+            query = query.where(Dashboard.updated_at >= updated_since)
+        return db.session.execute(query).scalars().all()
 
     def get_default(self) -> Optional[Dashboard]:
         """Return the dashboard marked as default, if any."""

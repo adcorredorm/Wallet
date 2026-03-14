@@ -4,7 +4,7 @@ Transfer repository for database operations.
 
 from typing import Optional
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import selectinload
@@ -79,6 +79,7 @@ class TransferRepository(BaseRepository[Transfer]):
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         tags: Optional[list[str]] = None,
+        updated_since: Optional[datetime] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[Transfer], int]:
@@ -90,6 +91,8 @@ class TransferRepository(BaseRepository[Transfer]):
             date_from: Filter by start date (inclusive)
             date_to: Filter by end date (inclusive)
             tags: Filter by tags (any match)
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all matching records.
             limit: Maximum results per page
             offset: Number of results to skip
 
@@ -113,6 +116,8 @@ class TransferRepository(BaseRepository[Transfer]):
         if tags:
             # PostgreSQL array overlap operator
             filters.append(Transfer.tags.overlap(tags))
+        if updated_since is not None:
+            filters.append(Transfer.updated_at >= updated_since)
 
         # Count total matching records
         count_query = db.select(db.func.count()).select_from(Transfer)

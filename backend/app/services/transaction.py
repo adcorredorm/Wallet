@@ -3,7 +3,7 @@ Transaction service containing business logic for transaction operations.
 """
 
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from app.models import Transaction, TransactionType, CategoryType
@@ -46,6 +46,7 @@ class TransactionService:
         date_from: date | None = None,
         date_to: date | None = None,
         tags: list[str] | None = None,
+        updated_since: datetime | None = None,
         page: int = 1,
         limit: int = 20,
     ) -> tuple[list[Transaction], int]:
@@ -59,6 +60,8 @@ class TransactionService:
             date_from: Filter by start date
             date_to: Filter by end date
             tags: Filter by tags
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all matching records.
             page: Page number (1-indexed)
             limit: Items per page
 
@@ -75,6 +78,7 @@ class TransactionService:
             date_from=date_from,
             date_to=date_to,
             tags=tags,
+            updated_since=updated_since,
             limit=limit,
             offset=offset,
         )

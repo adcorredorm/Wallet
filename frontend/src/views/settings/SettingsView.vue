@@ -37,10 +37,17 @@
 
 import { ref, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useSyncStore } from '@/stores/sync'
+import { syncManager } from '@/offline/sync-manager'
 import { SUPPORTED_CURRENCIES } from '@/utils/constants'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
 const settingsStore = useSettingsStore()
+const syncStore = useSyncStore()
+
+async function handleForceSync(): Promise<void> {
+  await syncManager.forceFullSync()
+}
 
 // ---------------------------------------------------------------------------
 // Currency options — shaped for BaseSelect's { value, label } contract.
@@ -206,6 +213,32 @@ function currentCurrencyLabel(): string {
         >
           {{ saveError }}
         </span>
+      </div>
+
+      <!-- Sincronización -->
+      <div class="border-t border-dark-bg-tertiary/50 pt-4 space-y-3">
+        <div>
+          <h2 class="text-base font-semibold text-dark-text-primary">
+            Sincronización
+          </h2>
+          <p class="mt-0.5 text-sm text-dark-text-secondary leading-relaxed">
+            Descarga todos los datos nuevamente desde el servidor. Útil si los datos locales parecen incompletos.
+          </p>
+        </div>
+
+        <button
+          @click="handleForceSync"
+          :disabled="syncStore.isSyncing"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                 bg-blue-600 text-white text-sm font-medium
+                 hover:bg-blue-700
+                 disabled:opacity-50 disabled:cursor-not-allowed
+                 transition-colors min-h-[44px]"
+          aria-label="Forzar sincronización completa con el servidor"
+        >
+          <span v-if="syncStore.isSyncing">Sincronizando...</span>
+          <span v-else>Forzar sincronización completa</span>
+        </button>
       </div>
     </div>
   </div>

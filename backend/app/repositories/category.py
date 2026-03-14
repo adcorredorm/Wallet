@@ -2,6 +2,7 @@
 Category repository for database operations.
 """
 
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -97,24 +98,29 @@ class CategoryRepository(BaseRepository[Category]):
             .all()
         )
 
-    def get_all(self, include_archived: bool = False) -> list[Category]:
+    def get_all(
+        self,
+        include_archived: bool = False,
+        updated_since: datetime | None = None,
+    ) -> list[Category]:
         """
-        Get all categories.
+        Get all categories, optionally filtered by archived status and/or update time.
 
         Args:
             include_archived: When True, return all categories regardless of
                 active flag. When False (default), return only active categories.
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all matching records.
 
         Returns:
             List of categories
         """
-        if include_archived:
-            return (
-                db.session.execute(db.select(Category))
-                .scalars()
-                .all()
-            )
-        return self.get_all_active()
+        query = db.select(Category)
+        if not include_archived:
+            query = query.where(Category.active == True)
+        if updated_since is not None:
+            query = query.where(Category.updated_at >= updated_since)
+        return db.session.execute(query).scalars().all()
 
     def has_transactions(self, category_id: UUID) -> bool:
         """

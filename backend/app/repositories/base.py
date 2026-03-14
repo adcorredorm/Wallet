@@ -2,6 +2,7 @@
 Base repository with common CRUD operations.
 """
 
+from datetime import datetime
 from typing import TypeVar, Generic, Optional, Type
 from uuid import UUID
 
@@ -83,14 +84,21 @@ class BaseRepository(Generic[T]):
             raise NotFoundError(self.model.__name__, str(id))
         return record
 
-    def get_all(self) -> list[T]:
+    def get_all(self, updated_since: datetime | None = None) -> list[T]:
         """
-        Get all records.
+        Get all records, optionally filtered by modification time.
+
+        Args:
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all records.
 
         Returns:
-            List of all model instances
+            List of model instances
         """
-        return db.session.execute(db.select(self.model)).scalars().all()
+        query = db.select(self.model)
+        if updated_since is not None:
+            query = query.where(self.model.updated_at >= updated_since)
+        return db.session.execute(query).scalars().all()
 
     def create(self, **kwargs) -> T:
         """

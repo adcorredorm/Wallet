@@ -345,3 +345,186 @@ def create_mock_account(**overrides):
     account.transfers_destination.count.return_value = 0
 
     return account
+
+
+# ============================================================================
+# REAL DB FACTORY FIXTURES (para integration y repository tests)
+# ============================================================================
+
+@pytest.fixture
+def make_account(app):
+    """Factory que crea Account reales en DB.
+    NO usar with app.app_context() — el fixture `app` ya activa el contexto.
+    """
+    from app.extensions import db
+    from app.models.account import Account, AccountType
+    from uuid import uuid4
+
+    def _make(**kwargs):
+        defaults = dict(
+            name=f"Cuenta {uuid4().hex[:6]}",
+            type=AccountType.DEBIT,
+            currency="MXN",
+            active=True,
+        )
+        defaults.update(kwargs)
+        account = Account(**defaults)
+        db.session.add(account)
+        db.session.commit()
+        db.session.refresh(account)
+        return account
+    yield _make
+
+
+@pytest.fixture
+def make_category(app):
+    """Factory que crea Category reales en DB."""
+    from app.extensions import db
+    from app.models.category import Category, CategoryType
+    from uuid import uuid4
+
+    def _make(**kwargs):
+        defaults = dict(
+            name=f"Cat {uuid4().hex[:6]}",
+            type=CategoryType.EXPENSE,
+            active=True,
+        )
+        defaults.update(kwargs)
+        cat = Category(**defaults)
+        db.session.add(cat)
+        db.session.commit()
+        db.session.refresh(cat)
+        return cat
+    yield _make
+
+
+@pytest.fixture
+def make_dashboard(app):
+    """Factory que crea Dashboard reales en DB.
+    display_currency es nullable=False — siempre proveer un valor.
+    """
+    from app.extensions import db
+    from app.models.dashboard import Dashboard
+    from uuid import uuid4
+
+    def _make(**kwargs):
+        defaults = dict(
+            name=f"Dashboard {uuid4().hex[:6]}",
+            is_default=False,
+            sort_order=0,
+            display_currency="USD",
+        )
+        defaults.update(kwargs)
+        d = Dashboard(**defaults)
+        db.session.add(d)
+        db.session.commit()
+        db.session.refresh(d)
+        return d
+    yield _make
+
+
+@pytest.fixture
+def make_widget(app):
+    """Factory que crea DashboardWidget reales en DB."""
+    from app.extensions import db
+    from app.models.dashboard_widget import DashboardWidget, WidgetType
+    from uuid import uuid4
+
+    def _make(dashboard_id, **kwargs):
+        defaults = dict(
+            dashboard_id=dashboard_id,
+            widget_type=WidgetType.LINE,
+            title=f"Widget {uuid4().hex[:6]}",
+            position_x=0,
+            position_y=0,
+            width=4,
+            height=2,
+            config={},
+        )
+        defaults.update(kwargs)
+        w = DashboardWidget(**defaults)
+        db.session.add(w)
+        db.session.commit()
+        db.session.refresh(w)
+        return w
+    yield _make
+
+
+@pytest.fixture
+def make_exchange_rate(app):
+    """Factory que crea ExchangeRate reales en DB."""
+    from app.extensions import db
+    from app.models.exchange_rate import ExchangeRate
+    from decimal import Decimal
+    from datetime import datetime
+    from uuid import uuid4
+
+    def _make(currency_code=None, **kwargs):
+        code = currency_code or f"T{uuid4().hex[:3].upper()}"
+        defaults = dict(
+            currency_code=code,
+            rate_to_usd=Decimal("1.0"),
+            source="test",
+            fetched_at=datetime.utcnow(),
+        )
+        defaults.update(kwargs)
+        er = ExchangeRate(**defaults)
+        db.session.add(er)
+        db.session.commit()
+        db.session.refresh(er)
+        return er
+    yield _make
+
+
+@pytest.fixture
+def make_transaction(app, make_account, make_category):
+    """Factory que crea Transaction reales en DB."""
+    from app.extensions import db
+    from app.models.transaction import Transaction, TransactionType
+    from decimal import Decimal
+    from datetime import date
+
+    def _make(**kwargs):
+        if "account_id" not in kwargs:
+            kwargs["account_id"] = make_account().id
+        if "category_id" not in kwargs:
+            kwargs["category_id"] = make_category().id
+        defaults = dict(
+            type=TransactionType.EXPENSE,
+            amount=Decimal("100.00"),
+            date=date.today(),
+            title="Test transaction",
+        )
+        defaults.update(kwargs)
+        t = Transaction(**defaults)
+        db.session.add(t)
+        db.session.commit()
+        db.session.refresh(t)
+        return t
+    yield _make
+
+
+@pytest.fixture
+def make_transfer(app, make_account):
+    """Factory que crea Transfer reales en DB."""
+    from app.extensions import db
+    from app.models.transfer import Transfer
+    from decimal import Decimal
+    from datetime import date
+
+    def _make(**kwargs):
+        if "source_account_id" not in kwargs:
+            kwargs["source_account_id"] = make_account().id
+        if "destination_account_id" not in kwargs:
+            kwargs["destination_account_id"] = make_account().id
+        defaults = dict(
+            amount=Decimal("50.00"),
+            date=date.today(),
+        )
+        defaults.update(kwargs)
+        t = Transfer(**defaults)
+        db.session.add(t)
+        db.session.commit()
+        db.session.refresh(t)
+        return t
+    yield _make

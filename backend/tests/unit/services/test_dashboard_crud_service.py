@@ -35,9 +35,14 @@ def mock_repo():
 
 @pytest.fixture
 def service(mock_repo):
-    """Create DashboardCrudService instance with mocked repository."""
+    """Create DashboardCrudService instance with mocked repository.
+
+    _touch_dashboard is patched to a no-op so these pure unit tests do not
+    require a Flask app context or real database session.
+    """
     svc = DashboardCrudService()
     svc.repo = mock_repo
+    svc._touch_dashboard = Mock()
     return svc
 
 

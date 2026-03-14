@@ -2,6 +2,7 @@
 Category service containing business logic for category operations.
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from app.models import Category
@@ -20,23 +21,40 @@ class CategoryService:
         self,
         type: str | None = None,
         include_archived: bool = False,
+        updated_since: datetime | None = None,
     ) -> list[Category]:
         """
-        Get all categories, optionally filtered by type.
+        Get all categories, optionally filtered by type, archived status, and update time.
 
         Args:
-            type: Optional category type filter (income, expense, both)
+            type: Optional category type filter (income, expense, both).
+                Mutually exclusive with updated_since — raises ValueError if both
+                are provided, because get_by_type() does not support time-based
+                filtering. Sync callers must not pass type.
             include_archived: When True, return both active and archived categories.
                 When False (default), return only active categories.
+            updated_since: Only return records with updated_at >= updated_since
+                (naive UTC). None returns all matching records.
 
         Returns:
             List of categories
+
+        Raises:
+            ValueError: If both type and updated_since are provided.
         """
+        if type and updated_since is not None:
+            raise ValueError(
+                "type and updated_since are mutually exclusive: get_by_type() "
+                "does not support time-based filtering. Sync callers must not pass type."
+            )
         if type:
             from app.models.category import CategoryType
 
             return self.repository.get_by_type(CategoryType(type))
-        return self.repository.get_all(include_archived=include_archived)
+        return self.repository.get_all(
+            include_archived=include_archived,
+            updated_since=updated_since,
+        )
 
     def get_by_id(self, category_id: UUID) -> Category:
         """

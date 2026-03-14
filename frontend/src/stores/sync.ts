@@ -27,7 +27,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, readonly } from 'vue'
 
 export interface SyncError {
   entityType: string
@@ -76,6 +76,16 @@ export const useSyncStore = defineStore('sync', () => {
    * (currently just "Sincronizado" for simplicity).
    */
   const lastSyncAt = ref<string | null>(null)
+
+  /**
+   * True once the first full read-sync has completed successfully.
+   * Used by the SyncManager to gate incremental sync — incremental requests
+   * only make sense after the initial dataset has been bootstrapped into
+   * IndexedDB. Exposed as readonly so only setInitialSyncComplete() can
+   * transition it from false → true; prevents accidental direct mutation
+   * by components.
+   */
+  const initialSyncComplete = ref(false)
 
   /**
    * Detailed list of sync errors for potential display in a future error
@@ -129,6 +139,10 @@ export const useSyncStore = defineStore('sync', () => {
     lastSyncAt.value = ts
   }
 
+  function setInitialSyncComplete(value: boolean): void {
+    initialSyncComplete.value = value
+  }
+
   /**
    * Add a new sync error to the errors array and bump the errorCount.
    * Called by sync-manager.ts whenever a mutation fails permanently.
@@ -154,6 +168,7 @@ export const useSyncStore = defineStore('sync', () => {
     pendingCount,
     errorCount,
     lastSyncAt,
+    initialSyncComplete: readonly(initialSyncComplete),
     errors,
     // Computed
     syncStatus,
@@ -163,6 +178,7 @@ export const useSyncStore = defineStore('sync', () => {
     setPendingCount,
     setErrorCount,
     setLastSyncAt,
+    setInitialSyncComplete,
     addError,
     clearErrors
   }

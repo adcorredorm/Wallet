@@ -3,7 +3,7 @@ Categories API endpoints.
 """
 
 from datetime import datetime, timezone
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from app.schemas.category import (
 from app.services import CategoryService
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 from app.utils.responses import success_response, error_response
+from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 categories_bp = Blueprint("categories", __name__, url_prefix="/api/v1/categories")
 category_service = CategoryService()
@@ -50,15 +51,51 @@ def list_categories():
     """
     List all categories.
 
+    When the ``If-Sync-Cursor`` request header is present and valid the endpoint
+    operates in incremental sync mode: only categories modified since the cursor
+    timestamp are returned as a flat list.  Archived categories are always
+    included in incremental mode so that deactivation changes propagate to the
+    client.  If nothing has changed, 304 is returned with no body.  A fresh
+    ``X-Sync-Cursor`` header is always included so the client can advance its
+    cursor.
+
+    Request Headers:
+        If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
+
     Query Parameters:
-        type (str): Filter by category type (income, expense, both)
-        include_archived (bool): Include archived/inactive categories (default: false)
+        type (str): Filter by category type (income, expense, both).
+            Ignored in incremental mode.
+        include_archived (bool): Include archived/inactive categories (default: false).
+            Ignored in incremental mode (archived are always included).
 
     Returns:
         200: List of categories
+        304: No changes since cursor (incremental mode only)
         500: Internal server error
     """
     try:
+        updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        new_cursor = encode_cursor()
+
+        if updated_since is not None:
+            # INCREMENTAL MODE — include archived so deletions propagate
+            categories = category_service.get_all(
+                updated_since=updated_since,
+                include_archived=True,
+            )
+            if not categories:
+                resp = make_response("", 304)
+                resp.headers["X-Sync-Cursor"] = new_cursor
+                return resp
+            data = [
+                CategoryResponse.model_validate(cat).model_dump(mode="json")
+                for cat in categories
+            ]
+            resp = make_response(jsonify({"success": True, "data": data}), 200)
+            resp.headers["X-Sync-Cursor"] = new_cursor
+            return resp
+
+        # FULL SYNC MODE — existing behaviour
         type = request.args.get("type")
         include_archived = request.args.get("include_archived", "false").lower() == "true"
         categories = category_service.get_all(type=type, include_archived=include_archived)
@@ -68,7 +105,10 @@ def list_categories():
             for cat in categories
         ]
 
-        return success_response(data=data)
+        body, status = success_response(data=data)
+        resp = make_response(jsonify(body), status)
+        resp.headers["X-Sync-Cursor"] = new_cursor
+        return resp
 
     except Exception as e:
         return error_response(f"Error al listar categorias: {str(e)}", status_code=500)

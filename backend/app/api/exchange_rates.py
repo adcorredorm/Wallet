@@ -8,7 +8,7 @@ this API.
 
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 
 from app.schemas.exchange_rate import (
@@ -19,6 +19,7 @@ from app.schemas.exchange_rate import (
 from app.services.exchange_rate import ExchangeRateService
 from app.utils.exceptions import NotFoundError, ValidationError
 from app.utils.responses import error_response, success_response
+from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 exchange_rates_bp = Blueprint("exchange_rates", __name__, url_prefix="/api/v1")
 exchange_rate_service = ExchangeRateService()
@@ -31,14 +32,45 @@ def list_exchange_rates():
 
     Returns every exchange rate row ordered alphabetically by currency code,
     together with the most recent ``fetched_at`` timestamp across all rows.
-    Always returns 200 — the ``rates`` list is empty when no rates have been
-    loaded yet.
+    Always returns 200 in full sync mode — the ``rates`` list is empty when no
+    rates have been loaded yet.
+
+    When the ``If-Sync-Cursor`` request header is present and valid the endpoint
+    operates in incremental sync mode: only rates modified since the cursor
+    timestamp are returned as a flat list of ``ExchangeRateResponse`` objects
+    (the ``ExchangeRatesListResponse`` wrapper is NOT used in this mode).  If
+    nothing has changed, 304 is returned with no body.  A fresh
+    ``X-Sync-Cursor`` header is always included so the client can advance its
+    cursor.
+
+    Request Headers:
+        If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
 
     Returns:
-        200: ExchangeRatesListResponse payload.
+        200: ExchangeRatesListResponse payload (full sync) or flat list (incremental).
+        304: No changes since cursor (incremental mode only).
         500: Internal server error.
     """
     try:
+        updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        new_cursor = encode_cursor()
+
+        if updated_since is not None:
+            # INCREMENTAL MODE — flat list, no wrapper
+            rates = exchange_rate_service.get_all(updated_since=updated_since)
+            if not rates:
+                resp = make_response("", 304)
+                resp.headers["X-Sync-Cursor"] = new_cursor
+                return resp
+            data = [
+                ExchangeRateResponse.model_validate(r).model_dump(mode="json")
+                for r in rates
+            ]
+            resp = make_response(jsonify({"success": True, "data": data}), 200)
+            resp.headers["X-Sync-Cursor"] = new_cursor
+            return resp
+
+        # FULL SYNC MODE — existing behaviour with ExchangeRatesListResponse wrapper
         rates = exchange_rate_service.get_all()
         last_updated = exchange_rate_service.get_last_updated()
 
@@ -47,7 +79,10 @@ def list_exchange_rates():
             last_updated=last_updated,
         )
 
-        return success_response(data=response.model_dump(mode="json"))
+        body, status = success_response(data=response.model_dump(mode="json"))
+        resp = make_response(jsonify(body), status)
+        resp.headers["X-Sync-Cursor"] = new_cursor
+        return resp
 
     except Exception as e:
         return error_response(

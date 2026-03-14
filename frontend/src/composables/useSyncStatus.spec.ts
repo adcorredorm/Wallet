@@ -201,3 +201,20 @@ describe('useSyncStatus — statusColor', () => {
     expect(status.statusColor.value).toBe('text-green-400')
   })
 })
+
+describe('syncStore — initialSyncComplete', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('is false by default', () => {
+    const store = useSyncStore()
+    expect(store.initialSyncComplete).toBe(false)
+  })
+
+  it('becomes true after setInitialSyncComplete(true)', () => {
+    const store = useSyncStore()
+    store.setInitialSyncComplete(true)
+    expect(store.initialSyncComplete).toBe(true)
+  })
+})

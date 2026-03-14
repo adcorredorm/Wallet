@@ -3,7 +3,7 @@ Transactions API endpoints.
 """
 
 from datetime import date, datetime, timezone
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from app.schemas.category import CategoryResponse
 from app.services import TransactionService
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 from app.utils.responses import success_response, error_response, paginated_response
+from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 transactions_bp = Blueprint("transactions", __name__, url_prefix="/api/v1/transactions")
 transaction_service = TransactionService()
@@ -53,6 +54,15 @@ def list_transactions():
     """
     List transactions with filters and pagination.
 
+    When the ``If-Sync-Cursor`` request header is present and valid the endpoint
+    operates in incremental sync mode: only transactions modified since the cursor
+    timestamp are returned as a flat list (bypassing pagination).  If nothing has
+    changed, 304 is returned with no body.  A fresh ``X-Sync-Cursor`` header is
+    always included so the client can advance its cursor.
+
+    Request Headers:
+        If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
+
     Query Parameters:
         account_id (UUID): Filter by account
         category_id (UUID): Filter by category
@@ -60,15 +70,39 @@ def list_transactions():
         date_from (date): Filter by start date
         date_to (date): Filter by end date
         tags (list[str]): Filter by tags (comma-separated)
-        page (int): Page number (default: 1)
-        limit (int): Items per page (default: 20, max: 100)
+        page (int): Page number (default: 1, ignored in incremental mode)
+        limit (int): Items per page (default: 20, max: 10000, ignored in incremental mode)
 
     Returns:
-        200: Paginated list of transactions
+        200: Paginated list of transactions (full sync) or flat list (incremental)
+        304: No changes since cursor (incremental mode only)
         400: Validation error
         500: Internal server error
     """
     try:
+        updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        new_cursor = encode_cursor()
+
+        if updated_since is not None:
+            # INCREMENTAL MODE — return all changed transactions as a flat list
+            transactions, _ = transaction_service.get_filtered(
+                updated_since=updated_since,
+                limit=10000,
+                page=1,
+            )
+            if not transactions:
+                resp = make_response("", 304)
+                resp.headers["X-Sync-Cursor"] = new_cursor
+                return resp
+            data = [
+                TransactionResponse.model_validate(t).model_dump(mode="json")
+                for t in transactions
+            ]
+            resp = make_response(jsonify({"success": True, "data": data}), 200)
+            resp.headers["X-Sync-Cursor"] = new_cursor
+            return resp
+
+        # FULL SYNC MODE — existing paginated behaviour
         # Parse query parameters
         filters_data = {
             "account_id": request.args.get("account_id"),
@@ -104,12 +138,15 @@ def list_transactions():
             trans_data["category"] = CategoryResponse.model_validate(trans.category).model_dump(mode="json")
             items.append(trans_data)
 
-        return paginated_response(
+        body, status = paginated_response(
             items=items,
             total=total,
             page=filters.page,
             page_size=filters.limit,
         )
+        resp = make_response(jsonify(body), status)
+        resp.headers["X-Sync-Cursor"] = new_cursor
+        return resp
 
     except PydanticValidationError as e:
         return error_response("Error de validación", status_code=400, errors=e.errors())
