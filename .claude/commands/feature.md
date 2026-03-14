@@ -2,7 +2,6 @@
 description: Full feature development lifecycle with Notion tracking
 argument-hint: [feature description or Notion page URL]
 model: sonnet
-allowed-tools: Agent, Skill, mcp__notion__notion-create-pages, mcp__notion__notion-update-page, mcp__notion__notion-fetch, Bash(cd backend && python -m pytest:*), Bash(cd frontend && npm run type-check:*), Bash(cd frontend && npm run lint:*), Read, Glob, Grep
 ---
 
 # Wallet Feature Development
@@ -53,6 +52,8 @@ Save the page ID — you will update it throughout the flow.
 ---
 
 ## Phase 1: Architecture Design Document (ADD)
+
+Use `superpowers:brainstorming` to clarify the feature's intent, scope, and key design questions before exploring the codebase. This ensures the architect receives a well-framed brief, not just raw input.
 
 Before launching the architect, explore the codebase to build context:
 - Backend: `backend/models/`, `backend/routes/`, `backend/services/`
@@ -112,7 +113,7 @@ Otherwise, proceed directly to Phase 3.
 
 For each sub-task that has an agent (not `User` tagged), launch the corresponding agent with:
 
-> "Review the following ADD and your assigned sub-task. Use `superpowers:writing-plans` to produce a detailed implementation plan before writing any code:
+> "Review the following ADD and your assigned sub-task. Use `superpowers:brainstorming` to explore the problem space and confirm your approach, then use `superpowers:writing-plans` to produce a detailed implementation plan before writing any code:
 >
 > **ADD**: [paste relevant sections of the ADD]
 > **Your sub-task**: [sub-task description and acceptance criteria]
@@ -145,7 +146,11 @@ For each sub-task, launch the corresponding agent referencing its approved plan 
 - `DevOps` → `docker-manager`
 - `User` → pause, inform the user what needs to be done manually, and wait for confirmation before continuing
 
-Each agent prompt **must** include these Notion responsibilities:
+Each agent prompt **must** include these instructions:
+
+> "Before writing any implementation code, use `superpowers:test-driven-development` to follow the TDD workflow — write tests first, then implement."
+
+Each agent prompt **must** also include these Notion responsibilities:
 
 > "**Notion ticket**: [sub-ticket page URL]
 >
@@ -224,7 +229,7 @@ Present the checklist to the user in a clear, step-by-step format they can follo
      - **Tags**: `Frontend` or `Backend` depending on the affected layer
      - **Parent**: link to the main feature page, or to the relevant sub-ticket if the bug is clearly scoped to one
      - **Notes**: what the user observed vs what was expected
-  2. Diagnose and fix the bug
+  2. Use `superpowers:systematic-debugging` to diagnose the bug before proposing a fix
   3. **No commit until the user confirms the fix is working**
   4. Once confirmed: commit the fix, update the Notion ticket Status to `Done`
   5. Move to the next bug
@@ -240,7 +245,7 @@ Then proceed.
 
 ## Phase 7: Close
 
-Use `superpowers:requesting-code-review` before closing.
+Use `superpowers:requesting-code-review` to verify the work meets requirements. Then use `superpowers:finishing-a-development-branch` to decide how to integrate (merge, PR, cleanup).
 
 1. Update the main Notion entry Status to `Done`
 2. **Close all sub-tickets:** search for every Notion entry whose `Parent` is the main feature page and update their Status to `Done`. A parent marked Done means all its children are Done — no exceptions.
