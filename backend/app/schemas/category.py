@@ -63,6 +63,7 @@ class CategoryUpdate(BaseModel):
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = None
     parent_category_id: Optional[UUID] = None
+    active: Optional[bool] = None
 
     @field_validator("color")
     @classmethod
@@ -89,6 +90,7 @@ class CategoryResponse(BaseModel):
     icon: Optional[str]
     color: Optional[str]
     parent_category_id: Optional[UUID]
+    active: bool
     created_at: datetime
     updated_at: datetime
 
