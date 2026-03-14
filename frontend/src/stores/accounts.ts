@@ -17,6 +17,16 @@
  * immediately, before touching the network. The UI updates without waiting
  * for a server round-trip. The SyncManager (Phase 4) will flush the queue
  * when connectivity is restored.
+ *
+ * Archive/hard-delete change:
+ * - archiveAccount (formerly deleteAccount): sets active=false in IndexedDB
+ *   instead of removing the record. The archived account stays in IndexedDB
+ *   so it can be restored and so its balance history is preserved locally.
+ *   Backend interprets the DELETE verb as a soft-delete (archive).
+ * - hardDeleteAccount: permanently removes the record from IndexedDB and
+ *   enqueues a delete_permanent mutation so the backend also hard-deletes.
+ *   Only allowed when the account has no transactions or transfers.
+ * - restoreAccount: flips active back to true and enqueues an update mutation.
  */
 
 import { defineStore } from 'pinia'
@@ -41,6 +51,14 @@ export const useAccountsStore = defineStore('accounts', () => {
   // Computed
   const activeAccounts = computed(() =>
     accounts.value.filter(account => account.active)
+  )
+
+  // Why filter active === false rather than !active?
+  // active is always a boolean on LocalAccount (required field on Account).
+  // Strict equality guards against undefined on records fetched from older
+  // IndexedDB schema versions that pre-date the active column.
+  const archivedAccounts = computed(() =>
+    accounts.value.filter(account => account.active === false)
   )
 
   const selectedAccount = computed(() =>
@@ -381,7 +399,22 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
   }
 
-  async function deleteAccount(id: string) {
+  /**
+   * Archive an account — soft-delete that keeps the record in IndexedDB with
+   * active=false. The account moves from activeAccounts to archivedAccounts
+   * in the UI. The backend treats DELETE as a soft-delete (archive).
+   *
+   * Why keep in IndexedDB instead of removing?
+   * Archived accounts must be restorable. They also retain their balance
+   * history so net worth calculations remain accurate. Physical removal would
+   * lose that history on the next page reload.
+   *
+   * Special case: if the account was created offline and never synced
+   * (pending CREATE in queue), archive is equivalent to cancellation —
+   * we remove the record entirely and cancel the CREATE mutation instead
+   * of enqueuing a DELETE, because the server never knew about this account.
+   */
+  async function archiveAccount(id: string) {
     loading.value = true
     error.value = null
     try {
@@ -401,16 +434,34 @@ export const useAccountsStore = defineStore('accounts', () => {
         return
       }
 
-      // The entity exists on the server. Delete from IndexedDB immediately
-      // so stale-while-revalidate reads don't restore the deleted account,
-      // then remove from reactive state and enqueue the DELETE for sync.
-      await db.accounts.delete(id)
-      accounts.value = accounts.value.filter(a => a.id !== id)
-      balances.value.delete(id)
+      // Step 1 — Update IndexedDB: set active=false so the record is preserved
+      // but marked as archived. _sync_status=pending flags it for sync.
+      const localUpdatedAt = new Date().toISOString()
+      await db.accounts.update(id, {
+        active: false,
+        _sync_status: 'pending',
+        _local_updated_at: localUpdatedAt
+      })
+
+      // Step 2 — Update reactive ref: patch the account in-place so the
+      // archivedAccounts computed picks it up and activeAccounts drops it.
+      const idx = accounts.value.findIndex(a => a.id === id)
+      if (idx !== -1) {
+        accounts.value[idx] = {
+          ...accounts.value[idx],
+          active: false,
+          _sync_status: 'pending',
+          _local_updated_at: localUpdatedAt
+        }
+      }
+
       if (selectedAccountId.value === id) {
         selectedAccountId.value = null
       }
 
+      // Step 3 — Enqueue DELETE mutation. The backend interprets DELETE as a
+      // soft-delete (archive), so we use the same 'delete' operation that the
+      // original deleteAccount used. No behaviour change on the server side.
       await mutationQueue.enqueue({
         entity_type: 'account',
         entity_id: id,
@@ -418,12 +469,134 @@ export const useAccountsStore = defineStore('accounts', () => {
         payload: { id }
       })
     } catch (err: any) {
-      error.value = err.message || 'Error al eliminar cuenta'
+      error.value = err.message || 'Error al archivar cuenta'
       throw err
     } finally {
       loading.value = false
     }
   }
+
+  /**
+   * Hard-delete an account — permanently removes the record from IndexedDB
+   * and enqueues a delete_permanent mutation for the server.
+   *
+   * Why check transaction/transfer counts before deleting?
+   * Hard delete is only allowed when the account has no financial history.
+   * The UI disables the button when transactions/transfers exist, but this
+   * guard is a belt-and-suspenders check to prevent data corruption if the
+   * guard is called programmatically or the UI check is bypassed.
+   *
+   * Why use delete_permanent operation?
+   * The backend distinguishes between soft-delete (DELETE verb → archive) and
+   * hard delete (DELETE /accounts/:id/permanent). The 'delete_permanent'
+   * operation tells the SyncManager to call the hard-delete endpoint.
+   */
+  async function hardDeleteAccount(id: string) {
+    loading.value = true
+    error.value = null
+    try {
+      // Guard: ensure no transactions reference this account.
+      const txCount = await db.transactions.where('account_id').equals(id).count()
+
+      // Guard: ensure no transfers reference this account (either direction).
+      // Why two separate counts instead of a combined query?
+      // Dexie's .or() on a WhereClause requires both sides to use the same
+      // index key. source_account_id and destination_account_id are different
+      // fields indexed separately, so two queries and a sum is the idiomatic
+      // Dexie approach for an OR across different indexed columns.
+      const transferFromCount = await db.transfers.where('source_account_id').equals(id).count()
+      const transferToCount = await db.transfers.where('destination_account_id').equals(id).count()
+
+      if (txCount + transferFromCount + transferToCount > 0) {
+        throw new Error(
+          'Cannot hard-delete an account that has transactions or transfers. Archive it instead.'
+        )
+      }
+
+      // Step 1 — Remove from IndexedDB entirely.
+      await db.accounts.delete(id)
+
+      // Step 2 — Remove from reactive state.
+      accounts.value = accounts.value.filter(a => a.id !== id)
+      balances.value.delete(id)
+      if (selectedAccountId.value === id) {
+        selectedAccountId.value = null
+      }
+
+      // Step 3 — Enqueue delete_permanent mutation.
+      await mutationQueue.enqueue({
+        entity_type: 'account',
+        entity_id: id,
+        operation: 'delete_permanent',
+        payload: { id }
+      })
+    } catch (err: any) {
+      error.value = err.message || 'Error al eliminar cuenta permanentemente'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Restore an archived account — flips active back to true and re-enqueues
+   * an update mutation so the backend also restores the account.
+   *
+   * Why use operation 'update' with { active: true }?
+   * The backend restore endpoint is a PATCH with active=true. Using the
+   * standard 'update' operation keeps the SyncManager logic simple — it
+   * already knows how to send PATCH requests for account updates.
+   */
+  async function restoreAccount(id: string) {
+    loading.value = true
+    error.value = null
+    try {
+      const localUpdatedAt = new Date().toISOString()
+
+      // Step 1 — Update IndexedDB: flip active back to true.
+      await db.accounts.update(id, {
+        active: true,
+        _sync_status: 'pending',
+        _local_updated_at: localUpdatedAt
+      })
+
+      // Step 2 — Update reactive ref: the account moves from archivedAccounts
+      // back to activeAccounts via the computed filters.
+      const idx = accounts.value.findIndex(a => a.id === id)
+      if (idx !== -1) {
+        accounts.value[idx] = {
+          ...accounts.value[idx],
+          active: true,
+          _sync_status: 'pending',
+          _local_updated_at: localUpdatedAt
+        }
+      }
+
+      // Step 3 — Enqueue update mutation with { active: true } payload.
+      await mutationQueue.enqueue({
+        entity_type: 'account',
+        entity_id: id,
+        operation: 'update',
+        payload: { active: true }
+      })
+    } catch (err: any) {
+      error.value = err.message || 'Error al restaurar cuenta'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * deleteAccount — kept as an alias for archiveAccount to avoid breaking
+   * any existing callers that have not yet been migrated to the new name.
+   *
+   * Why an alias instead of a rename everywhere?
+   * Component migrations happen in a later task (FE-4). Keeping this alias
+   * means the rename does not break callers in the same PR, and the alias
+   * can be removed once all callers have been updated.
+   */
+  const deleteAccount = archiveAccount
 
   /**
    * Adjust an account's in-memory balance by a signed delta.
@@ -502,6 +675,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     error,
     // Computed
     activeAccounts,
+    archivedAccounts,
     selectedAccount,
     accountsWithBalances,
     // Actions
@@ -510,6 +684,9 @@ export const useAccountsStore = defineStore('accounts', () => {
     recomputeBalancesFromTransactions,
     createAccount,
     updateAccount,
+    archiveAccount,
+    hardDeleteAccount,
+    restoreAccount,
     deleteAccount,
     adjustBalance,
     selectAccount,

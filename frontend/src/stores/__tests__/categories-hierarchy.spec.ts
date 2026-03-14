@@ -62,6 +62,7 @@ function makeCat(overrides: Partial<LocalCategory> = {}): LocalCategory {
     id: 'cat-1',
     name: 'Test Category',
     type: CategoryType.EXPENSE,
+    active: true,
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
     _sync_status: 'synced',

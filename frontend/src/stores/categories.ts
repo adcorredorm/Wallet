@@ -14,6 +14,15 @@
  * then creates a child category in the same session, parent_category_id in the
  * child's payload will be a temp-* ID. The SyncManager resolves it before the
  * network call, in FIFO order so the parent is created on the server first.
+ *
+ * Archive/hard-delete change:
+ * - archiveCategory: sets active=false for the category and all its active
+ *   children. Children are archived first so the parent is always archived last.
+ *   Backend interprets DELETE as a soft-delete (archive).
+ * - hardDeleteCategory: permanently removes the record from IndexedDB and
+ *   enqueues a delete_permanent mutation. Only allowed when no transactions
+ *   reference the category.
+ * - restoreCategory: flips active back to true for a single category.
  */
 
 import { defineStore } from 'pinia'
@@ -42,20 +51,37 @@ export const useCategoriesStore = defineStore('categories', () => {
   const error = ref<string | null>(null)
 
   // Computed
+
+  // activeCategories — only categories with active=true.
+  // Why expose this separately from `categories`?
+  // Dropdowns (category pickers on transaction/transfer forms) must only show
+  // active categories. Having a dedicated computed avoids sprinkling
+  // `.filter(c => c.active)` calls across every component that needs a picker.
+  const activeCategories = computed(() =>
+    categories.value.filter(cat => cat.active !== false)
+  )
+
+  // archivedCategories — only categories with active=false.
+  // Used by the archive management view to list items that can be restored
+  // or hard-deleted.
+  const archivedCategories = computed(() =>
+    categories.value.filter(cat => cat.active === false)
+  )
+
   const incomeCategories = computed(() =>
-    categories.value.filter(cat =>
+    activeCategories.value.filter(cat =>
       cat.type === 'income' || cat.type === 'both'
     )
   )
 
   const expenseCategories = computed(() =>
-    categories.value.filter(cat =>
+    activeCategories.value.filter(cat =>
       cat.type === 'expense' || cat.type === 'both'
     )
   )
 
   const parentCategories = computed(() =>
-    categories.value.filter(cat => !cat.parent_category_id)
+    activeCategories.value.filter(cat => !cat.parent_category_id)
   )
 
   // Helper to get subcategories of a parent
@@ -63,7 +89,11 @@ export const useCategoriesStore = defineStore('categories', () => {
     categories.value.filter(cat => cat.parent_category_id === parentId)
 
   /**
-   * categoryTree — groups all categories into a 2-level hierarchy.
+   * categoryTree — groups all ACTIVE categories into a 2-level hierarchy.
+   *
+   * Why filter to active only?
+   * The tree is used by the transaction/category management UI. Archived
+   * categories should not appear in the tree — they belong in the archive view.
    *
    * Each CategoryGroup has a parent and its direct children.
    * Sorting: groups with children come first (alphabetical by name),
@@ -72,8 +102,11 @@ export const useCategoriesStore = defineStore('categories', () => {
    * as standalone root entries.
    */
   const categoryTree = computed<CategoryGroup[]>(() => {
+    // Only build the tree from active categories
+    const activeCats = categories.value.filter(cat => cat.active !== false)
+
     const byId = new Map<string, LocalCategory>()
-    for (const cat of categories.value) {
+    for (const cat of activeCats) {
       byId.set(cat.id, cat)
     }
 
@@ -81,7 +114,7 @@ export const useCategoriesStore = defineStore('categories', () => {
     const roots: LocalCategory[] = []
     const childrenMap = new Map<string, LocalCategory[]>()
 
-    for (const cat of categories.value) {
+    for (const cat of activeCats) {
       if (!cat.parent_category_id || !byId.has(cat.parent_category_id)) {
         // This is a root (or an orphan treated as root)
         roots.push(cat)
@@ -124,9 +157,10 @@ export const useCategoriesStore = defineStore('categories', () => {
    * - A root category that already has children CAN still accept more children.
    * - Type compatibility: income -> income|both, expense -> expense|both, both -> both only
    * - Excludes excludeId (self) and its children (prevents circular references)
+   * - Only considers active categories (archived cannot be a parent)
    */
   function compatibleParentCategories(type: CategoryType, excludeId?: string): LocalCategory[] {
-    return categories.value.filter(cat => {
+    return activeCategories.value.filter(cat => {
       // Must be root (no parent) — this is the 2-level limit:
       // a category that already has a parent cannot itself become a parent
       if (cat.parent_category_id) return false
@@ -252,6 +286,12 @@ export const useCategoriesStore = defineStore('categories', () => {
     // parent_category_id is optional in both Category and CreateCategoryDto —
     // we carry it through as-is. If the parent was created offline its value
     // will be a temp-* ID; the SyncManager resolves it before the network call.
+    //
+    // Why active: true here?
+    // Category.active is a required field (non-optional boolean). New categories
+    // are always active by definition — only an archive action sets active=false.
+    // Without this field the object would fail the LocalCategory type check
+    // because active is required on the Category base interface.
     const localCategory: LocalCategory = {
       id: tempId,
       name: data.name,
@@ -259,6 +299,7 @@ export const useCategoriesStore = defineStore('categories', () => {
       icon: data.icon,
       color: data.color,
       parent_category_id: data.parent_category_id,
+      active: true,
       created_at: now,
       updated_at: now,
       _sync_status: 'pending',
@@ -372,6 +413,190 @@ export const useCategoriesStore = defineStore('categories', () => {
     }
   }
 
+  /**
+   * Archive a category — soft-delete that sets active=false.
+   *
+   * Why cascade to children first?
+   * A parent cannot be left active while its children are archived in an
+   * inconsistent state, and the 2-level limit means there are at most one
+   * level of children to consider. Archiving children before the parent
+   * ensures the tree is always coherent: if the parent is archived the
+   * children are too.
+   *
+   * Why archive children that are already inactive?
+   * We skip already-archived children (active === false) to avoid redundant
+   * DB writes and duplicate mutation queue entries.
+   *
+   * Returns { cascaded: number } — total categories archived (parent + children).
+   */
+  async function archiveCategory(id: string): Promise<{ cascaded: number }> {
+    loading.value = true
+    error.value = null
+    try {
+      const now = new Date().toISOString()
+      let cascaded = 0
+
+      // Find active children of the target category.
+      const activeChildren = categories.value.filter(
+        c => c.parent_category_id === id && c.active !== false
+      )
+
+      // Archive each active child first.
+      for (const child of activeChildren) {
+        // Step 1 — IndexedDB update for child.
+        await db.categories.update(child.id, {
+          active: false,
+          _sync_status: 'pending',
+          _local_updated_at: now
+        })
+
+        // Step 2 — Reactive ref update for child.
+        const childIdx = categories.value.findIndex(c => c.id === child.id)
+        if (childIdx !== -1) {
+          categories.value[childIdx] = {
+            ...categories.value[childIdx],
+            active: false,
+            _sync_status: 'pending',
+            _local_updated_at: now
+          }
+        }
+
+        // Step 3 — Enqueue DELETE mutation for child.
+        // Backend treats DELETE as soft-delete (archive).
+        await mutationQueue.enqueue({
+          entity_type: 'category',
+          entity_id: child.id,
+          operation: 'delete',
+          payload: { id: child.id }
+        })
+
+        cascaded++
+      }
+
+      // Now archive the parent itself.
+      await db.categories.update(id, {
+        active: false,
+        _sync_status: 'pending',
+        _local_updated_at: now
+      })
+
+      const idx = categories.value.findIndex(c => c.id === id)
+      if (idx !== -1) {
+        categories.value[idx] = {
+          ...categories.value[idx],
+          active: false,
+          _sync_status: 'pending',
+          _local_updated_at: now
+        }
+      }
+
+      await mutationQueue.enqueue({
+        entity_type: 'category',
+        entity_id: id,
+        operation: 'delete',
+        payload: { id }
+      })
+
+      cascaded++ // count the parent
+
+      return { cascaded }
+    } catch (err: any) {
+      error.value = err.message || 'Error al archivar categoría'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Hard-delete a category — permanently removes the record from IndexedDB
+   * and enqueues a delete_permanent mutation for the backend.
+   *
+   * Why verify zero transactions first?
+   * Hard delete is only valid when the category has no associated transaction
+   * history. The UI disables the button, but this guard protects against
+   * programmatic misuse and race conditions.
+   */
+  async function hardDeleteCategory(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      // Guard: verify no transactions reference this category.
+      const txCount = await db.transactions.where('category_id').equals(id).count()
+      if (txCount > 0) {
+        throw new Error(
+          'Cannot hard-delete a category that has transactions. Archive it instead.'
+        )
+      }
+
+      // Step 1 — Remove from IndexedDB entirely.
+      await db.categories.delete(id)
+
+      // Step 2 — Remove from reactive state.
+      categories.value = categories.value.filter(c => c.id !== id)
+
+      // Step 3 — Enqueue delete_permanent mutation.
+      await mutationQueue.enqueue({
+        entity_type: 'category',
+        entity_id: id,
+        operation: 'delete_permanent',
+        payload: { id }
+      })
+    } catch (err: any) {
+      error.value = err.message || 'Error al eliminar categoría permanentemente'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Restore an archived category — flips active back to true.
+   *
+   * Why not cascade restore to children?
+   * Children were individually archived and should be restored individually.
+   * The user may intentionally want some children to remain archived. Cascading
+   * restore would override those individual decisions.
+   */
+  async function restoreCategory(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      const localUpdatedAt = new Date().toISOString()
+
+      // Step 1 — Update IndexedDB: flip active back to true.
+      await db.categories.update(id, {
+        active: true,
+        _sync_status: 'pending',
+        _local_updated_at: localUpdatedAt
+      })
+
+      // Step 2 — Update reactive ref.
+      const idx = categories.value.findIndex(c => c.id === id)
+      if (idx !== -1) {
+        categories.value[idx] = {
+          ...categories.value[idx],
+          active: true,
+          _sync_status: 'pending',
+          _local_updated_at: localUpdatedAt
+        }
+      }
+
+      // Step 3 — Enqueue update mutation with { active: true }.
+      await mutationQueue.enqueue({
+        entity_type: 'category',
+        entity_id: id,
+        operation: 'update',
+        payload: { active: true }
+      })
+    } catch (err: any) {
+      error.value = err.message || 'Error al restaurar categoría'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function getCategoryById(id: string): LocalCategory | undefined {
     return categories.value.find(c => c.id === id)
   }
@@ -387,6 +612,8 @@ export const useCategoriesStore = defineStore('categories', () => {
     loading,
     error,
     // Computed
+    activeCategories,
+    archivedCategories,
     incomeCategories,
     expenseCategories,
     parentCategories,
@@ -399,6 +626,9 @@ export const useCategoriesStore = defineStore('categories', () => {
     createCategory,
     updateCategory,
     deleteCategory,
+    archiveCategory,
+    hardDeleteCategory,
+    restoreCategory,
     getCategoryById,
     getSubcategories,
     refreshFromDB
