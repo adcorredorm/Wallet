@@ -67,12 +67,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-      # Don't use target: builder since Dockerfile.dev doesn't have multi-stage
+      # Dockerfile.dev runs `npm ci` during build to populate node_modules with Linux binaries
 
-    # Install node_modules only if vite is missing (first start after recreate),
-    # then start Vite dev server with HMR. Fast on repeat starts since the
-    # named volume frontend_node_modules persists installed packages.
-    command: sh -c "[ -f node_modules/.bin/vite ] || npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    # Start Vite dev server with HMR enabled
+    # node_modules and dependencies come from the built Docker image, not from host volume
+    # This avoids the macOS arm64 binary incompatibility issue on Linux containers
+    command: npm run dev -- --host 0.0.0.0 --port 5173
 
     # Port mappings for development access
     ports:
@@ -83,17 +83,27 @@ services:
       # Legacy port for scripts/documentation that reference port 3000 (commented out due to conflict)
       # - "3000:5173"
 
-    # Mount source code for live reload and HMR
-    # Changes to Vue components, templates, styles instantly reflect in browser
+    # Mount only source files needed for hot reload and HMR
+    # ⚠️  IMPORTANT: Changes to package.json or package-lock.json require rebuilding the image:
+    #    docker-compose build frontend
+    # This is necessary because node_modules comes from the Docker image, not a host volume.
     volumes:
-      # Mount frontend source for live reload
-      - ./frontend:/app
-      # Named volume for node_modules — persists across recreations and uses
-      # Linux binaries (not macOS host binaries, which are incompatible).
-      # See ticket: https://www.notion.so/32379901d1b881409329ec4ab0a6c835
-      - frontend_node_modules:/app/node_modules
-      # Exclude dist directory (can get large during dev)
-      - /app/dist
+      # Source code for live reload (Vue components, utilities, stores)
+      - ./frontend/src:/app/src
+      # Public static assets
+      - ./frontend/public:/app/public
+      # Entry point template
+      - ./frontend/index.html:/app/index.html
+      # Build and dev server configuration
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/vite.config.js:/app/vite.config.js
+      # TypeScript configuration
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+      # Styling configuration
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
 
     # Development environment variables
     environment:
@@ -134,9 +144,3 @@ networks:
   wallet_network:
     driver: bridge
 
-# Named volumes for development
-volumes:
-  # Persists Linux node_modules across container recreations.
-  # Unlike anonymous volumes, this survives `docker-compose up -d` recreations.
-  # First-time creation copies from the built image (Dockerfile.dev runs npm ci).
-  frontend_node_modules:
