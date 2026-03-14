@@ -69,9 +69,10 @@ services:
       dockerfile: Dockerfile.dev
       # Don't use target: builder since Dockerfile.dev doesn't have multi-stage
 
-    # Override command to run Vite dev server
-    # This provides Hot Module Replacement (HMR) for instant UI updates
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    # Install node_modules only if vite is missing (first start after recreate),
+    # then start Vite dev server with HMR. Fast on repeat starts since the
+    # named volume frontend_node_modules persists installed packages.
+    command: sh -c "[ -f node_modules/.bin/vite ] || npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
 
     # Port mappings for development access
     ports:
@@ -87,9 +88,10 @@ services:
     volumes:
       # Mount frontend source for live reload
       - ./frontend:/app
-      # Exclude node_modules from volume mount to use container's dependencies
-      # This prevents permission issues and ensures consistent versions
-      - /app/node_modules
+      # Named volume for node_modules — persists across recreations and uses
+      # Linux binaries (not macOS host binaries, which are incompatible).
+      # See ticket: https://www.notion.so/32379901d1b881409329ec4ab0a6c835
+      - frontend_node_modules:/app/node_modules
       # Exclude dist directory (can get large during dev)
       - /app/dist
 
@@ -131,3 +133,10 @@ services:
 networks:
   wallet_network:
     driver: bridge
+
+# Named volumes for development
+volumes:
+  # Persists Linux node_modules across container recreations.
+  # Unlike anonymous volumes, this survives `docker-compose up -d` recreations.
+  # First-time creation copies from the built image (Dockerfile.dev runs npm ci).
+  frontend_node_modules:
