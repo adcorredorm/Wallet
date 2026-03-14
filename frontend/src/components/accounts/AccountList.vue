@@ -50,13 +50,23 @@ function getBalance(accountId: string): number {
 
     <!-- Account list -->
     <div v-else class="space-y-3">
-      <AccountCard
+      <div
         v-for="account in accounts"
         :key="account.id"
-        :account="account"
-        :balance="getBalance(account.id)"
-        @click="emit('account-click', account)"
-      />
+        class="relative"
+        :class="{ 'opacity-50': account.active === false }"
+      >
+        <AccountCard
+          :account="account"
+          :balance="getBalance(account.id)"
+          @click="emit('account-click', account)"
+        />
+        <!-- Archived badge -->
+        <span
+          v-if="account.active === false"
+          class="text-xs text-gray-400 dark:text-gray-500 ml-1"
+        >Archivada</span>
+      </div>
     </div>
   </div>
 </template>

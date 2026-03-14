@@ -5,6 +5,9 @@
  * Shows all categories in a collapsible grouped layout.
  * Groups with children display as collapsible sections;
  * standalone categories appear in a flat grid at the bottom.
+ *
+ * A "Mostrar archivadas" toggle appends a flat list of archived categories
+ * (both parent and child) below the active tree.
  */
 
 import { ref, onMounted } from 'vue'
@@ -21,6 +24,9 @@ const uiStore = useUiStore()
 
 /** Tracks which parent groups are expanded (by parent id). Empty = all collapsed. */
 const expandedGroups = ref<Set<string>>(new Set())
+
+/** When true, archived categories are shown below the active tree. */
+const showArchived = ref<boolean>(false)
 
 function toggleGroup(parentId: string) {
   if (expandedGroups.value.has(parentId)) {
@@ -59,8 +65,25 @@ const standaloneGroups = () =>
 <template>
   <div class="space-y-6">
     <!-- Header -->
-    <div>
+    <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold">Categorías</h1>
+
+      <!-- Mostrar archivadas toggle — only shown when there are archived categories -->
+      <button
+        v-if="categoriesStore.archivedCategories.length > 0"
+        class="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors min-h-[44px]"
+        :class="showArchived
+          ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+          : 'bg-dark-bg-secondary text-dark-text-secondary border border-dark-bg-tertiary/50 hover:bg-dark-bg-tertiary/50'"
+        :aria-pressed="showArchived"
+        aria-label="Mostrar categorías archivadas"
+        @click="showArchived = !showArchived"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8M10 12v4m4-4v4" />
+        </svg>
+        Mostrar archivadas
+      </button>
     </div>
 
     <!-- Loading -->
@@ -200,6 +223,42 @@ const standaloneGroups = () =>
         <!-- Tipo badge -->
         <span class="text-xs px-2 py-0.5 rounded-full bg-dark-bg-tertiary text-dark-text-secondary flex-shrink-0">
           {{ formatCategoryType(group.parent.type) }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Archived categories section (shown when toggle is active) -->
+    <div v-if="showArchived && categoriesStore.archivedCategories.length > 0" class="space-y-2">
+      <h2 class="text-sm font-medium text-dark-text-secondary uppercase tracking-wide px-1">
+        Archivadas ({{ categoriesStore.archivedCategories.length }})
+      </h2>
+      <div
+        v-for="category in categoriesStore.archivedCategories"
+        :key="category.id"
+        class="rounded-xl bg-dark-bg-secondary border border-dark-bg-tertiary/50
+               flex items-center px-4 py-3 gap-3 cursor-pointer opacity-50
+               hover:opacity-75 transition-opacity"
+        @click="goToCategory(category.id)"
+      >
+        <!-- Color dot -->
+        <div
+          v-if="category.color"
+          class="w-3 h-3 rounded-full flex-shrink-0"
+          :style="{ backgroundColor: category.color }"
+        ></div>
+
+        <!-- Icon -->
+        <span class="text-xl flex-shrink-0">{{ category.icon || '📁' }}</span>
+
+        <!-- Name + Archivada badge -->
+        <span class="font-medium truncate flex-1 min-w-0">
+          {{ category.name }}
+          <span class="text-xs text-gray-400 dark:text-gray-500 ml-1">Archivada</span>
+        </span>
+
+        <!-- Tipo badge -->
+        <span class="text-xs px-2 py-0.5 rounded-full bg-dark-bg-tertiary text-dark-text-secondary flex-shrink-0">
+          {{ formatCategoryType(category.type) }}
         </span>
       </div>
     </div>
