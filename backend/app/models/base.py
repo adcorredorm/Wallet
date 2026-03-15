@@ -8,7 +8,7 @@ from datetime import datetime
 from uuid import uuid4
 from typing import Any
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.extensions import db
@@ -36,13 +36,21 @@ class BaseModel(db.Model):
     __allow_unmapped__ = True
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    client_id = Column(String(100), nullable=True, unique=True, index=True)
+    client_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
         nullable=False,
+    )
+    # user_id is NULLABLE at model level to allow the two-phase migration:
+    # 008b adds the column as NULLABLE and backfills, 008c enforces NOT NULL.
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,  # Starts NULLABLE; migration 008c sets NOT NULL after backfill
+        index=True,
     )
 
     def to_dict(self) -> dict[str, Any]:

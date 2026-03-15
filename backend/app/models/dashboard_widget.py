@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     CheckConstraint,
     Enum,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship, backref
@@ -89,6 +90,7 @@ class DashboardWidget(BaseModel):
         CheckConstraint("height >= 1 AND height <= 3", name="ck_widgets_height"),
         CheckConstraint("position_x >= 0", name="ck_widgets_position_x"),
         CheckConstraint("position_y >= 0", name="ck_widgets_position_y"),
+        UniqueConstraint("user_id", "client_id", name="uq_widgets_user_client"),
     )
 
     def __repr__(self) -> str:

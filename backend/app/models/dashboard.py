@@ -2,7 +2,7 @@
 Dashboard model for user-defined analytics dashboards.
 """
 
-from sqlalchemy import Column, String, Integer, Boolean, CheckConstraint
+from sqlalchemy import Column, String, Integer, Boolean, CheckConstraint, UniqueConstraint
 from app.models.base import BaseModel
 
 
@@ -37,6 +37,7 @@ class Dashboard(BaseModel):
             "layout_columns >= 1 AND layout_columns <= 4",
             name="ck_dashboards_layout_columns",
         ),
+        UniqueConstraint("user_id", "client_id", name="uq_dashboards_user_client"),
     )
 
     def __repr__(self) -> str:

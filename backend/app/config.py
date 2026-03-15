@@ -34,6 +34,12 @@ class Config:
     JSON_SORT_KEYS = False
     JSONIFY_PRETTYPRINT_REGULAR = True
 
+    # Authentication
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+    JWT_SECRET = os.getenv("JWT_SECRET", "dev-jwt-secret-change-in-production")
+    JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
+    REFRESH_TOKEN_EXPIRY_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRY_DAYS", "90"))
+
 
 class DevelopmentConfig(Config):
     """Development environment configuration."""
@@ -61,6 +67,10 @@ class ProductionConfig(Config):
     # Ensure SECRET_KEY is set in production
     if not os.getenv("SECRET_KEY"):
         raise ValueError("SECRET_KEY must be set in production environment")
+    if not os.getenv("JWT_SECRET"):
+        raise ValueError("JWT_SECRET must be set in production environment")
+    if not os.getenv("GOOGLE_CLIENT_ID"):
+        raise ValueError("GOOGLE_CLIENT_ID must be set in production environment")
 
 
 def get_config(config_name: str = "development") -> type[Config]:

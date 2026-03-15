@@ -9,7 +9,7 @@ as NULL. Cross-currency transfers populate all three fields.
 from typing import TYPE_CHECKING
 from decimal import Decimal
 
-from sqlalchemy import Column, String, ForeignKey, Date, Numeric, Index
+from sqlalchemy import Column, String, ForeignKey, Date, Numeric, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
@@ -76,11 +76,12 @@ class Transfer(BaseModel):
         back_populates="transfers_destination",
     )
 
-    # Indexes for performance
+    # Indexes and constraints
     __table_args__ = (
         Index("idx_transfers_source", "source_account_id"),
         Index("idx_transfers_destination", "destination_account_id"),
         Index("idx_transfers_date", "date"),
+        UniqueConstraint("user_id", "client_id", name="uq_transfers_user_client"),
     )
 
     def __repr__(self) -> str:
