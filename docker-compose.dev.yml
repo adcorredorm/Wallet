@@ -114,9 +114,11 @@ services:
       # VITE_HMR_PROTOCOL: ws for development
       VITE_HMR_PROTOCOL: ws
 
-      # API base URL for frontend to communicate with backend
-      # Development: use localhost:5001/api/v1 (host port mapping from container's 5000)
-      VITE_API_BASE_URL: http://localhost:5001/api/v1
+      # API base URL for frontend to communicate with backend.
+      # Use a relative path so all requests go through the Vite proxy (/api/* →
+      # backend:5000). An absolute URL (http://localhost:5001) would bypass the
+      # proxy and trigger CORS errors in the browser.
+      VITE_API_BASE_URL: /api/v1
 
       # Vite proxy target: backend service via Docker internal DNS.
       # Vite's proxy runs inside the container, so it must use the Docker
