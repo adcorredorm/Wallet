@@ -17,6 +17,8 @@ from app.models.category import Category, CategoryType
 from app.models.account import Account
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 
+USER_ID = uuid4()
+
 
 # ============================================================================
 # LOCAL FIXTURES
@@ -110,10 +112,10 @@ class TestGetById:
         """Should return the transaction when the repository finds it."""
         mock_transaction_repo.get_with_relations.return_value = sample_transaction
 
-        result = transaction_service.get_by_id(sample_transaction.id)
+        result = transaction_service.get_by_id(sample_transaction.id, user_id=USER_ID)
 
         mock_transaction_repo.get_with_relations.assert_called_once_with(
-            sample_transaction.id
+            sample_transaction.id, USER_ID
         )
         assert result == sample_transaction
 
@@ -124,7 +126,7 @@ class TestGetById:
         mock_transaction_repo.get_with_relations.return_value = None
 
         with pytest.raises(NotFoundError):
-            transaction_service.get_by_id(uuid4())
+            transaction_service.get_by_id(uuid4(), user_id=USER_ID)
 
 
 class TestGetFiltered:
@@ -136,7 +138,7 @@ class TestGetFiltered:
         """Should compute offset = (page - 1) * limit before querying."""
         mock_transaction_repo.get_filtered.return_value = ([sample_transaction], 1)
 
-        result, total = transaction_service.get_filtered(page=2, limit=10)
+        result, total = transaction_service.get_filtered(user_id=USER_ID, page=2, limit=10)
 
         call_kwargs = mock_transaction_repo.get_filtered.call_args.kwargs
         assert call_kwargs["offset"] == 10  # (2-1) * 10
@@ -149,7 +151,7 @@ class TestGetFiltered:
         """Should convert type string to TransactionType enum before querying."""
         mock_transaction_repo.get_filtered.return_value = ([sample_transaction], 1)
 
-        transaction_service.get_filtered(type="expense")
+        transaction_service.get_filtered(user_id=USER_ID, type="expense")
 
         call_kwargs = mock_transaction_repo.get_filtered.call_args.kwargs
         assert call_kwargs["type"] == TransactionType.EXPENSE
@@ -174,6 +176,7 @@ class TestCreate:
         mock_transaction_repo.create.return_value = sample_transaction
 
         result = transaction_service.create(
+            user_id=USER_ID,
             type="expense",
             amount=Decimal("100.00"),
             date=date(2026, 3, 1),
@@ -200,6 +203,7 @@ class TestCreate:
         mock_transaction_repo.create.return_value = sample_transaction
 
         result = transaction_service.create(
+            user_id=USER_ID,
             type="income",
             amount=Decimal("500.00"),
             date=date(2026, 3, 1),
@@ -221,6 +225,7 @@ class TestCreate:
         mock_transaction_repo.get_by_client_id.return_value = sample_transaction
 
         result = transaction_service.create(
+            user_id=USER_ID,
             type="expense",
             amount=Decimal("100.00"),
             date=date(2026, 3, 1),
@@ -244,6 +249,7 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transaction_service.create(
+                user_id=USER_ID,
                 type="expense",
                 amount=Decimal("100.00"),
                 date=date(2026, 3, 1),
@@ -262,6 +268,7 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transaction_service.create(
+                user_id=USER_ID,
                 type="expense",
                 amount=Decimal("100.00"),
                 date=date(2026, 3, 1),
@@ -283,6 +290,7 @@ class TestCreate:
 
         with pytest.raises(BusinessRuleError):
             transaction_service.create(
+                user_id=USER_ID,
                 type="expense",
                 amount=Decimal("100.00"),
                 date=date(2026, 3, 1),
@@ -304,6 +312,7 @@ class TestCreate:
 
         with pytest.raises(BusinessRuleError):
             transaction_service.create(
+                user_id=USER_ID,
                 type="income",
                 amount=Decimal("500.00"),
                 date=date(2026, 3, 1),
@@ -387,6 +396,7 @@ class TestUpdate:
 
         transaction_service.update(
             transaction_id=sample_transaction.id,
+            user_id=USER_ID,
             amount=Decimal("999.00"),
         )
 
@@ -414,6 +424,7 @@ class TestUpdate:
         with pytest.raises(BusinessRuleError):
             transaction_service.update(
                 transaction_id=sample_transaction.id,
+                user_id=USER_ID,
                 type="income",  # changing type but not category → re-validation fires
             )
 
@@ -434,6 +445,7 @@ class TestUpdate:
         with pytest.raises(BusinessRuleError):
             transaction_service.update(
                 transaction_id=sample_transaction.id,
+                user_id=USER_ID,
                 category_id=uuid4(),  # changing category → re-validation with existing EXPENSE type
             )
 
@@ -447,7 +459,7 @@ class TestUpdate:
 
         with pytest.raises(NotFoundError):
             transaction_service.update(
-                transaction_id=uuid4(), amount=Decimal("100.00")
+                transaction_id=uuid4(), user_id=USER_ID, amount=Decimal("100.00")
             )
 
 
@@ -478,6 +490,7 @@ class TestCreateMultiCurrency:
         mock_transaction_repo.create.return_value = sample_transaction
 
         result = transaction_service.create(
+            user_id=USER_ID,
             type="income",
             amount=Decimal("4000000"),
             date=date(2026, 3, 1),
@@ -520,6 +533,7 @@ class TestCreateMultiCurrency:
         mock_transaction_repo.create.return_value = sample_transaction
 
         transaction_service.create(
+            user_id=USER_ID,
             type="income",
             amount=Decimal("1000"),
             date=date(2026, 3, 1),
@@ -557,6 +571,7 @@ class TestCreateMultiCurrency:
         mock_transaction_repo.create.return_value = sample_transaction
 
         transaction_service.create(
+            user_id=USER_ID,
             type="expense",
             amount=Decimal("500.00"),
             date=date(2026, 3, 1),
@@ -712,7 +727,7 @@ class TestDelete:
         """Should call repository.delete with the fetched transaction object."""
         mock_transaction_repo.get_by_id_or_fail.return_value = sample_transaction
 
-        transaction_service.delete(sample_transaction.id)
+        transaction_service.delete(sample_transaction.id, user_id=USER_ID)
 
         mock_transaction_repo.delete.assert_called_once_with(sample_transaction)
 
@@ -725,7 +740,7 @@ class TestDelete:
         )
 
         with pytest.raises(NotFoundError):
-            transaction_service.delete(uuid4())
+            transaction_service.delete(uuid4(), user_id=USER_ID)
 
 
 class TestCreateBaseRate:
@@ -756,6 +771,7 @@ class TestCreateBaseRate:
         mock_transaction_repo.create.return_value = expected_tx
 
         result = transaction_service.create(
+            user_id=USER_ID,
             type="expense",
             amount=Decimal("100.00"),
             date=date(2026, 3, 12),
@@ -789,6 +805,7 @@ class TestCreateBaseRate:
         mock_transaction_repo.create.return_value = Mock()
 
         transaction_service.create(
+            user_id=USER_ID,
             type="expense",
             amount=Decimal("100.00"),
             date=date(2026, 3, 12),

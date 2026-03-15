@@ -1,9 +1,13 @@
 """
 Transactions API endpoints.
+
+All routes are protected by @require_auth. The authenticated user's UUID is
+read from g.current_user_id (injected by the decorator) and forwarded to
+every service call so data is always scoped to the current user.
 """
 
 from datetime import date, datetime, timezone
-from flask import Blueprint, jsonify, make_response, request
+from flask import Blueprint, g, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
 
@@ -17,6 +21,7 @@ from app.schemas.transaction import (
 from app.schemas.account import AccountResponse
 from app.schemas.category import CategoryResponse
 from app.services import TransactionService
+from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 from app.utils.responses import success_response, error_response, paginated_response
 from app.utils.sync_cursor import encode_cursor, decode_cursor
@@ -50,6 +55,7 @@ def _parse_client_updated_at(header_value: str | None) -> datetime | None:
 
 
 @transactions_bp.route("", methods=["GET"])
+@require_auth
 def list_transactions():
     """
     List transactions with filters and pagination.
@@ -80,12 +86,14 @@ def list_transactions():
         500: Internal server error
     """
     try:
+        user_id = g.current_user_id
         updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
         new_cursor = encode_cursor()
 
         if updated_since is not None:
             # INCREMENTAL MODE — return all changed transactions as a flat list
             transactions, _ = transaction_service.get_filtered(
+                user_id=user_id,
                 updated_since=updated_since,
                 limit=10000,
                 page=1,
@@ -120,6 +128,7 @@ def list_transactions():
 
         # Get filtered transactions
         transactions, total = transaction_service.get_filtered(
+            user_id=user_id,
             account_id=filters.account_id,
             category_id=filters.category_id,
             type=filters.type.value if filters.type else None,
@@ -155,6 +164,7 @@ def list_transactions():
 
 
 @transactions_bp.route("/<uuid:transaction_id>", methods=["GET"])
+@require_auth
 def get_transaction(transaction_id: UUID):
     """
     Get a single transaction by ID.
@@ -168,7 +178,7 @@ def get_transaction(transaction_id: UUID):
         500: Internal server error
     """
     try:
-        transaction = transaction_service.get_by_id(transaction_id)
+        transaction = transaction_service.get_by_id(transaction_id, user_id=g.current_user_id)
 
         # Format response with relations
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
@@ -184,6 +194,7 @@ def get_transaction(transaction_id: UUID):
 
 
 @transactions_bp.route("", methods=["POST"])
+@require_auth
 def create_transaction():
     """
     Create a new transaction.
@@ -204,6 +215,7 @@ def create_transaction():
 
         # Create transaction (idempotent when client_id is present)
         transaction = transaction_service.create(
+            user_id=g.current_user_id,
             type=transaction_data.type.value,
             amount=transaction_data.amount,
             date=transaction_data.date,
@@ -235,6 +247,7 @@ def create_transaction():
 
 
 @transactions_bp.route("/<uuid:transaction_id>", methods=["PUT"])
+@require_auth
 def update_transaction(transaction_id: UUID):
     """
     Update an existing transaction.
@@ -266,13 +279,14 @@ def update_transaction(transaction_id: UUID):
     try:
         # Validate request data
         transaction_data = TransactionUpdate(**request.json)
+        user_id = g.current_user_id
 
         # LWW conflict detection
         client_updated_at = _parse_client_updated_at(
             request.headers.get("X-Client-Updated-At")
         )
         if client_updated_at is not None:
-            current_transaction = transaction_service.get_by_id(transaction_id)
+            current_transaction = transaction_service.get_by_id(transaction_id, user_id=user_id)
             server_updated_at = current_transaction.updated_at
             if server_updated_at.tzinfo is None:
                 server_updated_at = server_updated_at.replace(tzinfo=timezone.utc)
@@ -289,6 +303,7 @@ def update_transaction(transaction_id: UUID):
         # Update transaction
         transaction = transaction_service.update(
             transaction_id=transaction_id,
+            user_id=user_id,
             type=transaction_data.type.value if transaction_data.type else None,
             amount=transaction_data.amount,
             date=transaction_data.date,
@@ -317,6 +332,7 @@ def update_transaction(transaction_id: UUID):
 
 
 @transactions_bp.route("/<uuid:transaction_id>", methods=["DELETE"])
+@require_auth
 def delete_transaction(transaction_id: UUID):
     """
     Delete a transaction.
@@ -330,7 +346,7 @@ def delete_transaction(transaction_id: UUID):
         500: Internal server error
     """
     try:
-        transaction_service.delete(transaction_id)
+        transaction_service.delete(transaction_id, user_id=g.current_user_id)
         return success_response(message="Transaccion eliminada exitosamente")
 
     except NotFoundError as e:

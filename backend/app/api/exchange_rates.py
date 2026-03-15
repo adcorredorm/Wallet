@@ -4,6 +4,10 @@ Exchange rates API endpoints.
 Provides read-only access to stored exchange rates and currency conversion.
 All write operations on rates are performed by background jobs, not through
 this API.
+
+Exchange rates are global data — not per-user. @require_auth is applied for
+consistency (authenticated callers only), but the ExchangeRateRepository does
+NOT filter by user_id.
 """
 
 from decimal import Decimal, InvalidOperation
@@ -17,6 +21,7 @@ from app.schemas.exchange_rate import (
     ExchangeRatesListResponse,
 )
 from app.services.exchange_rate import ExchangeRateService
+from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, ValidationError
 from app.utils.responses import error_response, success_response
 from app.utils.sync_cursor import encode_cursor, decode_cursor
@@ -26,6 +31,7 @@ exchange_rate_service = ExchangeRateService()
 
 
 @exchange_rates_bp.route("/exchange-rates", methods=["GET"])
+@require_auth
 def list_exchange_rates():
     """
     List all stored exchange rates.
@@ -91,6 +97,7 @@ def list_exchange_rates():
 
 
 @exchange_rates_bp.route("/exchange-rates/convert", methods=["GET"])
+@require_auth
 def convert_currency():
     """
     Convert an amount from one currency to another.

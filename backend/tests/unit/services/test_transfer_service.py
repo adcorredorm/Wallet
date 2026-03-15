@@ -3,6 +3,7 @@ Unit tests for TransferService.
 
 These tests focus on business logic validation using mocked repositories.
 No database, no Flask app context, no db.session — pure unit tests.
+All service methods now accept user_id — the tests pass a fixed UUID.
 """
 
 import pytest
@@ -15,6 +16,8 @@ from app.services.transfer import TransferService
 from app.models.transfer import Transfer
 from app.models.account import Account
 from app.utils.exceptions import NotFoundError, BusinessRuleError
+
+USER_ID = uuid4()
 
 
 # ============================================================================
@@ -61,9 +64,11 @@ class TestGetById:
         """Should return the transfer when the repository finds it."""
         mock_transfer_repo.get_with_relations.return_value = mock_transfer
 
-        result = transfer_service.get_by_id(mock_transfer.id)
+        result = transfer_service.get_by_id(mock_transfer.id, user_id=USER_ID)
 
-        mock_transfer_repo.get_with_relations.assert_called_once_with(mock_transfer.id)
+        mock_transfer_repo.get_with_relations.assert_called_once_with(
+            mock_transfer.id, USER_ID
+        )
         assert result == mock_transfer
 
     def test_get_by_id_not_found(self, transfer_service, mock_transfer_repo):
@@ -72,7 +77,7 @@ class TestGetById:
         mock_transfer_repo.get_with_relations.return_value = None
 
         with pytest.raises(NotFoundError):
-            transfer_service.get_by_id(transfer_id)
+            transfer_service.get_by_id(transfer_id, user_id=USER_ID)
 
 
 class TestGetFiltered:
@@ -84,7 +89,9 @@ class TestGetFiltered:
         """Should compute offset = (page - 1) * limit before querying."""
         mock_transfer_repo.get_filtered.return_value = ([mock_transfer], 1)
 
-        result, total = transfer_service.get_filtered(page=3, limit=10)
+        result, total = transfer_service.get_filtered(
+            user_id=USER_ID, page=3, limit=10
+        )
 
         call_kwargs = mock_transfer_repo.get_filtered.call_args.kwargs
         assert call_kwargs["offset"] == 20  # (3-1) * 10
@@ -97,7 +104,7 @@ class TestGetFiltered:
         """Offset should be 0 for the first page."""
         mock_transfer_repo.get_filtered.return_value = ([mock_transfer], 1)
 
-        transfer_service.get_filtered(page=1, limit=20)
+        transfer_service.get_filtered(user_id=USER_ID, page=1, limit=20)
 
         call_kwargs = mock_transfer_repo.get_filtered.call_args.kwargs
         assert call_kwargs["offset"] == 0
@@ -119,6 +126,7 @@ class TestCreate:
         mock_transfer_repo.create.return_value = mock_transfer
 
         result = transfer_service.create(
+            user_id=USER_ID,
             source_account_id=uuid4(),
             destination_account_id=uuid4(),
             amount=Decimal("500.00"),
@@ -142,6 +150,7 @@ class TestCreate:
 
         with pytest.raises(ValidationError):
             transfer_service.create(
+                user_id=USER_ID,
                 source_account_id=uuid4(),
                 destination_account_id=uuid4(),
                 amount=Decimal("500.00"),
@@ -163,6 +172,7 @@ class TestCreate:
         mock_transfer_repo.create.return_value = mock_transfer
 
         result = transfer_service.create(
+            user_id=USER_ID,
             source_account_id=uuid4(),
             destination_account_id=uuid4(),
             amount=Decimal("100.00"),
@@ -182,6 +192,7 @@ class TestCreate:
         mock_transfer_repo.get_by_client_id.return_value = mock_transfer
 
         result = transfer_service.create(
+            user_id=USER_ID,
             source_account_id=uuid4(),
             destination_account_id=uuid4(),
             amount=Decimal("500.00"),
@@ -204,6 +215,7 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transfer_service.create(
+                user_id=USER_ID,
                 source_account_id=uuid4(),
                 destination_account_id=uuid4(),
                 amount=Decimal("100.00"),
@@ -223,6 +235,7 @@ class TestCreate:
 
         with pytest.raises(NotFoundError):
             transfer_service.create(
+                user_id=USER_ID,
                 source_account_id=uuid4(),
                 destination_account_id=uuid4(),
                 amount=Decimal("100.00"),
@@ -242,6 +255,7 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
+            user_id=USER_ID,
             amount=Decimal("999.00"),
         )
 
@@ -259,6 +273,7 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
+            user_id=USER_ID,
             description="Updated description",
             tags=["new-tag"],
         )
@@ -276,6 +291,7 @@ class TestUpdate:
 
         transfer_service.update(
             transfer_id=mock_transfer.id,
+            user_id=USER_ID,
             amount=Decimal("750.00"),
             date=date(2026, 4, 1),
             description="Nueva descripción",
@@ -295,7 +311,9 @@ class TestUpdate:
         )
 
         with pytest.raises(NotFoundError):
-            transfer_service.update(transfer_id=uuid4(), amount=Decimal("100.00"))
+            transfer_service.update(
+                transfer_id=uuid4(), user_id=USER_ID, amount=Decimal("100.00")
+            )
 
 
 class TestDelete:
@@ -307,7 +325,7 @@ class TestDelete:
         """Should call repository.delete with the fetched transfer object."""
         mock_transfer_repo.get_by_id_or_fail.return_value = mock_transfer
 
-        transfer_service.delete(mock_transfer.id)
+        transfer_service.delete(mock_transfer.id, user_id=USER_ID)
 
         mock_transfer_repo.delete.assert_called_once_with(mock_transfer)
 
@@ -318,7 +336,7 @@ class TestDelete:
         )
 
         with pytest.raises(NotFoundError):
-            transfer_service.delete(uuid4())
+            transfer_service.delete(uuid4(), user_id=USER_ID)
 
 
 class TestCreateBaseRate:
@@ -344,6 +362,7 @@ class TestCreateBaseRate:
         mock_transfer_repo.create.return_value = expected_transfer
 
         result = transfer_service.create(
+            user_id=USER_ID,
             source_account_id=source_id,
             destination_account_id=dest_id,
             amount=Decimal("500.00"),
@@ -370,6 +389,7 @@ class TestCreateBaseRate:
         mock_transfer_repo.create.return_value = Mock()
 
         transfer_service.create(
+            user_id=USER_ID,
             source_account_id=uuid4(),
             destination_account_id=uuid4(),
             amount=Decimal("100.00"),

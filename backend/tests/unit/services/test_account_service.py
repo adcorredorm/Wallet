@@ -2,6 +2,7 @@
 Unit tests for AccountService.
 
 These tests focus on business logic validation using mocked repositories.
+All service methods now accept user_id — the tests pass a fixed UUID.
 """
 
 import pytest
@@ -12,6 +13,10 @@ from unittest.mock import Mock, patch, MagicMock
 from app.services.account import AccountService
 from app.models.account import Account, AccountType
 from app.utils.exceptions import NotFoundError, BusinessRuleError
+
+
+# Shared user_id used across all tests
+USER_ID = uuid4()
 
 
 @pytest.fixture
@@ -32,7 +37,7 @@ def account_service(mock_repository):
 @pytest.fixture
 def sample_account():
     """Create a sample account for testing."""
-    account = Mock(spec=Account)
+    account = MagicMock()
     account.id = uuid4()
     account.name = "Cuenta Test"
     account.type = AccountType.DEBIT
@@ -59,22 +64,22 @@ class TestGetAll:
         """Should return only active accounts by default."""
         mock_repository.get_all_active.return_value = [sample_account]
 
-        result = account_service.get_all()
+        result = account_service.get_all(user_id=USER_ID)
 
-        mock_repository.get_all_active.assert_called_once()
+        mock_repository.get_all_active.assert_called_once_with(user_id=USER_ID)
         mock_repository.get_all.assert_not_called()
         assert len(result) == 1
         assert result[0] == sample_account
 
     def test_get_all_including_archived(self, account_service, mock_repository, sample_account):
         """Should return all accounts including archived when requested."""
-        archived_account = Mock(spec=Account)
+        archived_account = MagicMock()
         archived_account.active = False
         mock_repository.get_all.return_value = [sample_account, archived_account]
 
-        result = account_service.get_all(include_archived=True)
+        result = account_service.get_all(user_id=USER_ID, include_archived=True)
 
-        mock_repository.get_all.assert_called_once()
+        mock_repository.get_all.assert_called_once_with(user_id=USER_ID, include_archived=True)
         mock_repository.get_all_active.assert_not_called()
         assert len(result) == 2
 
@@ -86,18 +91,18 @@ class TestGetById:
         """Should return account when found."""
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        result = account_service.get_by_id(sample_account.id)
+        result = account_service.get_by_id(sample_account.id, user_id=USER_ID)
 
-        mock_repository.get_by_id_or_fail.assert_called_once_with(sample_account.id)
+        mock_repository.get_by_id_or_fail.assert_called_once_with(sample_account.id, USER_ID)
         assert result == sample_account
 
     def test_get_by_id_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.get_by_id(account_id)
+            account_service.get_by_id(account_id, user_id=USER_ID)
 
 
 class TestGetWithBalance:
@@ -109,7 +114,9 @@ class TestGetWithBalance:
         mock_repository.get_by_id_or_fail.return_value = sample_account
         mock_repository.calculate_balance.return_value = expected_balance
 
-        account, balance = account_service.get_with_balance(sample_account.id)
+        account, balance = account_service.get_with_balance(
+            sample_account.id, user_id=USER_ID
+        )
 
         assert account == sample_account
         assert balance == expected_balance
@@ -118,10 +125,10 @@ class TestGetWithBalance:
     def test_get_with_balance_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.get_with_balance(account_id)
+            account_service.get_with_balance(account_id, user_id=USER_ID)
 
 
 class TestGetAllWithBalances:
@@ -129,9 +136,9 @@ class TestGetAllWithBalances:
 
     def test_get_all_with_balances(self, account_service, mock_repository):
         """Should return all accounts with their balances."""
-        account1 = Mock(spec=Account)
+        account1 = MagicMock()
         account1.id = uuid4()
-        account2 = Mock(spec=Account)
+        account2 = MagicMock()
         account2.id = uuid4()
 
         mock_repository.get_all_active.return_value = [account1, account2]
@@ -140,7 +147,7 @@ class TestGetAllWithBalances:
             Decimal("2000.00")
         ]
 
-        result = account_service.get_all_with_balances()
+        result = account_service.get_all_with_balances(user_id=USER_ID)
 
         assert len(result) == 2
         assert result[0] == (account1, Decimal("1000.00"))
@@ -153,13 +160,14 @@ class TestCreate:
 
     def test_create_account_success(self, account_service, mock_repository):
         """Should create account with provided data."""
-        new_account = Mock(spec=Account)
+        new_account = MagicMock()
         mock_repository.create.return_value = new_account
 
         result = account_service.create(
+            user_id=USER_ID,
             name="Nueva Cuenta",
             type="debit",
-            currency="usd",  # Should be converted to uppercase
+            currency="usd",
             description="Test description",
             tags=["tag1", "tag2"]
         )
@@ -167,17 +175,19 @@ class TestCreate:
         assert result == new_account
         mock_repository.create.assert_called_once()
         call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["user_id"] == USER_ID
         assert call_kwargs["name"] == "Nueva Cuenta"
         assert call_kwargs["type"] == AccountType.DEBIT
-        assert call_kwargs["currency"] == "USD"  # Uppercase
+        assert call_kwargs["currency"] == "USD"
         assert call_kwargs["tags"] == ["tag1", "tag2"]
 
     def test_create_account_minimal_data(self, account_service, mock_repository):
         """Should create account with only required fields."""
-        new_account = Mock(spec=Account)
+        new_account = MagicMock()
         mock_repository.create.return_value = new_account
 
         result = account_service.create(
+            user_id=USER_ID,
             name="Cuenta Mínima",
             type="cash",
             currency="MXN"
@@ -190,9 +200,10 @@ class TestCreate:
 
     def test_create_account_currency_uppercase(self, account_service, mock_repository):
         """Should convert currency code to uppercase."""
-        mock_repository.create.return_value = Mock(spec=Account)
+        mock_repository.create.return_value = MagicMock()
 
         account_service.create(
+            user_id=USER_ID,
             name="Test",
             type="debit",
             currency="eur"
@@ -207,12 +218,13 @@ class TestUpdate:
 
     def test_update_account_success(self, account_service, mock_repository, sample_account):
         """Should update account with provided data."""
-        updated_account = Mock(spec=Account)
+        updated_account = MagicMock()
         mock_repository.get_by_id_or_fail.return_value = sample_account
         mock_repository.update.return_value = updated_account
 
         result = account_service.update(
             account_id=sample_account.id,
+            user_id=USER_ID,
             name="Nombre Actualizado",
             currency="USD"
         )
@@ -231,6 +243,7 @@ class TestUpdate:
 
         account_service.update(
             account_id=sample_account.id,
+            user_id=USER_ID,
             name="Nuevo Nombre"
         )
 
@@ -242,10 +255,10 @@ class TestUpdate:
     def test_update_account_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.update(account_id, name="Test")
+            account_service.update(account_id, user_id=USER_ID, name="Test")
 
 
 class TestArchive:
@@ -253,22 +266,22 @@ class TestArchive:
 
     def test_archive_success(self, account_service, mock_repository, sample_account):
         """Should archive account successfully."""
-        archived_account = Mock(spec=Account)
+        archived_account = MagicMock()
         archived_account.active = False
         mock_repository.soft_delete.return_value = archived_account
 
-        result = account_service.archive(sample_account.id)
+        result = account_service.archive(sample_account.id, user_id=USER_ID)
 
         assert result == archived_account
-        mock_repository.soft_delete.assert_called_once_with(sample_account.id)
+        mock_repository.soft_delete.assert_called_once_with(sample_account.id, USER_ID)
 
     def test_archive_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.soft_delete.side_effect = NotFoundError("Account not found")
+        mock_repository.soft_delete.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.archive(account_id)
+            account_service.archive(account_id, user_id=USER_ID)
 
 
 class TestDelete:
@@ -278,7 +291,7 @@ class TestDelete:
         """Should delete account when no transactions or transfers exist."""
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        account_service.delete(sample_account.id)
+        account_service.delete(sample_account.id, user_id=USER_ID)
 
         mock_repository.delete.assert_called_once_with(sample_account)
 
@@ -288,7 +301,7 @@ class TestDelete:
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id)
+            account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transacciones" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -299,7 +312,7 @@ class TestDelete:
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id)
+            account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transferencias" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -310,7 +323,7 @@ class TestDelete:
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
         with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id)
+            account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transferencias" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -318,10 +331,10 @@ class TestDelete:
     def test_delete_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.delete(account_id)
+            account_service.delete(account_id, user_id=USER_ID)
 
 
 class TestGetBalance:
@@ -333,18 +346,18 @@ class TestGetBalance:
         mock_repository.get_by_id_or_fail.return_value = sample_account
         mock_repository.calculate_balance.return_value = expected_balance
 
-        result = account_service.get_balance(sample_account.id)
+        result = account_service.get_balance(sample_account.id, user_id=USER_ID)
 
         assert result == expected_balance
-        mock_repository.get_by_id_or_fail.assert_called_once_with(sample_account.id)
+        mock_repository.get_by_id_or_fail.assert_called_once_with(sample_account.id, USER_ID)
         mock_repository.calculate_balance.assert_called_once_with(sample_account.id)
 
     def test_get_balance_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
         account_id = uuid4()
-        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account not found")
+        mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Account", "test-id")
 
         with pytest.raises(NotFoundError):
-            account_service.get_balance(account_id)
+            account_service.get_balance(account_id, user_id=USER_ID)
 
         mock_repository.calculate_balance.assert_not_called()

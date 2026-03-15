@@ -64,13 +64,19 @@ class ProductionConfig(Config):
     DEBUG = False
     TESTING = False
 
-    # Ensure SECRET_KEY is set in production
-    if not os.getenv("SECRET_KEY"):
-        raise ValueError("SECRET_KEY must be set in production environment")
-    if not os.getenv("JWT_SECRET"):
-        raise ValueError("JWT_SECRET must be set in production environment")
-    if not os.getenv("GOOGLE_CLIENT_ID"):
-        raise ValueError("GOOGLE_CLIENT_ID must be set in production environment")
+    @classmethod
+    def validate(cls) -> None:
+        """Validate that all required production environment variables are set.
+
+        Raises:
+            ValueError: If a required environment variable is missing.
+        """
+        if not os.getenv("SECRET_KEY"):
+            raise ValueError("SECRET_KEY must be set in production environment")
+        if not os.getenv("JWT_SECRET"):
+            raise ValueError("JWT_SECRET must be set in production environment")
+        if not os.getenv("GOOGLE_CLIENT_ID"):
+            raise ValueError("GOOGLE_CLIENT_ID must be set in production environment")
 
 
 def get_config(config_name: str = "development") -> type[Config]:

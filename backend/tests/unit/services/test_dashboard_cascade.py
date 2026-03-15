@@ -21,7 +21,7 @@ def test_create_widget_cascades_updated_at(app, make_dashboard):
 
     time.sleep(0.02)
 
-    svc.create_widget(dashboard.id, WidgetCreate(
+    svc.create_widget(dashboard.id, user_id=None, data=WidgetCreate(
         widget_type="line",
         title="Test Widget",
         position_x=0, position_y=0,
@@ -45,7 +45,7 @@ def test_update_widget_cascades_updated_at(app, make_dashboard, make_widget):
 
     time.sleep(0.02)
 
-    svc.update_widget(dashboard.id, widget.id, WidgetUpdate(width=3))
+    svc.update_widget(dashboard.id, widget.id, user_id=None, data=WidgetUpdate(width=3))
 
     db.session.refresh(dashboard)
     assert dashboard.updated_at > original_ts
@@ -63,7 +63,7 @@ def test_delete_widget_cascades_updated_at(app, make_dashboard, make_widget):
 
     time.sleep(0.02)
 
-    svc.delete_widget(dashboard.id, widget.id)
+    svc.delete_widget(dashboard.id, widget.id, user_id=None)
 
     db.session.refresh(dashboard)
     assert dashboard.updated_at > original_ts

@@ -16,6 +16,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.schemas.user_setting import SettingResponse, SettingUpdateRequest, SettingsResponse
 from app.services.user_setting import SettingsService
+from app.utils.auth import require_auth
 from app.utils.exceptions import ValidationError
 from app.utils.responses import error_response, success_response
 
@@ -24,6 +25,7 @@ settings_service = SettingsService()
 
 
 @settings_bp.route("/settings", methods=["GET"])
+@require_auth
 def get_settings():
     """
     Return all stored settings for the authenticated user.
@@ -44,6 +46,7 @@ def get_settings():
 
 
 @settings_bp.route("/settings/<string:key>", methods=["PUT"])
+@require_auth
 def update_setting(key: str):
     """
     Update a single setting by key for the authenticated user.
