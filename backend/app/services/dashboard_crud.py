@@ -12,6 +12,7 @@ from typing import Optional
 
 import sqlalchemy as sa
 
+from app.extensions import db
 from app.models.dashboard import Dashboard
 from app.models.dashboard_widget import DashboardWidget, WidgetType
 from app.repositories.dashboard import DashboardRepository
