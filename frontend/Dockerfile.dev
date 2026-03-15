@@ -11,15 +11,11 @@ RUN apk add --no-cache dumb-init
 # Set working directory
 WORKDIR /app
 
-# Copy only package.json (not package-lock.json).
-# The package-lock.json may contain resolved URLs pointing to corporate/private registries
-# (e.g. nexus.corp.indeed.com) that are not accessible from inside Docker containers.
-# By omitting it, npm install resolves packages fresh from the public registry.
-COPY package.json ./
+# Copy package files for dependency installation
+COPY package.json package-lock.json ./
 
-# Install dependencies using the public npm registry.
-# --registry overrides any host-level .npmrc registry settings.
-RUN npm install --registry https://registry.npmjs.org
+# Install dependencies using ci for reproducible builds
+RUN npm ci
 
 # Copy application source code
 COPY . .
