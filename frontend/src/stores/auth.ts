@@ -23,7 +23,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, readonly } from 'vue'
 import {
   getRefreshToken,
   setRefreshToken,
@@ -32,6 +32,7 @@ import {
   getLastUserId,
   deleteLastUserId,
 } from '@/offline/auth-db'
+import { db } from '@/offline/db'
 import {
   postAuthGoogle,
   postAuthRefresh,
@@ -201,8 +202,11 @@ export const useAuthStore = defineStore('auth', () => {
    * INVARIANTE: Limpia el estado local INDEPENDIENTEMENTE de la respuesta del servidor.
    * Si el servidor responde 401, 500, o la red falla — el frontend limpia el estado
    * igualmente. El usuario nunca queda "atrapado" sin poder desloguearse.
+   *
+   * @param clearLocalData — Si true, también borra WalletDB por completo (usado al
+   *   cambiar de usuario). Si false, conserva los datos locales (logout simple).
    */
-  async function logout(): Promise<void> {
+  async function logout(clearLocalData = false): Promise<void> {
     // Intentar revocar el refresh token en el servidor (fire-and-forget)
     const storedRefreshToken = await getRefreshToken()
     if (storedRefreshToken) {
@@ -219,6 +223,39 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     await deleteRefreshToken()
     // Mantenemos last_user_id para detectar cambio de usuario en el próximo login
+
+    // Si se solicita limpiar datos locales (cambio de usuario), borrar WalletDB.
+    // db.delete() elimina la base de datos IndexedDB por completo; db.open()
+    // la recrea vacía con el schema actual. Esto garantiza que el nuevo usuario
+    // no vea datos del usuario anterior.
+    if (clearLocalData) {
+      try {
+        await db.delete()
+        await db.open()
+      } catch (err) {
+        console.warn('[useAuthStore] logout: error al limpiar WalletDB:', err)
+      }
+    }
+  }
+
+  /**
+   * initializeFromStorage — restaurar sesión silenciosa al arrancar la app.
+   *
+   * Se llama desde main.ts antes del primer mount. Lee el refresh_token de
+   * AuthDB y, si existe, intenta renovar silenciosamente el accessToken.
+   * Si no hay token o el refresh falla, la app arranca en modo invitado — sin error.
+   *
+   * Por qué aquí y no en un route guard?
+   * Un route guard se ejecuta por primera vez DESPUÉS de que Vue Router intenta
+   * navegar a la ruta inicial. En ese momento el store ya debería tener el estado
+   * de autenticación. Si inicializáramos en el guard, habría un ciclo: el guard
+   * llama a refresh(), refresh() actualiza el store, el guard re-evalúa. Hacerlo
+   * en main.ts antes del mount es más simple y evita ese ciclo.
+   */
+  async function initializeFromStorage(): Promise<void> {
+    const token = await getRefreshToken()
+    if (!token) return  // No hay sesión almacenada — modo invitado
+    await refresh()     // refresh() maneja sus propios errores; no lanza
   }
 
   /**
@@ -231,15 +268,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    // Estado (readonly para externos)
-    accessToken,
-    user,
+    // Estado — readonly para que los consumidores externos no muten directamente.
+    // Por qué readonly() y no computed()? readonly() wrappea el ref completo y
+    // preserva la reactividad (los watchers siguen funcionando) sin exponer
+    // el setter. computed() requeriría un getter explícito por cada campo.
+    accessToken: readonly(accessToken),
+    user: readonly(user),
     // Computed
     isAuthenticated,
     // Acciones
     loginWithGoogle,
     refresh,
     logout,
+    initializeFromStorage,
     clearLocalAuthState,
     // Helper para SyncManager (acceso directo al last_user_id de AuthDB)
     getLastUserId,

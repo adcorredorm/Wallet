@@ -37,6 +37,8 @@ const {
   mockGetLastUserId,
   mockSetLastUserId,
   mockDeleteLastUserId,
+  mockDbDelete,
+  mockDbOpen,
 } = vi.hoisted(() => ({
   mockPostAuthGoogle: vi.fn(),
   mockPostAuthRefresh: vi.fn(),
@@ -47,6 +49,8 @@ const {
   mockGetLastUserId: vi.fn(),
   mockSetLastUserId: vi.fn(),
   mockDeleteLastUserId: vi.fn(),
+  mockDbDelete: vi.fn(),
+  mockDbOpen: vi.fn(),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -63,6 +67,13 @@ vi.mock('@/offline/auth-db', () => ({
   setLastUserId: mockSetLastUserId,
   deleteLastUserId: mockDeleteLastUserId,
   clearAuthDb: vi.fn(),
+}))
+
+vi.mock('@/offline/db', () => ({
+  db: {
+    delete: mockDbDelete,
+    open: mockDbOpen,
+  },
 }))
 
 // Import AFTER mocks
@@ -126,6 +137,10 @@ beforeEach(() => {
   mockGetLastUserId.mockResolvedValue(undefined)
   mockSetLastUserId.mockResolvedValue(undefined)
   mockDeleteLastUserId.mockResolvedValue(undefined)
+
+  // Default: WalletDB operations succeed silently
+  mockDbDelete.mockResolvedValue(undefined)
+  mockDbOpen.mockResolvedValue(undefined)
 })
 
 // ---------------------------------------------------------------------------
@@ -364,6 +379,108 @@ describe('clearLocalAuthState', () => {
     expect(store.accessToken).toBeNull()
     expect(store.user).toBeNull()
     expect(mockPostAuthLogout).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// logout with clearLocalData
+// ---------------------------------------------------------------------------
+describe('logout — clearLocalData parameter', () => {
+  it('logout(true) deletes and re-opens WalletDB', async () => {
+    mockPostAuthGoogle.mockResolvedValueOnce(googleApiResponse)
+    const store = useAuthStore()
+    await store.loginWithGoogle('google-id-token')
+
+    mockGetRefreshToken.mockResolvedValueOnce('opaque-refresh-token')
+    mockPostAuthLogout.mockResolvedValueOnce(undefined)
+    await store.logout(true)
+
+    expect(mockDbDelete).toHaveBeenCalledOnce()
+    expect(mockDbOpen).toHaveBeenCalledOnce()
+  })
+
+  it('logout(false) does NOT touch WalletDB', async () => {
+    mockPostAuthGoogle.mockResolvedValueOnce(googleApiResponse)
+    const store = useAuthStore()
+    await store.loginWithGoogle('google-id-token')
+
+    mockGetRefreshToken.mockResolvedValueOnce('opaque-refresh-token')
+    mockPostAuthLogout.mockResolvedValueOnce(undefined)
+    await store.logout(false)
+
+    expect(mockDbDelete).not.toHaveBeenCalled()
+    expect(mockDbOpen).not.toHaveBeenCalled()
+  })
+
+  it('logout() without argument does NOT touch WalletDB (default false)', async () => {
+    mockGetRefreshToken.mockResolvedValueOnce('opaque-refresh-token')
+    mockPostAuthLogout.mockResolvedValueOnce(undefined)
+
+    const store = useAuthStore()
+    await store.logout()
+
+    expect(mockDbDelete).not.toHaveBeenCalled()
+    expect(mockDbOpen).not.toHaveBeenCalled()
+  })
+
+  it('logout(true) still clears auth state even if WalletDB.delete() throws', async () => {
+    mockGetRefreshToken.mockResolvedValueOnce('opaque-refresh-token')
+    mockPostAuthLogout.mockResolvedValueOnce(undefined)
+    mockDbDelete.mockRejectedValueOnce(new Error('IndexedDB error'))
+
+    mockPostAuthGoogle.mockResolvedValueOnce(googleApiResponse)
+    const store = useAuthStore()
+    await store.loginWithGoogle('google-id-token')
+
+    await expect(store.logout(true)).resolves.not.toThrow()
+    expect(store.accessToken).toBeNull()
+    expect(store.user).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// initializeFromStorage
+// ---------------------------------------------------------------------------
+describe('initializeFromStorage', () => {
+  it('with no stored token: stays as guest without calling refresh API', async () => {
+    mockGetRefreshToken.mockResolvedValueOnce(undefined)
+
+    const store = useAuthStore()
+    await store.initializeFromStorage()
+
+    expect(mockPostAuthRefresh).not.toHaveBeenCalled()
+    expect(store.isAuthenticated).toBe(false)
+  })
+
+  it('with a stored token: calls refresh() and updates auth state on success', async () => {
+    const newJwt = buildJwt({ sub: 'user-abc-123', email: 'angel@example.com', name: 'Angel Test' })
+    // initializeFromStorage() calls getRefreshToken() once to check existence,
+    // then refresh() calls getRefreshToken() again to get the token value.
+    // Both calls must return the token.
+    mockGetRefreshToken.mockResolvedValue('stored-refresh-token')
+    mockPostAuthRefresh.mockResolvedValueOnce({
+      access_token: newJwt,
+      refresh_token: 'new-rotated-refresh-token',
+    })
+    mockSetRefreshToken.mockResolvedValue(undefined)
+
+    const store = useAuthStore()
+    await store.initializeFromStorage()
+
+    expect(mockPostAuthRefresh).toHaveBeenCalledOnce()
+    expect(store.isAuthenticated).toBe(true)
+    expect(store.user?.email).toBe('angel@example.com')
+  })
+
+  it('with an expired token: stays as guest after refresh failure (no throw)', async () => {
+    mockGetRefreshToken.mockResolvedValueOnce('expired-refresh-token')
+    mockPostAuthRefresh.mockRejectedValueOnce(
+      Object.assign(new Error('Unauthorized'), { response: { status: 401 } })
+    )
+
+    const store = useAuthStore()
+    await expect(store.initializeFromStorage()).resolves.not.toThrow()
+    expect(store.isAuthenticated).toBe(false)
   })
 })
 

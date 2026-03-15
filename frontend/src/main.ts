@@ -15,6 +15,7 @@ import { useRegisterSW } from 'virtual:pwa-register/vue'
 import App from './App.vue'
 import router from './router'
 import './assets/css/main.css'
+import { useAuthStore } from '@/stores/auth'
 
 const app = createApp(App)
 
@@ -24,6 +25,26 @@ app.use(pinia)
 
 // Initialize router
 app.use(router)
+
+/**
+ * Silent session restore at boot.
+ *
+ * Por qué await aquí antes de mount?
+ * Si montáramos primero y luego llamáramos initializeFromStorage(), habría un
+ * frame donde el router ya evaluó los guards con isAuthenticated === false
+ * (antes de que el refresh silencioso completara). Eso provocaría un redirect
+ * no deseado a /login aunque el usuario tenga un refresh_token válido.
+ * Esperamos el resultado antes de montar para que el primer render ya tenga
+ * el estado de auth correcto. El impacto en tiempo de arranque es mínimo:
+ * IndexedDB es local y el refresh es una llamada HTTP única.
+ *
+ * Por qué no bloqueamos si falla?
+ * initializeFromStorage() maneja sus propios errores internamente (refresh()
+ * captura excepciones y devuelve false). La app siempre arranca — en el peor
+ * caso lo hace en modo invitado.
+ */
+const authStore = useAuthStore()
+await authStore.initializeFromStorage()
 
 // Mount application
 app.mount('#app')
