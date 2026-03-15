@@ -13,6 +13,13 @@ export default defineConfig({
       // page reload mid-session and could discard unsaved form state.
       registerType: 'autoUpdate',
 
+      // Disable the Service Worker in development so code changes are always
+      // served fresh without cached-bundle interference. The SW only makes
+      // sense in production where assets are hashed and stable.
+      devOptions: {
+        enabled: false,
+      },
+
       // Static assets that Workbox should precache during build.
       // favicon.svg is the existing icon; icons/* covers our PWA icons.
       // TODO: change 'icons/*.svg' to 'icons/*.png' once real icons are generated.
