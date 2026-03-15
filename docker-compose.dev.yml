@@ -118,6 +118,11 @@ services:
       # Development: use localhost:5001/api/v1 (host port mapping from container's 5000)
       VITE_API_BASE_URL: http://localhost:5001/api/v1
 
+      # Vite proxy target: backend service via Docker internal DNS.
+      # Vite's proxy runs inside the container, so it must use the Docker
+      # service name (backend:5000), not the host port mapping (localhost:5001).
+      BACKEND_URL: http://backend:5000
+
       # Frontend-specific environment
       NODE_ENV: development
 

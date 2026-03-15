@@ -98,9 +98,11 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      // Proxy API requests to Flask backend
+      // Proxy API requests to Flask backend.
+      // BACKEND_URL env var allows Docker to override the target (uses Docker
+      // internal DNS: http://backend:5000) while local dev defaults to host port.
       '/api': {
-        target: 'http://localhost:5001',
+        target: process.env.BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,
         secure: false
       }
