@@ -98,9 +98,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: wallet_frontend
-    ports:
-      # Primary port for frontend access
-      - "3000:80"
+    ports: []
     depends_on:
       # Frontend doesn't strictly need backend to start, but good practice to wait
       - backend

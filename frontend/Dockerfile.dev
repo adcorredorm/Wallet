@@ -11,37 +11,27 @@ RUN apk add --no-cache dumb-init
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* yarn.lock* ./
+# Copy only package.json (not package-lock.json).
+# The package-lock.json may contain resolved URLs pointing to corporate/private registries
+# (e.g. nexus.corp.indeed.com) that are not accessible from inside Docker containers.
+# By omitting it, npm install resolves packages fresh from the public registry.
+COPY package.json ./
 
-# Install dependencies
-# Using npm ci with package-lock.json ensures reproducible installs
-# Falls back to yarn or npm install if lockfile doesn't exist
-RUN if [ -f yarn.lock ]; then \
-      yarn install; \
-    elif [ -f package-lock.json ]; then \
-      npm ci; \
-    else \
-      npm install; \
-    fi
+# Install dependencies using the public npm registry.
+# --registry overrides any host-level .npmrc registry settings.
+RUN npm install --registry https://registry.npmjs.org
 
 # Copy application source code
-# Note: node_modules will be excluded via docker-compose volume mounts
 COPY . .
 
 # Expose Vite dev server port
-# Vite dev server typically runs on 5173
 EXPOSE 5173 5174
 
 # Health check - verify Vite dev server is responding
-# Vite returns HTML content even on /
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:5173/ || exit 1
 
 # Use dumb-init to handle signals properly
-# This prevents zombie processes and ensures clean shutdown
 ENTRYPOINT ["dumb-init", "--"]
 
-# Run Vite dev server with HMR enabled
-# The server will automatically reload on file changes
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
