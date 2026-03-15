@@ -9,7 +9,12 @@ from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
 
+from sqlalchemy import select, func
+
+from app.extensions import db
 from app.models import Account
+from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 from app.repositories import AccountRepository
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 
@@ -88,6 +93,9 @@ class AccountService:
             List of tuples (account, balance).
         """
         accounts = self.get_all(user_id=user_id, include_archived=include_archived)
+        # N+1: issues 4 queries per account (income, expenses, transfers_in, transfers_out).
+        # Acceptable for personal use with few accounts. Optimize with a single aggregated
+        # query if performance becomes an issue.
         return [
             (account, self.repository.calculate_balance(account.id))
             for account in accounts
@@ -115,6 +123,9 @@ class AccountService:
             updated_since=updated_since,
             include_archived=True,
         )
+        # N+1: issues 4 queries per account (income, expenses, transfers_in, transfers_out).
+        # Acceptable for personal use with few accounts. Optimize with a single aggregated
+        # query if performance becomes an issue.
         return [
             (account, self.repository.calculate_balance(account.id))
             for account in accounts
@@ -246,16 +257,24 @@ class AccountService:
         """
         account = self.repository.get_by_id_or_fail(account_id, user_id)
 
-        if account.transactions.count() > 0:
+        txn_count = db.session.execute(
+            select(func.count()).select_from(Transaction).where(
+                Transaction.account_id == account.id
+            )
+        ).scalar()
+        if txn_count > 0:
             raise BusinessRuleError(
                 "No se puede eliminar una cuenta con transacciones. "
                 "Use archivar en su lugar."
             )
 
-        if (
-            account.transfers_source.count() > 0
-            or account.transfers_destination.count() > 0
-        ):
+        transfer_count = db.session.execute(
+            select(func.count()).select_from(Transfer).where(
+                (Transfer.source_account_id == account.id)
+                | (Transfer.destination_account_id == account.id)
+            )
+        ).scalar()
+        if transfer_count > 0:
             raise BusinessRuleError(
                 "No se puede eliminar una cuenta con transferencias. "
                 "Use archivar en su lugar."

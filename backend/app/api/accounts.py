@@ -323,6 +323,7 @@ def hard_delete_account(account_id: UUID):
         401: Authentication required
         404: Account not found
         422: Account has transactions or transfers
+        500: Internal server error
     """
     try:
         account_service.delete(account_id, user_id=g.current_user_id)
@@ -331,6 +332,8 @@ def hard_delete_account(account_id: UUID):
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:
         return error_response(e.message, status_code=422)
+    except Exception as e:
+        return error_response(f"Error al eliminar cuenta: {str(e)}", status_code=500)
 
 
 @accounts_bp.route("/<uuid:account_id>/balance", methods=["GET"])
