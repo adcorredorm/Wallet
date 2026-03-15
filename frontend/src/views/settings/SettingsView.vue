@@ -36,14 +36,64 @@
  */
 
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
+import { useAuthStore } from '@/stores/auth'
 import { syncManager } from '@/offline/sync-manager'
 import { SUPPORTED_CURRENCIES } from '@/utils/constants'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
+const authStore = useAuthStore()
+const router = useRouter()
+
+// ---------------------------------------------------------------------------
+// Logout modal state
+//
+// Why a local ref instead of a Pinia-based modal system?
+// The logout modal is specific to this view and has no cross-component usage.
+// A local ref is the simplest, most direct solution. If a global modal
+// system is added in the future, this can be migrated then.
+// ---------------------------------------------------------------------------
+const showLogoutModal = ref(false)
+
+function openLogoutModal(): void {
+  showLogoutModal.value = true
+}
+
+function closeLogoutModal(): void {
+  showLogoutModal.value = false
+}
+
+/**
+ * Handle logout with the "keep data" option.
+ *
+ * Why logout(false)?
+ * The user wants to leave the authenticated session but keep their local
+ * IndexedDB data intact. They will continue in guest mode with all their
+ * existing data available offline.
+ */
+async function handleLogoutKeepData(): Promise<void> {
+  closeLogoutModal()
+  await authStore.logout(false)
+  await router.push('/')
+}
+
+/**
+ * Handle logout with the "delete all data" option.
+ *
+ * Why logout(true)?
+ * The user explicitly wants to clear all local data — typically because
+ * they are handing the device to someone else or switching accounts.
+ * authStore.logout(true) deletes WalletDB and re-creates it empty.
+ */
+async function handleLogoutDeleteAll(): Promise<void> {
+  closeLogoutModal()
+  await authStore.logout(true)
+  await router.push('/')
+}
 
 async function handleForceSync(): Promise<void> {
   await syncManager.forceFullSync()
@@ -120,11 +170,28 @@ function currentCurrencyLabel(): string {
 
 <template>
   <div class="space-y-6">
-    <!-- Page heading -->
+    <!-- Page heading with greeting -->
     <div>
       <h1 class="text-2xl font-bold text-dark-text-primary">Configuración</h1>
+      <!--
+        Greeting — shows the authenticated user's name or "Invitado".
+
+        Why display the name here instead of in the header?
+        Settings is the natural place for user identity — it's where you go
+        to manage your account. The header is better reserved for navigation
+        context (page title, back button). Placing it here keeps the header
+        clean and groups identity with account management.
+
+        Why font-medium on the name?
+        Visually distinguishes the name from the surrounding text without
+        requiring a color change. Matches the pattern used throughout the
+        app for "label: value" pairs (e.g., "Moneda actual: USD").
+      -->
       <p class="mt-1 text-sm text-dark-text-secondary">
-        Preferencias generales de la aplicación.
+        Hola,
+        <span class="font-medium text-dark-text-primary">
+          {{ authStore.user ? authStore.user.name : 'Invitado' }}
+        </span>
       </p>
     </div>
 
@@ -244,6 +311,180 @@ function currentCurrencyLabel(): string {
         <span v-else>Forzar sincronización completa</span>
       </button>
     </div>
+
+    <!--
+      Cerrar sesión section — only rendered when authenticated.
+
+      Why v-if="authStore.isAuthenticated" instead of v-show?
+      The button should not exist at all in guest mode — it's semantically
+      meaningless to "log out" when you are not logged in. v-if is correct
+      here: we want to remove the element from the DOM entirely, not just
+      hide it, to avoid any possibility of focus or keyboard access.
+    -->
+    <div
+      v-if="authStore.isAuthenticated"
+      class="rounded-xl bg-dark-bg-secondary border border-dark-bg-tertiary/50 p-4 space-y-4"
+    >
+      <div>
+        <h2 class="text-base font-semibold text-dark-text-primary">
+          Cuenta
+        </h2>
+        <p class="mt-0.5 text-sm text-dark-text-secondary leading-relaxed">
+          Gestiona tu sesión y los datos locales del dispositivo.
+        </p>
+      </div>
+
+      <div class="border-t border-dark-bg-tertiary/50" />
+
+      <!--
+        "Cerrar sesión" button.
+
+        Why a dedicated section (card) instead of a floating button?
+        Groups the destructive action with its context ("Cuenta") following
+        the same card pattern used throughout the app. A floating button
+        at the bottom of the page would be visually orphaned and might be
+        mistaken for a FAB.
+
+        Why text-red-400 but not bg-red?
+        Red background buttons are for immediately destructive actions with
+        no undo (e.g., "Eliminar cuenta permanentemente"). Logout is
+        recoverable — the user can log back in. Red text on a neutral
+        background communicates "caution" without "danger".
+      -->
+      <button
+        @click="openLogoutModal"
+        class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+               border border-red-500/30 text-red-400 text-sm font-medium
+               hover:bg-red-500/10
+               transition-colors min-h-[44px]"
+        aria-label="Cerrar sesión de tu cuenta"
+      >
+        <!-- Logout icon (Heroicons outline) -->
+        <svg
+          class="w-4 h-4 flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+          />
+        </svg>
+        Cerrar sesión
+      </button>
+    </div>
+
+    <!--
+      Logout modal / dialog
+
+      Why a custom modal instead of the browser's confirm() dialog?
+      1. confirm() is synchronous and blocks the UI — bad for mobile.
+      2. confirm() doesn't support custom styling or multiple buttons.
+      3. We need TWO options (keep data vs. delete all), which confirm()
+         cannot provide.
+
+      Why not Teleport to <body>?
+      The modal uses a fixed overlay that covers the entire viewport.
+      Teleporting to <body> is cleaner for z-index stacking in complex
+      layouts, but this app uses a simple flex layout where a fixed overlay
+      works correctly without Teleport. We avoid the complexity for now.
+
+      Why backdrop-blur?
+      Adds depth to the dark overlay without making it fully opaque. The
+      user can see they are still in the app while the modal is open,
+      which reduces disorientation.
+    -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div
+          v-if="showLogoutModal"
+          class="fixed inset-0 z-50 flex items-end justify-center sm:items-center px-4 pb-6 sm:pb-0"
+          style="background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-modal-title"
+          @click.self="closeLogoutModal"
+        >
+          <!--
+            Modal content card.
+
+            Why items-end on mobile (sm:items-center on larger)?
+            "Bottom sheet" pattern: on mobile, modals that require user
+            choice feel more natural when they slide up from the bottom
+            (one-thumb reachability). On tablet/desktop, center alignment
+            is the expected convention.
+          -->
+          <div
+            class="w-full max-w-sm rounded-2xl p-6 space-y-5"
+            style="background-color: #1e293b; border: 1px solid rgba(51, 65, 85, 0.8);"
+          >
+            <!-- Modal heading -->
+            <div class="space-y-2">
+              <h2
+                id="logout-modal-title"
+                class="text-lg font-semibold text-dark-text-primary"
+              >
+                Cerrar sesión
+              </h2>
+              <p class="text-sm text-dark-text-secondary leading-relaxed">
+                ¿Qué quieres hacer con tus datos locales?
+              </p>
+            </div>
+
+            <!-- Option buttons -->
+            <div class="space-y-3">
+              <!--
+                "Mantener en modo invitado" — logout(false)
+                The user keeps their IndexedDB data and continues as a guest.
+                Primary action: uses the accent-blue style to signal it's
+                the "safer" / recommended choice.
+              -->
+              <button
+                @click="handleLogoutKeepData"
+                class="w-full flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl
+                       text-left transition-colors min-h-[60px]
+                       hover:opacity-90"
+                style="background-color: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd;"
+              >
+                <span class="font-medium text-sm">Mantener en modo invitado</span>
+                <span class="text-xs opacity-75">Tus datos permanecen en este dispositivo</span>
+              </button>
+
+              <!--
+                "Borrar todo" — logout(true)
+                Destructive: deletes WalletDB entirely. Uses red styling to
+                signal this is irreversible. Placed second (below the safe
+                option) to make it harder to accidentally tap.
+              -->
+              <button
+                @click="handleLogoutDeleteAll"
+                class="w-full flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl
+                       text-left transition-colors min-h-[60px]
+                       hover:opacity-90"
+                style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5;"
+              >
+                <span class="font-medium text-sm">Borrar todo</span>
+                <span class="text-xs opacity-75">Elimina todos los datos locales de este dispositivo</span>
+              </button>
+
+              <!-- Cancel -->
+              <button
+                @click="closeLogoutModal"
+                class="w-full px-4 py-3 rounded-xl text-sm text-dark-text-secondary
+                       hover:text-dark-text-primary transition-colors min-h-[44px]"
+                style="background-color: rgba(51, 65, 85, 0.3);"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -263,5 +504,38 @@ function currentCurrencyLabel(): string {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/**
+ * Modal overlay fade + slight scale for the bottom-sheet entrance.
+ *
+ * Why opacity + transform together?
+ * Fading alone makes the modal appear/disappear flatly. Adding a subtle
+ * scale (0.95 → 1.0) gives the modal a "pop" that feels more native on
+ * mobile, matching the micro-interaction conventions of iOS/Android modals.
+ *
+ * Why 250ms?
+ * Slightly slower than the 200ms fade for inline elements. Modals are
+ * more visually significant — a tiny extra duration prevents them from
+ * feeling too abrupt while still being fast enough for mobile.
+ */
+.modal-fade-enter-active {
+  transition: opacity 250ms ease-out, transform 250ms ease-out;
+}
+
+.modal-fade-leave-active {
+  transition: opacity 200ms ease-in, transform 200ms ease-in;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.modal-fade-enter-to,
+.modal-fade-leave-from {
+  opacity: 1;
+  transform: scale(1);
 }
 </style>
