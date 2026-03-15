@@ -23,7 +23,8 @@ class Config:
     SQLALCHEMY_ECHO = False
 
     # CORS
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    # Docker compose sets FLASK_CORS_ORIGINS; local dev falls back to localhost defaults.
+    CORS_ORIGINS = os.getenv("FLASK_CORS_ORIGINS", os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")).split(",")
 
     # Pagination
     DEFAULT_PAGE_SIZE = int(os.getenv("DEFAULT_PAGE_SIZE", "20"))

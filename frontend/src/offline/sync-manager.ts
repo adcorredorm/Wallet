@@ -340,6 +340,13 @@ export class SyncManager {
       // After all (non-blocked) mutations are processed, re-fetch the state
       // from the server. If Dexie is empty (fresh install / cleared DB) run a
       // full sync; otherwise run an incremental sync using stored cursors.
+      //
+      // Why check AFTER processing mutations, not before?
+      // The optimistic-write pattern writes to Dexie when the user acts (before
+      // enqueueing the mutation), so Dexie is never truly empty mid-session.
+      // The check is aimed at the fresh-install / cleared-DB scenario, where
+      // the queue is also empty, so mutation processing is a no-op and the
+      // post-check is equivalent to a pre-check.
       const dexieIsEmpty = await this.isDexieEmpty()
       if (dexieIsEmpty) {
         console.log('[SyncManager] Dexie is empty — running full sync.')
@@ -405,13 +412,15 @@ export class SyncManager {
     try {
       await this.clearSyncCursors()
       await this.fullReadSync()
-      window.dispatchEvent(new CustomEvent('wallet:sync-complete'))
       console.log('[SyncManager] Force full sync complete.')
     } finally {
       this.processing = false
       syncStore.setSyncing(false)
       syncStore.setLastSyncAt(new Date().toISOString())
       syncStore.setInitialSyncComplete(true)
+      // Dispatch even on error so stores always refresh from whatever data
+      // was written to Dexie (partial sync is better than stale UI).
+      window.dispatchEvent(new CustomEvent('wallet:sync-complete'))
     }
   }
 
@@ -1467,6 +1476,9 @@ export class SyncManager {
 
     const entities: EntityConfig[] = [
       {
+        // Note: no ?include_archived=true — the backend enforces include_archived=True
+        // server-side whenever a cursor is present (see AccountService.get_all_with_balances_since).
+        // This is intentional: archived entities must propagate so deletions reach the client.
         url: '/accounts',
         cursorKey: 'accounts',
         writer: (items) => db.accounts.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalAccount)),
@@ -1482,6 +1494,7 @@ export class SyncManager {
         writer: (items) => db.transfers.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalTransfer)),
       },
       {
+        // Same as accounts: backend enforces include_archived=True in incremental mode.
         url: '/categories',
         cursorKey: 'categories',
         writer: (items) => db.categories.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalCategory)),

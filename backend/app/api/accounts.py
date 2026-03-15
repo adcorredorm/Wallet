@@ -72,6 +72,13 @@ def list_accounts():
     """
     try:
         updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
+        # Cursor is captured BEFORE the DB query intentionally.
+        # This means: if a write lands between encode_cursor() and the query,
+        # that write is included in this response AND will be returned again on
+        # the next poll (updated_at > cursor). Returning data twice is safe
+        # (idempotent bulkPut on the client). The alternative — capturing the
+        # cursor after the query — creates a window where writes can be silently
+        # missed. Do not reorder these two lines.
         new_cursor = encode_cursor()
 
         if updated_since is not None:

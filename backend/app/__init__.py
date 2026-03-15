@@ -31,7 +31,15 @@ def create_app(config_name: str = "development") -> Flask:
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    CORS(app, origins=app.config.get("CORS_ORIGINS", []))
+    CORS(
+        app,
+        origins=app.config.get("CORS_ORIGINS", []),
+        # X-Sync-Cursor must be explicitly exposed so the browser can read it
+        # in cross-origin contexts (CORS safe-list excludes custom headers).
+        # If-Sync-Cursor must be allowed so the preflight passes.
+        expose_headers=["X-Sync-Cursor"],
+        allow_headers=["Content-Type", "Authorization", "If-Sync-Cursor"],
+    )
 
     # Register blueprints
     from app.api import register_blueprints
