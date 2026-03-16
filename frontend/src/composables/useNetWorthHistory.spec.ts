@@ -33,7 +33,8 @@ const mockGetRate = vi.fn().mockReturnValue(1)
 vi.mock('@/stores/exchangeRates', () => ({
   useExchangeRatesStore: vi.fn(() => ({
     getRate: mockGetRate,
-    rates: [],
+    loading: false,
+    rates: [{ id: 'fake' }],
   })),
 }))
 

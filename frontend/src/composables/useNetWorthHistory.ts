@@ -89,7 +89,7 @@ export interface UseNetWorthHistoryReturn {
 function selectGranularity(days: number): Granularity {
   if (days <= 7) return 'day'
   if (days <= 30) return 'triday'
-  if (days <= 730) return 'month'
+  if (days <= 456) return 'month'
   return 'year'
 }
 
