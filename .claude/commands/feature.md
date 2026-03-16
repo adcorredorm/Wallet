@@ -231,11 +231,11 @@ If any check fails:
 - Re-launch it with the full failure output and a reference to its approved plan
 - Repeat until all checks pass cleanly
 
-### Phase 5 — Consolidate worktrees
+### 5.1 Consolidate worktrees
 
 Use `superpowers:finishing-a-development-branch` to merge all feature worktrees into `main` and clean up the worktree directories. If there are merge conflicts, report them to the user before continuing — do not attempt to auto-resolve conflicts.
 
-### Phase 5 — Boot Docker dev environment
+### 5.2 Boot Docker dev environment
 
 Run `make -f Makefile.docker up-dev` and wait for all services (db, backend, frontend) to report healthy. Check `docker compose logs --tail=20` per service for errors.
 
