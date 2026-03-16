@@ -19,13 +19,12 @@
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { transfersApi } from '@/api/transfers'
 import type {
   CreateTransferDto,
   UpdateTransferDto,
   TransferFilters
 } from '@/types'
-import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransfer } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
@@ -47,25 +46,14 @@ export const useTransfersStore = defineStore('transfers', () => {
   const error = ref<string | null>(null)
 
   // ---------------------------------------------------------------------------
-  // Actions — Reads (offline-first, stale-while-revalidate)
+  // Actions — Reads (offline-first, Dexie-only)
   // ---------------------------------------------------------------------------
 
-  async function fetchTransfers(customFilters?: TransferFilters) {
+  async function fetchTransfers() {
     loading.value = true
     error.value = null
     try {
-      const appliedFilters = customFilters || filters.value
-
-      const localData = await fetchAllWithRevalidation(
-        db.transfers,
-        () => transfersApi.getAll(appliedFilters),
-        (freshItems) => {
-          transfers.value = freshItems
-        },
-        { cleanupOrphans: false }
-      )
-
-      transfers.value = localData
+      await refreshFromDB()
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencias'
       throw err
@@ -74,62 +62,18 @@ export const useTransfersStore = defineStore('transfers', () => {
     }
   }
 
-  async function fetchTransferById(id: string) {
+  async function fetchTransferById(id: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const localItem = await fetchByIdWithRevalidation(
-        db.transfers,
-        id,
-        (transferId) => transfersApi.getById(transferId),
-        (freshItem) => {
-          const index = transfers.value.findIndex(t => t.id === id)
-          if (index >= 0) {
-            transfers.value[index] = freshItem
-          } else {
-            transfers.value.push(freshItem)
-          }
-        }
-      )
-
-      if (localItem) {
+      const item = await db.transfers.get(id)
+      if (item) {
         const index = transfers.value.findIndex(t => t.id === id)
-        if (index >= 0) {
-          transfers.value[index] = localItem
-        } else {
-          transfers.value.push(localItem)
-        }
-        return localItem
+        if (index >= 0) transfers.value[index] = item
+        else transfers.value.push(item)
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencia'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function fetchByAccount(accountId: string, customFilters?: TransferFilters) {
-    loading.value = true
-    error.value = null
-    try {
-      const localData = await fetchAllWithRevalidation(
-        db.transfers,
-        () => transfersApi.getByAccount(accountId, customFilters),
-        (freshItems) => {
-          transfers.value = freshItems
-        },
-        { cleanupOrphans: false }
-      )
-
-      // Narrow the stale result to transfers involving this account.
-      // This mirrors the existing getTransfersByAccount() logic and ensures
-      // the UI shows relevant-only data even before revalidation completes.
-      transfers.value = localData.filter(t =>
-        t.source_account_id === accountId || t.destination_account_id === accountId
-      )
-    } catch (err: any) {
-      error.value = err.message || 'Error al cargar transferencias de la cuenta'
       throw err
     } finally {
       loading.value = false
@@ -380,7 +324,6 @@ export const useTransfersStore = defineStore('transfers', () => {
     // Actions
     fetchTransfers,
     fetchTransferById,
-    fetchByAccount,
     createTransfer,
     updateTransfer,
     deleteTransfer,

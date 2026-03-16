@@ -15,21 +15,11 @@ vi.mock('@/offline', () => ({
       update: vi.fn().mockResolvedValue(undefined),
     },
   },
-  fetchAllWithRevalidation: vi.fn().mockResolvedValue([]),
-  fetchByIdWithRevalidation: vi.fn().mockResolvedValue(undefined),
   generateTempId: vi.fn().mockReturnValue('temp-456'),
   mutationQueue: {
     enqueue: vi.fn().mockResolvedValue(undefined),
     findPendingCreate: vi.fn().mockResolvedValue(null),
     updatePayload: vi.fn().mockResolvedValue(undefined),
-  },
-}))
-
-vi.mock('@/api/transfers', () => ({
-  transfersApi: {
-    getAll: vi.fn().mockResolvedValue([]),
-    getById: vi.fn().mockResolvedValue(null),
-    getByAccount: vi.fn().mockResolvedValue([]),
   },
 }))
 

@@ -11,10 +11,10 @@
  * operations, which do not exist in jsdom.
  *
  * Why mock @/api/accounts?
- * Several store actions call accountsApi.getAll() / getById() inside
- * fetchAllWithRevalidation / fetchByIdWithRevalidation. We want these tests to
- * be hermetic — no network calls — and the mock lets us control the return
- * value per test when needed.
+ * The mock is kept for barrel shape completeness. No store action currently
+ * calls accountsApi directly — all reads go through Dexie. We want tests to
+ * be hermetic — no network calls — in case a future action re-introduces an
+ * API call.
  *
  * Why createTestingPinia({ stubActions: false })?
  * stubActions: false means the store's own action code runs without
@@ -55,8 +55,6 @@ import { AccountType } from '@/types/account'
  *                           recomputeBalancesFromTransactions
  * - db.transactions.toArray — used by recomputeBalancesFromTransactions
  * - db.transfers.toArray  — used by recomputeBalancesFromTransactions
- * - fetchAllWithRevalidation — kept in mock for barrel shape completeness; no longer used by fetchAccounts
- * - fetchByIdWithRevalidation — used by fetchAccountById
  * - mutationQueue.enqueue / findPendingCreate — used by write actions
  * - generateTempId        — used by createAccount
  */
@@ -84,8 +82,6 @@ vi.mock('@/offline', () => {
         toArray: dbTransfersToArray,
       },
     },
-    fetchAllWithRevalidation: vi.fn().mockResolvedValue([]),
-    fetchByIdWithRevalidation: vi.fn().mockResolvedValue(undefined),
     generateTempId: vi.fn().mockReturnValue('temp-test-id'),
     isTempId: vi.fn((id: string) => id.startsWith('temp-')),
     mutationQueue: {
@@ -358,7 +354,6 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
 describe('useAccountsStore — fetchAccounts (Dexie-only)', () => {
   it('loads accounts from IndexedDB via refreshFromDB', async () => {
     const { db } = await import('@/offline')
-    const { fetchAllWithRevalidation } = await import('@/offline')
     const fixture = [makeAccount({ id: 'acc-dexie', balance: 500 })]
     ;(db.accounts.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fixture)
 
@@ -368,8 +363,6 @@ describe('useAccountsStore — fetchAccounts (Dexie-only)', () => {
     // accounts populated from IndexedDB
     expect(store.accounts).toHaveLength(1)
     expect(store.accounts[0].id).toBe('acc-dexie')
-    // fetchAllWithRevalidation must NOT have been called — pure Dexie path
-    expect(fetchAllWithRevalidation).not.toHaveBeenCalled()
   })
 
   it('sets loading to false after a successful fetch', async () => {
