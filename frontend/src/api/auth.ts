@@ -31,7 +31,7 @@ import apiClient from './index'
 //   'http://localhost:5001/api/v1' → 'http://localhost:5001'  (dev)
 //   '/api/v1'                      → ''                       (prod con nginx)
 const AUTH_BASE_URL = (import.meta.env.VITE_AUTH_BASE_URL as string | undefined)
-  ?? API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+  ?? (API_BASE_URL ?? 'http://localhost:5000').replace(/\/api\/v1\/?$/, '')
 
 // Cliente público sin interceptores — para endpoints /auth/* que no
 // requieren Authorization header.
