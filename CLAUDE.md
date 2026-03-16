@@ -23,6 +23,7 @@ Personal finance tracker for managing accounts, transactions, transfers, and cat
 - Frontend IndexedDB is the source of truth; backend is a sync backup
 - Amounts are always positive — transaction `type` (income/expense) determines the sign
 - All primary keys are UUIDs
+- Exchange rates are seeded into Dexie on first launch (`BASE_RATES` in `src/stores/exchangeRates.ts`). The backend upserts fresh rates on every sync. **On every minor version release, ask the user if they want to update `BASE_RATES` with the current rates from the DB** so offline cold-start accuracy stays acceptable.
 
 ## Testing
 
