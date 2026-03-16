@@ -135,9 +135,9 @@ class TestOnboardingSeed:
 
         assert all("auto-generated" in (acc.tags or []) for acc in accounts)
 
-    def test_seed_categories_have_seed_client_id_prefix(self, client, app):
+    def test_seed_categories_have_seed_offline_id_prefix(self, client, app):
         """
-        Categories created by seed must have client_id starting with 'seed-'.
+        Categories created by seed must have offline_id starting with 'seed-'.
         """
         from app.extensions import db
         from app.models.category import Category
@@ -157,5 +157,5 @@ class TestOnboardingSeed:
             ).scalars().all()
 
         assert all(
-            (cat.client_id or "").startswith("seed-") for cat in categories
+            (cat.offline_id or "").startswith("seed-") for cat in categories
         )

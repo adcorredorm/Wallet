@@ -63,7 +63,7 @@ def sample_dashboard():
     d.layout_columns = 2
     d.is_default = False
     d.sort_order = 0
-    d.client_id = None
+    d.offline_id = None
     return d
 
 
@@ -83,7 +83,7 @@ def sample_widget(sample_dashboard):
     w.width = 1
     w.height = 1
     w.config = {}
-    w.client_id = None
+    w.offline_id = None
     return w
 
 
@@ -127,7 +127,7 @@ class TestCreateDashboard:
             display_currency="USD",
             is_default=False,
             sort_order=None,
-            client_id=None,
+            offline_id=None,
             description=None,
             layout_columns=2,
         )
@@ -136,7 +136,7 @@ class TestCreateDashboard:
 
     def test_creates_successfully(self, service, mock_repo, sample_dashboard):
         """Should create a new dashboard and return (dashboard, True)."""
-        mock_repo.get_by_client_id.return_value = None
+        mock_repo.get_by_offline_id.return_value = None
         mock_repo.count_all.return_value = 0
         mock_repo.get_max_sort_order.return_value = 0
         mock_repo.create.return_value = sample_dashboard
@@ -173,11 +173,11 @@ class TestCreateDashboard:
         mock_repo.get_max_sort_order.assert_not_called()
 
     def test_idempotency_returns_existing(self, service, mock_repo, sample_dashboard):
-        """Should return existing dashboard with created=False when client_id matches."""
-        sample_dashboard.client_id = "cli-abc"
-        mock_repo.get_by_client_id.return_value = sample_dashboard
+        """Should return existing dashboard with created=False when offline_id matches."""
+        sample_dashboard.offline_id = "cli-abc"
+        mock_repo.get_by_offline_id.return_value = sample_dashboard
 
-        data = self._make_data(client_id="cli-abc")
+        data = self._make_data(offline_id="cli-abc")
         result, created = service.create_dashboard(user_id=USER_ID, data=data)
 
         assert result is sample_dashboard
@@ -186,7 +186,7 @@ class TestCreateDashboard:
 
     def test_raises_when_limit_reached(self, service, mock_repo):
         """Should raise BusinessRuleError when MAX_DASHBOARDS would be exceeded."""
-        mock_repo.get_by_client_id.return_value = None
+        mock_repo.get_by_offline_id.return_value = None
         mock_repo.count_all.return_value = MAX_DASHBOARDS  # exactly at limit
 
         data = self._make_data()
@@ -367,7 +367,7 @@ class TestCreateWidget:
             position_y=0,
             width=1,
             height=1,
-            client_id=None,
+            offline_id=None,
             config=WidgetConfig(),
         )
         defaults.update(kwargs)
@@ -376,7 +376,7 @@ class TestCreateWidget:
     def test_creates_successfully(self, service, mock_repo, sample_dashboard, sample_widget):
         """Should create a widget and return (widget, True)."""
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
-        mock_repo.get_widget_by_client_id.return_value = None
+        mock_repo.get_widget_by_offline_id.return_value = None
         mock_repo.count_widgets_for_dashboard.return_value = 0
         mock_repo.create_widget.return_value = sample_widget
 
@@ -390,12 +390,12 @@ class TestCreateWidget:
     def test_idempotency_returns_existing_widget(
         self, service, mock_repo, sample_dashboard, sample_widget
     ):
-        """Should return existing widget with created=False when client_id matches."""
-        sample_widget.client_id = "wgt-xyz"
+        """Should return existing widget with created=False when offline_id matches."""
+        sample_widget.offline_id = "wgt-xyz"
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
-        mock_repo.get_widget_by_client_id.return_value = sample_widget
+        mock_repo.get_widget_by_offline_id.return_value = sample_widget
 
-        data = self._make_widget_data(client_id="wgt-xyz")
+        data = self._make_widget_data(offline_id="wgt-xyz")
         result, created = service.create_widget(sample_dashboard.id, user_id=USER_ID, data=data)
 
         assert result is sample_widget
@@ -405,7 +405,7 @@ class TestCreateWidget:
     def test_raises_when_widget_limit_reached(self, service, mock_repo, sample_dashboard):
         """Should raise BusinessRuleError when MAX_WIDGETS_PER_DASHBOARD would be exceeded."""
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
-        mock_repo.get_widget_by_client_id.return_value = None
+        mock_repo.get_widget_by_offline_id.return_value = None
         mock_repo.count_widgets_for_dashboard.return_value = MAX_WIDGETS_PER_DASHBOARD
 
         data = self._make_widget_data()

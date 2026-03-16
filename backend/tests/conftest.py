@@ -250,7 +250,7 @@ def mock_transfer():
     transfer.date = date(2026, 3, 1)
     transfer.description = "Transferencia test"
     transfer.tags = ["test"]
-    transfer.client_id = None
+    transfer.offline_id = None
     transfer.base_rate = None
     return transfer
 
@@ -280,7 +280,7 @@ def mock_transaction():
     transaction.title = "Compra test"
     transaction.description = "Descripción test"
     transaction.tags = ["test"]
-    transaction.client_id = None
+    transaction.offline_id = None
     transaction.base_rate = None
     return transaction
 

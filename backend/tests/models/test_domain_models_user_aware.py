@@ -1,4 +1,4 @@
-"""Tests verifying all domain models have user_id FK and composite client_id constraint."""
+"""Tests verifying all domain models have user_id FK and composite offline_id constraint."""
 import pytest
 from sqlalchemy import UniqueConstraint
 
@@ -29,32 +29,32 @@ def test_domain_model_user_id_fk_to_users(app, model, name):
 
 
 @pytest.mark.parametrize("model,name", list(zip(DOMAIN_MODELS, DOMAIN_NAMES)))
-def test_domain_model_has_composite_client_id_constraint(app, model, name):
-    """All domain models must have a composite UniqueConstraint on (user_id, client_id)."""
+def test_domain_model_has_composite_offline_id_constraint(app, model, name):
+    """All domain models must have a composite UniqueConstraint on (user_id, offline_id)."""
     unique_constraints = [
         c for c in model.__table__.constraints
         if isinstance(c, UniqueConstraint)
     ]
     composite_found = any(
-        set(col.name for col in uc.columns) == {"user_id", "client_id"}
+        set(col.name for col in uc.columns) == {"user_id", "offline_id"}
         for uc in unique_constraints
     )
     assert composite_found, (
-        f"{name} is missing composite UniqueConstraint on (user_id, client_id)"
+        f"{name} is missing composite UniqueConstraint on (user_id, offline_id)"
     )
 
 
 @pytest.mark.parametrize("model,name", list(zip(DOMAIN_MODELS, DOMAIN_NAMES)))
-def test_domain_model_client_id_has_no_table_wide_unique(app, model, name):
-    """client_id must NOT have a standalone table-wide UNIQUE constraint."""
+def test_domain_model_offline_id_has_no_table_wide_unique(app, model, name):
+    """offline_id must NOT have a standalone table-wide UNIQUE constraint."""
     unique_constraints = [
         c for c in model.__table__.constraints
         if isinstance(c, UniqueConstraint)
     ]
-    solo_client_id_unique = any(
-        {col.name for col in uc.columns} == {"client_id"}
+    solo_offline_id_unique = any(
+        {col.name for col in uc.columns} == {"offline_id"}
         for uc in unique_constraints
     )
-    assert not solo_client_id_unique, (
-        f"{name} still has a standalone UNIQUE constraint on client_id"
+    assert not solo_offline_id_unique, (
+        f"{name} still has a standalone UNIQUE constraint on offline_id"
     )

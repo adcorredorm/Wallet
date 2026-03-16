@@ -66,7 +66,7 @@ def _make_category_mock(
     mock.color = "#FF5733"
     mock.parent_category_id = None
     mock.active = active
-    mock.client_id = None
+    mock.offline_id = None
     mock.created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
     mock.updated_at = datetime(2026, 1, 2, tzinfo=timezone.utc)
 

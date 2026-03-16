@@ -68,15 +68,15 @@ def test_get_all_filters_by_user_id(app, account_for_user_a, user_a_id, user_b_i
     assert len(b_records) == 0
 
 
-def test_get_by_client_id_filters_by_user_id(app, user_a_id, user_b_id):
-    """get_by_client_id does not return a record owned by a different user."""
+def test_get_by_offline_id_filters_by_user_id(app, user_a_id, user_b_id):
+    """get_by_offline_id does not return a record owned by a different user."""
     from app.extensions import db
     cid = "test-client-id-001"
     acc = Account(
         name="CID Account",
         type=AccountType.CASH,
         currency="USD",
-        client_id=cid,
+        offline_id=cid,
         user_id=user_a_id,
     )
     db.session.add(acc)
@@ -84,8 +84,8 @@ def test_get_by_client_id_filters_by_user_id(app, user_a_id, user_b_id):
 
     repo = AccountRepository()
     # User A should find it
-    found = repo.get_by_client_id(cid, user_a_id)
+    found = repo.get_by_offline_id(cid, user_a_id)
     assert found is not None
     # User B should not
-    not_found = repo.get_by_client_id(cid, user_b_id)
+    not_found = repo.get_by_offline_id(cid, user_b_id)
     assert not_found is None

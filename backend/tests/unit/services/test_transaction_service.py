@@ -79,7 +79,7 @@ def sample_transaction():
     transaction.title = "Compra supermercado"
     transaction.description = "Descripción test"
     transaction.tags = ["test"]
-    transaction.client_id = None
+    transaction.offline_id = None
     return transaction
 
 
@@ -221,8 +221,8 @@ class TestCreate:
         mock_category_repo,
         sample_transaction,
     ):
-        """Should return the existing transaction immediately when client_id matches."""
-        mock_transaction_repo.get_by_client_id.return_value = sample_transaction
+        """Should return the existing transaction immediately when offline_id matches."""
+        mock_transaction_repo.get_by_offline_id.return_value = sample_transaction
 
         result = transaction_service.create(
             user_id=USER_ID,
@@ -231,7 +231,7 @@ class TestCreate:
             date=date(2026, 3, 1),
             account_id=uuid4(),
             category_id=uuid4(),
-            client_id="client-key-abc",
+            offline_id="client-key-abc",
         )
 
         assert result == sample_transaction
