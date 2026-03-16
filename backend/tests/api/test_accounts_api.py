@@ -10,7 +10,7 @@ built from the test JWT_SECRET.
 
 import json
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock, ANY
 from uuid import uuid4
 
@@ -34,8 +34,8 @@ def _auth_headers(user_id=None) -> dict:
         "sub": str(uid),
         "email": "api-test@example.com",
         "name": "API Test",
-        "exp": datetime.utcnow() + timedelta(hours=1),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        "iat": datetime.now(timezone.utc),
     }
     token = jwt.encode(payload, _JWT_SECRET, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
@@ -125,7 +125,7 @@ def _make_mock_account(account_id=None):
     account.description = None
     account.tags = []
     account.active = True
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     account.created_at = now
     account.updated_at = now
     return account
