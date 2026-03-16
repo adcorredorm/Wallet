@@ -253,15 +253,26 @@ Only proceed to Phase 6 once all services are running cleanly.
 
 **DO NOT proceed to Phase 7 until the user explicitly says all bugs are resolved.**
 
-### 6.1 Deliver the QA checklist
+### 6.0 QA Breaker preflight
 
-Generate a testing checklist based on everything built in Phase 4. The checklist must cover:
-- Each sub-task's acceptance criteria (happy path)
-- Cross-cutting flows that touch multiple sub-tasks
-- Edge cases identified during implementation (e.g. offline behavior, empty states, cross-currency)
-- Regression paths for areas modified by this feature
+Before presenting anything to the user, launch the `qa-breaker` agent with:
+- **ADD path**: path to the spec document written during Phase 1
+- **Plan paths**: paths to all approved implementation plans from Phase 3
+- **Confirmation**: Docker dev is running (verified in Phase 5)
 
-Present the checklist to the user in a clear, step-by-step format they can follow manually in the app.
+The agent will perform static analysis, infrastructure verification, and live testing. It may dispatch implementation agents to fix issues it finds — let it complete without intervention. If the agent pauses and asks for user input (unresolved failure after one retry), address that before continuing.
+
+Once the agent returns its report, present it to the user as the opening of the QA session.
+
+### 6.1 QA session
+
+Present the full qa-breaker report to the user. The report includes:
+- What was built (per sub-task summary)
+- ADD deviations (if any)
+- Environment and live test status
+- Step-by-step QA checklist
+
+Ask the user to begin testing using the checklist. Work through bugs as they are reported (see 6.2).
 
 ### 6.2 Bug tracking rules
 
