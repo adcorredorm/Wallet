@@ -1,6 +1,6 @@
 """Rename client_id to offline_id in all domain tables
 
-Revision ID: 009_rename_client_id_to_offline_id
+Revision ID: 009_rename_offline_id  (shortened from 009_rename_client_id_to_offline_id — alembic_version.version_num is VARCHAR(32))
 Revises: 008c_user_id_not_null
 Create Date: 2026-03-16
 
