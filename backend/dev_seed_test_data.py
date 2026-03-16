@@ -185,7 +185,7 @@ def _clean_test_data(user_id, db) -> None:
 
     print("Cleaning previous test data...")
 
-    for Model in [DashboardWidget, Dashboard, Transaction, Transfer, Account, Category]:
+    for Model in [DashboardWidget, Dashboard, Transaction, Transfer, Account]:
         deleted = db.session.execute(
             db.delete(Model).where(
                 Model.user_id == user_id,
@@ -193,6 +193,27 @@ def _clean_test_data(user_id, db) -> None:
             )
         ).rowcount
         print(f"  Deleted {deleted} {Model.__tablename__}")
+
+    # Handle Category deletion in two steps to respect the self-referential FK
+    # First delete subcategories (where parent_category_id IS NOT NULL)
+    deleted_subs = db.session.execute(
+        db.delete(Category).where(
+            Category.user_id == user_id,
+            Category.offline_id.like("test-%"),
+            Category.parent_category_id.isnot(None),
+        )
+    ).rowcount
+    print(f"  Deleted {deleted_subs} test subcategories")
+
+    # Then delete parent categories (where parent_category_id IS NULL)
+    deleted_parents = db.session.execute(
+        db.delete(Category).where(
+            Category.user_id == user_id,
+            Category.offline_id.like("test-%"),
+            Category.parent_category_id.is_(None),
+        )
+    ).rowcount
+    print(f"  Deleted {deleted_parents} test parent categories")
 
     db.session.commit()
     print("Clean done.")
