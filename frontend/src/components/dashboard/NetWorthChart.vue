@@ -204,7 +204,7 @@ const chartData = computed(() => {
         },
         fill: true,
         borderWidth: 2,
-        pointRadius: 4,
+        pointRadius: points.length <= 1 ? 6 : 4,
         pointHoverRadius: 6,
         pointBackgroundColor: '#1e293b',  // dark-bg-secondary — creates ring effect
         pointBorderColor: COLOR_LINE,

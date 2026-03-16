@@ -66,8 +66,8 @@ const chartData = computed(() => ({
     tension: 0.3,
     fill: false,
     borderWidth: 2,
-    pointRadius: 0,        // hide individual points — let the line speak
-    pointHoverRadius: 4,   // subtle dot only on hover for tooltip anchor
+    pointRadius: ds.data.length <= 1 ? 4 : 0,  // show point when only one data point (no line to draw)
+    pointHoverRadius: 4,
   })),
 }))
 
