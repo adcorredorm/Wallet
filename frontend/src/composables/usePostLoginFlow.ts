@@ -79,9 +79,11 @@ export function usePostLoginFlow() {
     // Clear all local data — belongs to previous user
     await db.delete()
     await db.open()
-    syncManager.reset()
     await setLastUserId(newUserId)
-    syncManager.processQueue()
+    // Force full page reload to clear all in-memory Pinia store state.
+    // Without this, stores still hold the previous user's data even after
+    // IndexedDB is cleared. The reload starts fresh and triggers a full sync.
+    window.location.replace('/')
   }
 
   async function handleSameUserWithPendingData(): Promise<void> {
