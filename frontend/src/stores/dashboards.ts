@@ -140,7 +140,15 @@ export const useDashboardsStore = defineStore('dashboards', () => {
           }
           await db.dashboards.put(dashForDexie)
 
-          // Persist widgets — replace all widgets for this dashboard
+          // Persist widgets — replace server-confirmed widgets but preserve pending ones.
+          // If the user created a widget before the sync ran, bulkDelete would wipe it
+          // and the background revalidation would leave it missing from the UI.
+          const pendingWidgets = await db.dashboardWidgets
+            .where('dashboard_id')
+            .equals(id)
+            .filter(w => w._sync_status === 'pending')
+            .toArray()
+
           const existingWidgetIds = await db.dashboardWidgets
             .where('dashboard_id')
             .equals(id)
@@ -154,14 +162,20 @@ export const useDashboardsStore = defineStore('dashboards', () => {
             _sync_status: 'synced' as const,
             _local_updated_at: now
           }))
-          if (localWidgetsMapped.length > 0) {
-            await db.dashboardWidgets.bulkPut(localWidgetsMapped)
+
+          // Re-add pending widgets that haven't been confirmed by the server yet
+          const serverWidgetIds = new Set(localWidgetsMapped.map(w => w.id))
+          const stillPending = pendingWidgets.filter(pw => !serverWidgetIds.has(pw.id))
+
+          const allWidgets = [...localWidgetsMapped, ...stillPending]
+          if (allWidgets.length > 0) {
+            await db.dashboardWidgets.bulkPut(allWidgets)
           }
 
           // Update reactive state
           currentDashboard.value = {
             ...dashForDexie,
-            widgets: localWidgetsMapped
+            widgets: allWidgets
           }
 
           // Also update the dashboard in the list
