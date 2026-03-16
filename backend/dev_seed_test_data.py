@@ -659,6 +659,135 @@ def _seed_other_transfers(user_id, accs, months, vac_month, efectivo_refills, db
 
 
 # ---------------------------------------------------------------------------
+# Dashboard helpers
+# ---------------------------------------------------------------------------
+
+def _seed_dashboards(user_id, accs, vac_month, db) -> None:
+    """Seed 3 dashboards with 17 widgets covering all types, granularities, and group_by values."""
+    from app.models.dashboard import Dashboard
+    from app.models.dashboard_widget import DashboardWidget, WidgetType
+
+    print("Seeding dashboards...")
+
+    vac_year, vac_month_num = vac_month
+    vac_last = month_last_day(vac_year, vac_month_num)
+    vac_start = f"{vac_year:04d}-{vac_month_num:02d}-01"
+    vac_end   = f"{vac_year:04d}-{vac_month_num:02d}-{vac_last:02d}"
+
+    inversion_id = str(accs["inversion-cop"].id)
+    ahorro_id    = str(accs["ahorro-usd"].id)
+    brl_id       = str(accs["vacaciones-brl"].id)
+
+    DASHBOARDS = [
+        {
+            "offline_id": "test-dashboard-mes-actual",
+            "name": "Mes Actual",
+            "display_currency": "COP",
+            "layout_columns": 3,
+            "is_default": True,
+            "sort_order": 0,
+            "widgets": [
+                ("test-widget-mes-actual-1", "Balance Total",        WidgetType.NUMBER,      0, 0, 1, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {}}),
+                ("test-widget-mes-actual-2", "Gastos del Mes",       WidgetType.NUMBER,      1, 0, 1, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {"type": "expense"}}),
+                ("test-widget-mes-actual-3", "Ingresos del Mes",     WidgetType.NUMBER,      2, 0, 1, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {"type": "income"}}),
+                ("test-widget-mes-actual-4", "Gastos por Categoría", WidgetType.PIE,         0, 1, 1, 2,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {"type": "expense"}, "group_by": "category"}),
+                ("test-widget-mes-actual-5", "Evolución Diaria",     WidgetType.LINE,        1, 1, 1, 2,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {"type": "expense"}, "granularity": "day"}),
+                ("test-widget-mes-actual-6", "Gastos por Cuenta",    WidgetType.BAR,         2, 1, 1, 2,
+                 {"time_range": {"type": "dynamic", "value": "current_month"}, "filters": {"type": "expense"}, "group_by": "account"}),
+            ],
+        },
+        {
+            "offline_id": "test-dashboard-ingresos-inversiones",
+            "name": "Ingresos & Inversiones Año Actual",
+            "display_currency": "COP",
+            "layout_columns": 3,
+            "is_default": False,
+            "sort_order": 1,
+            "widgets": [
+                ("test-widget-ingresos-1", "Total Ingresos Año",       WidgetType.NUMBER,      0, 0, 1, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_year"}, "filters": {"type": "income"}}),
+                ("test-widget-ingresos-2", "Ingresos vs Gastos",       WidgetType.STACKED_BAR, 1, 0, 2, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_year"}, "granularity": "month", "group_by": "type"}),
+                ("test-widget-ingresos-3", "Evolución Inversión",      WidgetType.LINE,        0, 1, 2, 2,
+                 {"time_range": {"type": "dynamic", "value": "current_year"},
+                  "filters": {"account_ids": [inversion_id, ahorro_id]}, "granularity": "month"}),
+                ("test-widget-ingresos-4", "Ingresos por Fuente",      WidgetType.PIE,         2, 1, 1, 2,
+                 {"time_range": {"type": "dynamic", "value": "current_year"}, "filters": {"type": "income"}, "group_by": "category"}),
+                ("test-widget-ingresos-5", "Flujo Mensual",            WidgetType.BAR,         0, 3, 2, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_year"}, "granularity": "month", "group_by": "type"}),
+                ("test-widget-ingresos-6", "Gastos por Día de Semana", WidgetType.BAR,         2, 3, 1, 1,
+                 {"time_range": {"type": "dynamic", "value": "current_year"}, "filters": {"type": "expense"}, "group_by": "day_of_week"}),
+            ],
+        },
+        {
+            "offline_id": "test-dashboard-viaje-brasil",
+            "name": "Viaje Brasil",
+            "display_currency": "BRL",
+            "layout_columns": 2,
+            "is_default": False,
+            "sort_order": 2,
+            "widgets": [
+                ("test-widget-brasil-1", "Gasto Total Viaje",    WidgetType.NUMBER,      0, 0, 1, 1,
+                 {"time_range": {"type": "static", "value": {"from": vac_start, "to": vac_end}},
+                  "filters": {"account_ids": [brl_id], "type": "expense"}}),
+                ("test-widget-brasil-2", "Saldo Restante",       WidgetType.NUMBER,      1, 0, 1, 1,
+                 {"time_range": {"type": "static", "value": {"from": vac_start, "to": vac_end}},
+                  "filters": {"account_ids": [brl_id]}}),
+                ("test-widget-brasil-3", "Gastos por Día",       WidgetType.LINE,        0, 1, 1, 2,
+                 {"time_range": {"type": "static", "value": {"from": vac_start, "to": vac_end}},
+                  "filters": {"account_ids": [brl_id], "type": "expense"}, "granularity": "day"}),
+                ("test-widget-brasil-4", "Distribución Gastos",  WidgetType.PIE,         1, 1, 1, 2,
+                 {"time_range": {"type": "static", "value": {"from": vac_start, "to": vac_end}},
+                  "filters": {"account_ids": [brl_id], "type": "expense"}, "group_by": "category"}),
+                ("test-widget-brasil-5", "Gastos por Categoría", WidgetType.STACKED_BAR, 0, 3, 2, 1,
+                 {"time_range": {"type": "static", "value": {"from": vac_start, "to": vac_end}},
+                  "filters": {"account_ids": [brl_id], "type": "expense"}, "granularity": "day", "group_by": "category"}),
+            ],
+        },
+    ]
+
+    total_dashboards = 0
+    total_widgets = 0
+
+    for dash_def in DASHBOARDS:
+        dash = Dashboard(
+            user_id=user_id,
+            offline_id=dash_def["offline_id"],
+            name=dash_def["name"],
+            display_currency=dash_def["display_currency"],
+            layout_columns=dash_def["layout_columns"],
+            is_default=dash_def["is_default"],
+            sort_order=dash_def["sort_order"],
+        )
+        db.session.add(dash)
+        db.session.flush()   # need dash.id for widgets
+        total_dashboards += 1
+
+        for (w_offline_id, title, wtype, px, py, w, h, config) in dash_def["widgets"]:
+            widget = DashboardWidget(
+                user_id=user_id,
+                offline_id=w_offline_id,
+                dashboard_id=dash.id,
+                widget_type=wtype,
+                title=title,
+                position_x=px,
+                position_y=py,
+                width=w,
+                height=h,
+                config=config,
+            )
+            db.session.add(widget)
+            total_widgets += 1
+
+    print(f"  Created {total_dashboards} dashboards and {total_widgets} widgets")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
