@@ -118,6 +118,12 @@ export default defineConfig({
         target: process.env.BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,
         secure: false
+      },
+      // Health check endpoint — also at the root, not under /api/v1.
+      '/health': {
+        target: process.env.BACKEND_URL || 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false
       }
     }
   }
