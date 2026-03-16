@@ -81,10 +81,10 @@ export interface OnboardingSeedResponse {
  * Valida el id_token de Google, crea o encuentra al usuario, emite JWT + refresh token.
  */
 export async function postAuthGoogle(idToken: string): Promise<GoogleAuthResponse> {
-  const response = await publicClient.post<GoogleAuthResponse>('/auth/google', {
+  const response = await publicClient.post<{ success: boolean; data: GoogleAuthResponse }>('/auth/google', {
     id_token: idToken
   })
-  return response.data
+  return response.data.data
 }
 
 /**
@@ -92,10 +92,10 @@ export async function postAuthGoogle(idToken: string): Promise<GoogleAuthRespons
  * Renueva el JWT y rota el refresh token. El token viejo queda inválido.
  */
 export async function postAuthRefresh(refreshToken: string): Promise<RefreshResponse> {
-  const response = await publicClient.post<RefreshResponse>('/auth/refresh', {
+  const response = await publicClient.post<{ success: boolean; data: RefreshResponse }>('/auth/refresh', {
     refresh_token: refreshToken
   })
-  return response.data
+  return response.data.data
 }
 
 /**
