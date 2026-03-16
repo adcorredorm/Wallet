@@ -10,7 +10,7 @@
  * (both parent and child) below the active tree.
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCategoriesStore, useUiStore } from '@/stores'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
