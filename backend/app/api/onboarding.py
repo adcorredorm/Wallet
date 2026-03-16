@@ -25,9 +25,9 @@ _account_repo = AccountRepository()
 # ---------------------------------------------------------------------------
 
 _SEED_ACCOUNTS = [
-    {"name": "Efectivo", "type": AccountType.CASH, "currency": "MXN"},
-    {"name": "Cuenta Bancaria", "type": AccountType.DEBIT, "currency": "MXN"},
-    {"name": "Tarjeta de Crédito", "type": AccountType.CREDIT, "currency": "MXN"},
+    {"name": "Efectivo", "type": AccountType.CASH, "currency": "COP"},
+    {"name": "Cuenta Bancaria", "type": AccountType.DEBIT, "currency": "COP"},
+    {"name": "Tarjeta de Crédito", "type": AccountType.CREDIT, "currency": "COP"},
 ]
 
 _SEED_CATEGORIES = [
@@ -185,7 +185,7 @@ def seed_user():
             name="Mi Dashboard",
             is_default=True,
             sort_order=0,
-            display_currency="MXN",
+            display_currency="COP",
             client_id="seed-default-dashboard",
         )
         db.session.add(dashboard)
