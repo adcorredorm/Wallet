@@ -282,7 +282,7 @@ export const useCategoriesStore = defineStore('categories', () => {
         entity_type: 'category',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, client_id: tempId }
+        payload: { ...data, offline_id: tempId }
       })
 
       return localCategory

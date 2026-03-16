@@ -145,13 +145,13 @@ export const useTransfersStore = defineStore('transfers', () => {
       )
 
       // Step 3 — Enqueue CREATE mutation.
-      // client_id enables server-side idempotency on retries.
+      // offline_id enables server-side idempotency on retries.
       // source_account_id / destination_account_id may be temp IDs.
       await mutationQueue.enqueue({
         entity_type: 'transfer',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, base_rate: srcRate, client_id: tempId }
+        payload: { ...data, base_rate: srcRate, offline_id: tempId }
       })
 
       return localTransfer

@@ -240,13 +240,13 @@ export const useTransactionsStore = defineStore('transactions', () => {
       accountsStore.adjustBalance(data.account_id, balanceDelta)
 
       // Step 3 — Enqueue CREATE mutation.
-      // client_id in the payload allows the server to deduplicate retries.
+      // offline_id in the payload allows the server to deduplicate retries.
       // account_id / category_id are preserved verbatim (may be temp IDs).
       await mutationQueue.enqueue({
         entity_type: 'transaction',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, base_rate: txRate, client_id: tempId }
+        payload: { ...data, base_rate: txRate, offline_id: tempId }
       })
 
       return localTransaction

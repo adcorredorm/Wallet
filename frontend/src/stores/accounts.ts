@@ -246,15 +246,15 @@ export const useAccountsStore = defineStore('accounts', () => {
       })
 
       // Step 3 — Enqueue the CREATE mutation.
-      // client_id in the payload is the same tempId so the backend can use it
+      // offline_id in the payload is the same tempId so the backend can use it
       // for idempotency: if the same mutation is replayed due to a network
-      // timeout, the server detects the duplicate client_id and returns the
+      // timeout, the server detects the duplicate offline_id and returns the
       // already-created account rather than creating a second one.
       await mutationQueue.enqueue({
         entity_type: 'account',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...data, client_id: tempId }
+        payload: { ...data, offline_id: tempId }
       })
 
       return localAccount
