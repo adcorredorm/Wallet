@@ -19,13 +19,12 @@
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { transfersApi } from '@/api/transfers'
 import type {
   CreateTransferDto,
   UpdateTransferDto,
   TransferFilters
 } from '@/types'
-import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransfer } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
@@ -47,7 +46,7 @@ export const useTransfersStore = defineStore('transfers', () => {
   const error = ref<string | null>(null)
 
   // ---------------------------------------------------------------------------
-  // Actions — Reads (offline-first, stale-while-revalidate)
+  // Actions — Reads (offline-first, Dexie-only)
   // ---------------------------------------------------------------------------
 
   async function fetchTransfers() {
@@ -63,32 +62,15 @@ export const useTransfersStore = defineStore('transfers', () => {
     }
   }
 
-  async function fetchTransferById(id: string) {
+  async function fetchTransferById(id: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const localItem = await fetchByIdWithRevalidation(
-        db.transfers,
-        id,
-        (transferId) => transfersApi.getById(transferId),
-        (freshItem) => {
-          const index = transfers.value.findIndex(t => t.id === id)
-          if (index >= 0) {
-            transfers.value[index] = freshItem
-          } else {
-            transfers.value.push(freshItem)
-          }
-        }
-      )
-
-      if (localItem) {
+      const item = await db.transfers.get(id)
+      if (item) {
         const index = transfers.value.findIndex(t => t.id === id)
-        if (index >= 0) {
-          transfers.value[index] = localItem
-        } else {
-          transfers.value.push(localItem)
-        }
-        return localItem
+        if (index >= 0) transfers.value[index] = item
+        else transfers.value.push(item)
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencia'

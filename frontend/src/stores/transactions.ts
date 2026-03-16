@@ -21,13 +21,12 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { transactionsApi } from '@/api/transactions'
 import type {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionFilters,
 } from '@/types'
-import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransaction } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
@@ -135,7 +134,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
   )
 
   // ---------------------------------------------------------------------------
-  // Actions — Reads (offline-first, stale-while-revalidate)
+  // Actions — Reads (offline-first, Dexie-only)
   // ---------------------------------------------------------------------------
 
   async function fetchTransactions() {
@@ -151,32 +150,15 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
   }
 
-  async function fetchTransactionById(id: string) {
+  async function fetchTransactionById(id: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const localItem = await fetchByIdWithRevalidation(
-        db.transactions,
-        id,
-        (txId) => transactionsApi.getById(txId),
-        (freshItem) => {
-          const index = transactions.value.findIndex(t => t.id === id)
-          if (index >= 0) {
-            transactions.value[index] = freshItem
-          } else {
-            transactions.value.push(freshItem)
-          }
-        }
-      )
-
-      if (localItem) {
+      const item = await db.transactions.get(id)
+      if (item) {
         const index = transactions.value.findIndex(t => t.id === id)
-        if (index >= 0) {
-          transactions.value[index] = localItem
-        } else {
-          transactions.value.push(localItem)
-        }
-        return localItem
+        if (index >= 0) transactions.value[index] = item
+        else transactions.value.push(item)
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transacción'
@@ -186,31 +168,14 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
   }
 
-  async function fetchByAccount(accountId: string, customFilters?: TransactionFilters) {
+  async function fetchByAccount(accountId: string) {
     loading.value = true
     error.value = null
     try {
-      // For account-scoped queries we can do a targeted local read using the
-      // account_id index, which is more precise than loading all transactions.
-      // However, we still revalidate with the server to pick up changes.
-      const localData = await fetchAllWithRevalidation(
-        db.transactions,
-        () => transactionsApi.getByAccount(accountId, customFilters),
-        (freshItems) => {
-          // Filter to the requested account before updating the reactive ref so
-          // background revalidation doesn't replace account-scoped data with the
-          // full merged list (which includes records from other accounts).
-          transactions.value = [...freshItems]
-            .filter(t => t.account_id === accountId)
-            .sort(byDateDesc)
-        }
-      )
-
-      // Narrow the local result to the requested account so the stale value
-      // shown before revalidation is scoped correctly.
-      transactions.value = [...localData]
-        .filter(t => t.account_id === accountId)
-        .sort(byDateDesc)
+      const data = await db.transactions
+        .where('account_id').equals(accountId)
+        .toArray()
+      transactions.value = [...data].sort(byDateDesc)
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transacciones de la cuenta'
       throw err

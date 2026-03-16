@@ -27,10 +27,9 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { categoriesApi } from '@/api/categories'
 import { CategoryType } from '@/types/category'
 import type { CreateCategoryDto, UpdateCategoryDto } from '@/types'
-import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalCategory } from '@/offline'
 
 /**
@@ -200,7 +199,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Actions — Reads (offline-first, stale-while-revalidate)
+  // Actions — Reads (offline-first, Dexie-only)
   // ---------------------------------------------------------------------------
 
   async function fetchCategories() {
@@ -217,32 +216,15 @@ export const useCategoriesStore = defineStore('categories', () => {
     }
   }
 
-  async function fetchCategoryById(id: string) {
+  async function fetchCategoryById(id: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const localItem = await fetchByIdWithRevalidation(
-        db.categories,
-        id,
-        (catId) => categoriesApi.getById(catId),
-        (freshItem) => {
-          const index = categories.value.findIndex(c => c.id === id)
-          if (index >= 0) {
-            categories.value[index] = freshItem
-          } else {
-            categories.value.push(freshItem)
-          }
-        }
-      )
-
-      if (localItem) {
+      const item = await db.categories.get(id)
+      if (item) {
         const index = categories.value.findIndex(c => c.id === id)
-        if (index >= 0) {
-          categories.value[index] = localItem
-        } else {
-          categories.value.push(localItem)
-        }
-        return localItem
+        if (index >= 0) categories.value[index] = item
+        else categories.value.push(item)
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar categoría'

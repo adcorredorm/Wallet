@@ -31,9 +31,8 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { accountsApi } from '@/api/accounts'
 import type { CreateAccountDto, UpdateAccountDto, AccountBalance } from '@/types'
-import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalAccount } from '@/offline'
 
 export const useAccountsStore = defineStore('accounts', () => {
@@ -86,7 +85,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Actions — Reads (offline-first, stale-while-revalidate)
+  // Actions — Reads (offline-first, Dexie-only)
   // ---------------------------------------------------------------------------
 
   async function fetchAccounts() {
@@ -102,44 +101,16 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
   }
 
-  async function fetchAccountById(id: string) {
+  async function fetchAccountById(id: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      const localItem = await fetchByIdWithRevalidation(
-        db.accounts,
-        id,
-        (accountId) => accountsApi.getById(accountId),
-        (freshItem) => {
-          // Background revalidation callback: update the specific entry.
-          // Balance comes from IndexedDB (persisted by adjustBalance) — no
-          // backend balance endpoint call needed.
-          const normalized = normalizeBalance(freshItem)
-          const index = accounts.value.findIndex(a => a.id === id)
-          if (index >= 0) {
-            // Preserve the locally-tracked balance so the server's list value
-            // (which may be stale for pending transactions) doesn't overwrite it.
-            const localBalance = balances.value.get(id)?.balance
-                               ?? accounts.value.find(a => a.id === id)?.balance
-            accounts.value[index] = {
-              ...normalized,
-              balance: localBalance ?? normalized.balance
-            }
-          } else {
-            accounts.value.push(normalized)
-          }
-        }
-      )
-
-      if (localItem) {
-        const normalized = normalizeBalance(localItem)
+      const item = await db.accounts.get(id)
+      if (item) {
+        const normalized = normalizeBalance(item)
         const index = accounts.value.findIndex(a => a.id === id)
-        if (index >= 0) {
-          accounts.value[index] = normalized
-        } else {
-          accounts.value.push(normalized)
-        }
-        return normalized
+        if (index >= 0) accounts.value[index] = normalized
+        else accounts.value.push(normalized)
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar cuenta'

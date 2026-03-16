@@ -15,7 +15,6 @@
 
 export { db } from './db'
 export { generateTempId, isTempId } from './temp-id'
-export { fetchAllWithRevalidation, fetchByIdWithRevalidation } from './repository'
 export { mutationQueue, MutationQueue } from './mutation-queue'
 export { syncManager, SyncManager } from './sync-manager'
 export type {

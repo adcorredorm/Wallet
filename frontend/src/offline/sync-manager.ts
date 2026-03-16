@@ -213,12 +213,10 @@ function isApiError(error: unknown): error is ApiError {
 // ---------------------------------------------------------------------------
 // Helper: map a raw server entity to its LocalXxx representation.
 //
-// Why duplicate this helper here instead of importing from repository.ts?
-// repository.ts exports fetchAllWithRevalidation / fetchByIdWithRevalidation
-// which include stale-while-revalidate logic that we don't want here. The
-// SyncManager's fullReadSync does a direct write — no stale path needed.
-// Duplicating the three-field assignment is four lines; it's not worth
-// creating a shared utility that would couple the two modules.
+// This helper is local to sync-manager to avoid coupling between offline
+// modules. The SyncManager's fullReadSync does a direct write — no stale
+// path needed. Duplicating the three-field assignment is four lines; it is
+// not worth creating a shared utility between independent offline modules.
 // ---------------------------------------------------------------------------
 function toLocalItem<T extends { id: string; updated_at: string }>(
   item: T,
@@ -1483,11 +1481,9 @@ export class SyncManager {
    *
    * Why not update the Pinia stores here?
    * The SyncManager does not import stores (see architecture overview at the
-   * top). The stores will pick up the updated IndexedDB data on the next
-   * navigation or manual refresh because they use stale-while-revalidate via
-   * fetchAllWithRevalidation(). For most UX scenarios this is acceptable
-   * because the user is returning to an active tab after being offline — the
-   * data was stale anyway.
+   * top). Stores listen to the `wallet:sync-complete` event and call
+   * `refreshFromDB()` to reload their reactive state from the fresh IndexedDB
+   * data that fullReadSync just wrote. This keeps the two layers decoupled.
    *
    * Why use Promise.allSettled instead of Promise.all?
    * A failure in one entity type (e.g. server returns 503 for categories)

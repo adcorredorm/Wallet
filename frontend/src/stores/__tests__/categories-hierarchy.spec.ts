@@ -27,8 +27,6 @@ vi.mock('@/offline', () => ({
       delete: vi.fn().mockResolvedValue(undefined),
     },
   },
-  fetchAllWithRevalidation: vi.fn().mockResolvedValue([]),
-  fetchByIdWithRevalidation: vi.fn().mockResolvedValue(undefined),
   generateTempId: vi.fn().mockReturnValue('temp-test-id'),
   isTempId: vi.fn((id: string) => id.startsWith('temp-')),
   mutationQueue: {
