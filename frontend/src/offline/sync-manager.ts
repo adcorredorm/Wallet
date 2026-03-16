@@ -570,7 +570,7 @@ export class SyncManager {
    * all downstream queue payloads.
    *
    * For CREATE payloads we strip the temp-* entity_id from the body — the
-   * server assigns its own ID. The client_id field (already in the payload
+   * server assigns its own ID. The offline_id field (already in the payload
    * thanks to the stores) allows the server to deduplicate retried requests.
    *
    * For UPDATE payloads we attach the X-Client-Updated-At header so the
@@ -622,7 +622,7 @@ export class SyncManager {
    * synced). Scanning every value is safer and handles future entity types
    * without needing to update DEPENDENCY_FIELDS.
    *
-   * Note: client_id is intentionally not resolved — it is the temp ID itself
+   * Note: offline_id is intentionally not resolved — it is the temp ID itself
    * sent for server-side idempotency and must remain as the original tempId.
    */
   private async resolvePayloadIds(
@@ -631,8 +631,8 @@ export class SyncManager {
     const resolved: Record<string, unknown> = { ...payload }
 
     for (const [key, value] of Object.entries(resolved)) {
-      // Skip client_id — that field must remain as the original temp ID.
-      if (key === 'client_id') continue
+      // Skip offline_id — that field must remain as the original temp ID.
+      if (key === 'offline_id') continue
 
       if (typeof value === 'string' && isTempId(value)) {
         // Try to find the real server ID by looking up the entity in
@@ -679,16 +679,16 @@ export class SyncManager {
     if (dashboard?.server_id) return dashboard.server_id
 
     // Fallback: after replaceEntityWithRealId the temp-* record is deleted and
-    // replaced with a realId record that preserves client_id = tempId. Since
-    // client_id is not indexed we do a full scan — acceptable for a small table.
-    const dashboardByClientId = await db.dashboards.filter(d => d.client_id === tempId).first()
-    if (dashboardByClientId?.server_id) return dashboardByClientId.server_id
+    // replaced with a realId record that preserves offline_id = tempId. Since
+    // offline_id is not indexed we do a full scan — acceptable for a small table.
+    const dashboardByOfflineId = await db.dashboards.filter(d => d.offline_id === tempId).first()
+    if (dashboardByOfflineId?.server_id) return dashboardByOfflineId.server_id
 
     const widget = await db.dashboardWidgets.get(tempId)
     if (widget?.server_id) return widget.server_id
 
-    const widgetByClientId = await db.dashboardWidgets.filter(w => w.client_id === tempId).first()
-    if (widgetByClientId?.server_id) return widgetByClientId.server_id
+    const widgetByOfflineId = await db.dashboardWidgets.filter(w => w.offline_id === tempId).first()
+    if (widgetByOfflineId?.server_id) return widgetByOfflineId.server_id
 
     return undefined
   }
@@ -702,7 +702,7 @@ export class SyncManager {
     switch (mutation.operation) {
       case 'create': {
         // Strip the temp-* entity_id — the server assigns its own ID.
-        // client_id is already in the payload from the store's enqueue call.
+        // offline_id is already in the payload from the store's enqueue call.
         // We cast to CreateAccountDto because we know the store built the
         // payload from a CreateAccountDto; the cast is safe here.
         const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
