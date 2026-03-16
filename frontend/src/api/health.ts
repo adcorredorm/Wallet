@@ -3,6 +3,10 @@ import axios from 'axios'
 /**
  * Checks whether the backend is reachable by calling GET /health.
  *
+ * This module is intentionally NOT re-exported from api/index.ts.
+ * Callers import directly from this file to avoid the apiClient
+ * response interceptor (which unwraps {success, data} responses).
+ *
  * Why raw axios.get (no baseURL)?
  * The health endpoint lives at the root (/health), not under /api/v1.
  * Using a plain axios.get with a relative path keeps the call simple and
