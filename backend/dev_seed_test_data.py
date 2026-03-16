@@ -13,10 +13,24 @@ Usage:
 import argparse
 import calendar
 import random
+import uuid
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
 random.seed(42)
+
+# ---------------------------------------------------------------------------
+# Deterministic UUID helpers
+# ---------------------------------------------------------------------------
+# All test records use UUIDs derived from their offline_id so that re-running
+# the script produces the exact same PKs. This lets Dexie's bulkPut overwrite
+# existing records instead of accumulating stale duplicates.
+_SEED_NS = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+
+def det_uuid(offline_id: str) -> uuid.UUID:
+    """Return a deterministic UUID for a given offline_id."""
+    return uuid.uuid5(_SEED_NS, offline_id)
 
 # ---------------------------------------------------------------------------
 # Exchange rate constants
@@ -87,9 +101,11 @@ def _seed_accounts(user_id, db) -> dict:
 
     accs = {}
     for slug, name, atype, currency in ACCOUNT_DEFS:
+        oid = f"test-account-{slug}"
         acc = Account(
+            id=det_uuid(oid),
             user_id=user_id,
-            offline_id=f"test-account-{slug}",
+            offline_id=oid,
             name=name,
             type=atype,
             currency=currency,
@@ -147,9 +163,11 @@ def _seed_categories(user_id, db) -> dict:
 
     cats = {}
     for slug, name, ctype, subcats in CATEGORY_DEFS:
+        oid = f"test-category-{slug}"
         parent = Category(
+            id=det_uuid(oid),
             user_id=user_id,
-            offline_id=f"test-category-{slug}",
+            offline_id=oid,
             name=name,
             type=ctype,
             active=True,
@@ -159,9 +177,11 @@ def _seed_categories(user_id, db) -> dict:
         cats[slug] = parent
 
         for sub_slug, sub_name in subcats:
+            sub_oid = f"test-category-{sub_slug}"
             child = Category(
+                id=det_uuid(sub_oid),
                 user_id=user_id,
-                offline_id=f"test-category-{sub_slug}",
+                offline_id=sub_oid,
                 name=sub_name,
                 type=ctype,
                 active=True,
@@ -228,6 +248,7 @@ def _make_tx(user_id, account, category, tx_type, amount, tx_date,
              exchange_rate=None, base_rate=None):
     from app.models.transaction import Transaction, TransactionType
     return Transaction(
+        id=det_uuid(offline_id),
         user_id=user_id,
         offline_id=offline_id,
         account_id=account.id,
@@ -526,6 +547,7 @@ def _make_transfer(user_id, source_acc, dest_acc, amount_source, tx_date, offlin
                    exchange_rate=None, base_rate=None):
     from app.models.transfer import Transfer
     return Transfer(
+        id=det_uuid(offline_id),
         user_id=user_id,
         offline_id=offline_id,
         source_account_id=source_acc.id,
@@ -773,6 +795,7 @@ def _seed_dashboards(user_id, accs, vac_month, db) -> None:
 
     for dash_def in DASHBOARDS:
         dash = Dashboard(
+            id=det_uuid(dash_def["offline_id"]),
             user_id=user_id,
             offline_id=dash_def["offline_id"],
             name=dash_def["name"],
@@ -787,6 +810,7 @@ def _seed_dashboards(user_id, accs, vac_month, db) -> None:
 
         for (w_offline_id, title, wtype, px, py, w, h, config) in dash_def["widgets"]:
             widget = DashboardWidget(
+                id=det_uuid(w_offline_id),
                 user_id=user_id,
                 offline_id=w_offline_id,
                 dashboard_id=dash.id,
