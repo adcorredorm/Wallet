@@ -298,6 +298,114 @@ def _seed_credito_cop_expenses(user_id, accs, cats, months, db) -> dict:
     return monthly_totals
 
 
+def _seed_credito_usd_expenses(user_id, accs, cats, months, db) -> dict:
+    """
+    Seed Crédito USD expense transactions (0-2/month, 60% chance any month has tx).
+    Returns {(year, month): total_usd_expenses}.
+    """
+    print("Seeding Crédito USD expenses...")
+
+    acc = accs["credito-usd"]
+    monthly_totals = {}
+    total_tx = 0
+
+    CAT_CHOICES = ["compras-tecnologia", "salidas-eventos"]
+
+    for year, month in months:
+        month_total = 0.0
+        seq = 0
+        if random.random() < 0.60:
+            count = random.randint(1, 2)
+            for _ in range(count):
+                amount_usd = round(random.uniform(50, 400), 2)
+                tx_date = rand_day(year, month)
+                seq += 1
+                offline_id = f"test-tx-credito-usd-{year:04d}-{month:02d}-{seq:02d}"
+                cat_slug = random.choice(CAT_CHOICES)
+                tx = _make_tx(user_id, acc, cats[cat_slug], "expense", amount_usd, tx_date, offline_id)
+                db.session.add(tx)
+                month_total += amount_usd
+                total_tx += 1
+        monthly_totals[(year, month)] = month_total
+
+    print(f"  Created {total_tx} Crédito USD expense transactions")
+    return monthly_totals
+
+
+def _seed_principal_bills(user_id, accs, cats, months, db) -> None:
+    """Seed Principal COP fixed monthly bill expenses (4 transactions/month)."""
+    print("Seeding Principal COP bills...")
+
+    acc = accs["principal-cop"]
+    # The extra bill randomly picks from these subcategories
+    EXTRA_SUBS = ["facturas-arriendo", "facturas-servicios", "facturas-internet"]
+    total_tx = 0
+
+    for year, month in months:
+        seq = 0
+        last = month_last_day(year, month)
+
+        # Fixed bills on fixed days
+        for cat_slug, amount, fixed_day in [
+            ("facturas-arriendo",  1_200_000, 1),
+            ("facturas-servicios",   180_000, 5),
+            ("facturas-internet",     85_000, 8),
+        ]:
+            tx_date = date(year, month, min(fixed_day, last))
+            seq += 1
+            offline_id = f"test-tx-principal-cop-bills-{year:04d}-{month:02d}-{seq:02d}"
+            db.session.add(_make_tx(user_id, acc, cats[cat_slug], "expense", amount, tx_date, offline_id))
+            total_tx += 1
+
+        # One extra variable bill
+        extra_slug = random.choice(EXTRA_SUBS)
+        extra_amount = random.randint(60_000, 150_000)
+        extra_date = rand_day(year, month, 3, 15)
+        seq += 1
+        offline_id = f"test-tx-principal-cop-bills-{year:04d}-{month:02d}-{seq:02d}"
+        db.session.add(_make_tx(user_id, acc, cats[extra_slug], "expense", extra_amount, extra_date, offline_id))
+        total_tx += 1
+
+    print(f"  Created {total_tx} Principal COP bill transactions")
+
+
+def _seed_vacaciones_brl_expenses(user_id, accs, cats, vac_month, db) -> None:
+    """Seed Vacaciones BRL expenses — only active during the vacation month."""
+    print("Seeding Vacaciones BRL expenses...")
+
+    acc = accs["vacaciones-brl"]
+    year, month = vac_month
+    last = month_last_day(year, month)
+
+    EXPENSE_PLAN = [
+        ("viaje-brasil-hospedaje",   3, 300, 600),
+        ("viaje-brasil-comida",      8,  40, 150),
+        ("viaje-brasil-actividades", 7,  80, 350),
+    ]
+
+    all_days = list(range(1, last + 1))
+    random.shuffle(all_days)
+    day_cursor = 0
+    seq = 0
+    total_tx = 0
+
+    for cat_slug, count, amt_min, amt_max in EXPENSE_PLAN:
+        for _ in range(count):
+            amount = round(random.uniform(amt_min, amt_max), 2)
+            tx_date = date(year, month, all_days[day_cursor % len(all_days)])
+            day_cursor += 1
+            seq += 1
+            offline_id = f"test-tx-vacaciones-brl-{year:04d}-{month:02d}-{seq:02d}"
+            tx = _make_tx(
+                user_id, acc, cats[cat_slug], "expense", amount, tx_date, offline_id,
+                base_rate=BASE_RATES["BRL"]
+            )
+            db.session.add(tx)
+            total_tx += 1
+
+    print(f"  Created {total_tx} Vacaciones BRL expense transactions")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
