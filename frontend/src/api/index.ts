@@ -24,14 +24,39 @@ const apiClient: AxiosInstance = axios.create({
   }
 })
 
-// Request interceptor - Add auth token if needed in future
+// Request interceptor — inject Authorization: Bearer <accessToken> from authStore.
+//
+// Why call useAuthStore() INSIDE the callback (lazy access)?
+// Pinia requires that a store is only accessed after createPinia() has been
+// called and setActivePinia() has been executed. At module evaluation time
+// (when this file is first imported), the Pinia instance may not yet be
+// mounted — particularly in tests or during the app boot sequence before
+// main.ts calls app.use(pinia). Calling useAuthStore() lazily (inside the
+// interceptor function) defers the store access to the moment of each request,
+// when Pinia is guaranteed to be ready.
+//
+// Why not set the header at the Axios instance level (in the `headers` config)?
+// The access token is dynamic — it changes when the user logs in or the token
+// is refreshed. An interceptor is re-evaluated on every request, so it always
+// picks up the latest in-memory value without needing to recreate the client.
+//
+// Why ESM static import but lazy function call?
+// In Vite/ESM environments, require() is not available. The solution is to
+// import the module statically (which is fine — just resolves the module graph)
+// but call useAuthStore() lazily inside the callback. The module-level import
+// does NOT call useAuthStore(); it only imports the function reference.
+// The actual store access happens at request time via useAuthStore().
+import { useAuthStore as _useAuthStore } from '@/stores/auth'
+
 apiClient.interceptors.request.use(
   (config) => {
-    // Future: Add authentication token here
-    // const token = localStorage.getItem('auth_token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
+    // Lazy call: useAuthStore() is invoked here (at request time), not at
+    // module initialization time. Pinia is guaranteed to be active by now.
+    const authStore = _useAuthStore()
+    const token = authStore.accessToken
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
     return config
   },
   (error) => {

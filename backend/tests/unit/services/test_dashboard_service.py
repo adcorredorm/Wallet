@@ -6,18 +6,22 @@ and a patched db.session for methods that bypass the repository layer and
 query SQLAlchemy directly.
 
 No real database, no Flask app context — pure unit tests.
+All service methods now accept user_id — the tests pass a fixed UUID.
 """
 
 import pytest
 from decimal import Decimal
 from datetime import date
-from uuid import uuid4
+from uuid import uuid4, UUID
 from unittest.mock import Mock, MagicMock, patch
 
 from app.services.dashboard import DashboardService
 from app.models.account import Account
 from app.models.transaction import Transaction, TransactionType
 from app.models.transfer import Transfer
+
+
+USER_ID = uuid4()
 
 
 # ============================================================================
@@ -170,7 +174,7 @@ class TestGetNetWorth:
             Decimal("200.00"),
         ]
 
-        result = dashboard_service.get_net_worth()
+        result = dashboard_service.get_net_worth(user_id=USER_ID)
 
         balances = {b["currency"]: b["total"] for b in result["balances"]}
         assert balances["MXN"] == 1500.0  # 1000 + 500
@@ -183,7 +187,7 @@ class TestGetNetWorth:
         """Should return an empty balances list when no active accounts exist."""
         mock_account_repo.get_all_active.return_value = []
 
-        result = dashboard_service.get_net_worth()
+        result = dashboard_service.get_net_worth(user_id=USER_ID)
 
         assert result["balances"] == []
         assert "calculation_date" in result
@@ -192,11 +196,11 @@ class TestGetNetWorth:
         self, dashboard_service, mock_account_repo
     ):
         """Should call calculate_balance once per active account."""
-        accounts = [Mock(spec=Account, id=uuid4(), currency="MXN") for _ in range(3)]
+        accounts = [MagicMock(id=uuid4(), currency="MXN") for _ in range(3)]
         mock_account_repo.get_all_active.return_value = accounts
         mock_account_repo.calculate_balance.return_value = Decimal("100.00")
 
-        dashboard_service.get_net_worth()
+        dashboard_service.get_net_worth(user_id=USER_ID)
 
         assert mock_account_repo.calculate_balance.call_count == 3
 
@@ -208,7 +212,9 @@ class TestGetMonthlySummary:
         self, dashboard_service, mock_db
     ):
         """Should return a dict with all required keys for a given month/year."""
-        result = dashboard_service.get_monthly_summary(month=3, year=2026)
+        result = dashboard_service.get_monthly_summary(
+            user_id=USER_ID, month=3, year=2026
+        )
 
         assert "month" in result
         assert "year" in result
@@ -224,8 +230,9 @@ class TestGetMonthlySummary:
         self, dashboard_service, mock_db
     ):
         """net must equal total_income minus total_expenses."""
-        # mock_db scalar returns Decimal("0") → income=0, expenses=0, net=0
-        result = dashboard_service.get_monthly_summary(month=1, year=2026)
+        result = dashboard_service.get_monthly_summary(
+            user_id=USER_ID, month=1, year=2026
+        )
 
         assert result["net"] == result["total_income"] - result["total_expenses"]
 
@@ -233,7 +240,9 @@ class TestGetMonthlySummary:
         self, dashboard_service, mock_db
     ):
         """top_expense_categories and top_income_categories should be lists."""
-        result = dashboard_service.get_monthly_summary(month=6, year=2025)
+        result = dashboard_service.get_monthly_summary(
+            user_id=USER_ID, month=6, year=2025
+        )
 
         assert isinstance(result["top_expense_categories"], list)
         assert isinstance(result["top_income_categories"], list)
@@ -249,9 +258,8 @@ class TestGetRecentActivity:
         mock_transaction_repo.get_recent.return_value = [_make_mock_transaction()]
         mock_transfer_repo.get_recent.return_value = [_make_mock_transfer()]
 
-        result = dashboard_service.get_recent_activity(limit=10)
+        result = dashboard_service.get_recent_activity(user_id=USER_ID, limit=10)
 
-        # At least one of each type should appear
         types = {item["type"] for item in result}
         assert "transaction" in types
         assert "transfer" in types
@@ -263,7 +271,7 @@ class TestGetRecentActivity:
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_recent_activity()
+        result = dashboard_service.get_recent_activity(user_id=USER_ID)
 
         assert result == []
 
@@ -280,7 +288,7 @@ class TestGetDashboardData:
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_dashboard_data()
+        result = dashboard_service.get_dashboard_data(user_id=USER_ID)
 
         today = date.today()
         assert result["monthly_summary"]["month"] == today.month
@@ -295,7 +303,7 @@ class TestGetDashboardData:
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_dashboard_data(month=3, year=2026)
+        result = dashboard_service.get_dashboard_data(user_id=USER_ID, month=3, year=2026)
 
         assert "net_worth" in result
         assert "monthly_summary" in result
@@ -310,7 +318,7 @@ class TestGetDashboardData:
         mock_transaction_repo.get_recent.return_value = []
         mock_transfer_repo.get_recent.return_value = []
 
-        result = dashboard_service.get_dashboard_data(month=6, year=2025)
+        result = dashboard_service.get_dashboard_data(user_id=USER_ID, month=6, year=2025)
 
         assert result["monthly_summary"]["month"] == 6
         assert result["monthly_summary"]["year"] == 2025

@@ -5,6 +5,8 @@ This package contains all database models for the Wallet application.
 """
 
 from app.models.base import BaseModel
+from app.models.user import User
+from app.models.refresh_token import RefreshToken
 from app.models.account import Account, AccountType
 from app.models.category import Category, CategoryType
 from app.models.transaction import Transaction, TransactionType
@@ -16,6 +18,8 @@ from app.models.dashboard_widget import DashboardWidget, WidgetType
 
 __all__ = [
     "BaseModel",
+    "User",
+    "RefreshToken",
     "Account",
     "AccountType",
     "Category",

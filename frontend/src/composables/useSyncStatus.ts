@@ -52,6 +52,12 @@ export function useSyncStatus() {
     switch (syncStore.syncStatus) {
       case 'offline':
         return 'Sin conexión'
+      case 'guest':
+        // Why "Modo invitado" and not "No autenticado"?
+        // "Modo invitado" is friendly and describes the UX state the user is
+        // in, rather than a technical condition. It matches the language used
+        // in the GuestBanner component ("Los cambios no se sincronizarán").
+        return 'Modo invitado'
       case 'syncing':
         return 'Sincronizando...'
       case 'pending':
@@ -82,6 +88,9 @@ export function useSyncStatus() {
   const statusColor = computed(() => {
     switch (syncStore.syncStatus) {
       case 'offline':  return 'text-amber-400'
+      // guest uses amber: same "attention" tone as offline — data is safe
+      // locally but is not syncing. Not an error, just a notable state.
+      case 'guest':    return 'text-amber-400'
       case 'syncing':  return 'text-blue-400'
       case 'pending':  return 'text-amber-400'
       case 'error':    return 'text-red-400'

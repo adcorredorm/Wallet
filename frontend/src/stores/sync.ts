@@ -94,23 +94,43 @@ export const useSyncStore = defineStore('sync', () => {
    */
   const errors = ref<SyncError[]>([])
 
+  /**
+   * True when the user is online but not authenticated (guest mode).
+   * When isGuest is true, the sync engine intentionally skips all network
+   * operations — there is no user session to sync to.
+   *
+   * Why a separate flag instead of deriving from authStore.isAuthenticated?
+   * sync.ts is intentionally free of Pinia store imports (see architectural
+   * note at the top of this file). The SyncManager sets this flag by calling
+   * setGuest() after checking auth state in its own init sequence, keeping
+   * the sync store self-contained and testable without an auth dependency.
+   */
+  const isGuest = ref(false)
+
   // ── Computed: collapsed status token ────────────────────────────────────
 
   /**
    * Priority order (highest to lowest):
    * 1. offline  — device has no connectivity; nothing can sync
-   * 2. syncing  — a sync is actively in progress
-   * 3. error    — at least one mutation failed permanently
-   * 4. pending  — mutations are queued but not yet sent
-   * 5. synced   — everything is up to date
+   * 2. guest    — online but not authenticated; sync is intentionally skipped
+   * 3. syncing  — a sync is actively in progress
+   * 4. error    — at least one mutation failed permanently
+   * 5. pending  — mutations are queued but not yet sent
+   * 6. synced   — everything is up to date
    *
    * Why check offline first?
    * If we are offline and also have errors, showing "error" would be
    * misleading — the user cannot fix connectivity-related issues by doing
    * anything in the app. "offline" is the more actionable and accurate state.
+   *
+   * Why does guest beat syncing/error/pending?
+   * If the user is not authenticated, syncing/error/pending states are
+   * irrelevant — the sync engine is not running at all in guest mode.
+   * Showing "guest" makes it immediately clear why data is not syncing.
    */
-  const syncStatus = computed<'synced' | 'syncing' | 'pending' | 'error' | 'offline'>(() => {
+  const syncStatus = computed<'synced' | 'syncing' | 'pending' | 'error' | 'offline' | 'guest'>(() => {
     if (!isOnline.value) return 'offline'
+    if (isGuest.value) return 'guest'
     if (isSyncing.value) return 'syncing'
     if (errorCount.value > 0) return 'error'
     if (pendingCount.value > 0) return 'pending'
@@ -144,6 +164,15 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   /**
+   * Set the guest mode flag. Called by the SyncManager after checking
+   * authentication state: setGuest(true) when no user is authenticated,
+   * setGuest(false) after a successful login/refresh.
+   */
+  function setGuest(value: boolean): void {
+    isGuest.value = value
+  }
+
+  /**
    * Add a new sync error to the errors array and bump the errorCount.
    * Called by sync-manager.ts whenever a mutation fails permanently.
    */
@@ -169,6 +198,7 @@ export const useSyncStore = defineStore('sync', () => {
     errorCount,
     lastSyncAt,
     initialSyncComplete: readonly(initialSyncComplete),
+    isGuest,
     errors,
     // Computed
     syncStatus,
@@ -179,6 +209,7 @@ export const useSyncStore = defineStore('sync', () => {
     setErrorCount,
     setLastSyncAt,
     setInitialSyncComplete,
+    setGuest,
     addError,
     clearErrors
   }

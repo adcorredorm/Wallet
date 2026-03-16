@@ -168,6 +168,16 @@ const router = createRouter({
       }
     },
     {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: {
+        title: 'Iniciar sesión',
+        // Esta ruta NO usa AppLayout — tiene su propio layout centrado
+        noLayout: true,
+      }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

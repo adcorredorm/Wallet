@@ -9,7 +9,7 @@ import enum
 from typing import TYPE_CHECKING
 from decimal import Decimal
 
-from sqlalchemy import Column, String, Enum, ForeignKey, Date, Numeric, Index
+from sqlalchemy import Column, String, Enum, ForeignKey, Date, Numeric, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
@@ -86,12 +86,13 @@ class Transaction(BaseModel):
         back_populates="transactions",
     )
 
-    # Indexes for performance
+    # Indexes and constraints
     __table_args__ = (
         Index("idx_transactions_account_date", "account_id", "date"),
         Index("idx_transactions_account_type", "account_id", "type"),
         Index("idx_transactions_category", "category_id"),
         Index("idx_transactions_date", "date"),
+        UniqueConstraint("user_id", "client_id", name="uq_transactions_user_client"),
     )
 
     def __repr__(self) -> str:

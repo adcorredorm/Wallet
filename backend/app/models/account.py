@@ -8,7 +8,7 @@ Balance is calculated dynamically from transactions and transfers.
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, String, Boolean, Enum
+from sqlalchemy import Column, String, Boolean, Enum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 
@@ -69,6 +69,10 @@ class Account(BaseModel):
         foreign_keys="Transfer.destination_account_id",
         back_populates="destination_account",
         lazy="dynamic",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_id", name="uq_accounts_user_client"),
     )
 
     def __repr__(self) -> str:

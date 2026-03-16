@@ -38,6 +38,8 @@ import AppNavigation from './AppNavigation.vue'
 import AppDrawer from './AppDrawer.vue'
 // Phase 5: offline visibility banner — shown when device has no connectivity
 import NetworkBanner from '@/components/sync/NetworkBanner.vue'
+// Multiusuario: guest mode banner — shown when user is not authenticated
+import GuestBanner from '@/components/sync/GuestBanner.vue'
 </script>
 
 <template>
@@ -49,6 +51,22 @@ import NetworkBanner from '@/components/sync/NetworkBanner.vue'
       rather than an instant layout jump.
     -->
     <NetworkBanner />
+
+    <!--
+      GuestBanner (Multiusuario)
+      Shown when the user is online but not authenticated. Placed after
+      NetworkBanner so that if both are visible at the same time (offline +
+      guest — which shouldn't happen in normal flow, but is possible if the
+      user goes offline while unauthenticated), NetworkBanner is on top as
+      the higher-priority message.
+
+      Why here and not inside the main content area?
+      The banner is persistent and applies to the entire app, not to any
+      specific view. Placing it in AppLayout (above the header) means it
+      appears on every screen equally, following the same pattern as
+      NetworkBanner. This avoids having to add it to every individual view.
+    -->
+    <GuestBanner />
 
     <!--
       Side Drawer

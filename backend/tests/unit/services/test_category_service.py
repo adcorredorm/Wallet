@@ -13,6 +13,8 @@ from app.services.category import CategoryService
 from app.models.category import Category, CategoryType
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 
+USER_ID = uuid4()
+
 
 # ============================================================================
 # LOCAL FIXTURES
@@ -70,7 +72,7 @@ class TestGetAll:
         """Should call repository.get_all when no type filter is provided."""
         mock_repository.get_all.return_value = [sample_category]
 
-        result = category_service.get_all()
+        result = category_service.get_all(user_id=USER_ID)
 
         mock_repository.get_all.assert_called_once()
         mock_repository.get_by_type.assert_not_called()
@@ -82,9 +84,9 @@ class TestGetAll:
         """Should call repository.get_by_type with the correct enum when type is provided."""
         mock_repository.get_by_type.return_value = [sample_category]
 
-        result = category_service.get_all(type="expense")
+        result = category_service.get_all(user_id=USER_ID, type="expense")
 
-        mock_repository.get_by_type.assert_called_once_with(CategoryType.EXPENSE)
+        mock_repository.get_by_type.assert_called_once_with(CategoryType.EXPENSE, user_id=USER_ID)
         mock_repository.get_all.assert_not_called()
         assert len(result) == 1
 
@@ -94,9 +96,9 @@ class TestGetAll:
         """Should pass CategoryType.INCOME to get_by_type when type='income'."""
         mock_repository.get_by_type.return_value = [sample_category]
 
-        category_service.get_all(type="income")
+        category_service.get_all(user_id=USER_ID, type="income")
 
-        mock_repository.get_by_type.assert_called_once_with(CategoryType.INCOME)
+        mock_repository.get_by_type.assert_called_once_with(CategoryType.INCOME, user_id=USER_ID)
 
 
 class TestGetWithSubcategories:
@@ -108,9 +110,9 @@ class TestGetWithSubcategories:
         """Should return the category when the repository finds it."""
         mock_repository.get_with_subcategories.return_value = sample_category
 
-        result = category_service.get_with_subcategories(sample_category.id)
+        result = category_service.get_with_subcategories(sample_category.id, user_id=USER_ID)
 
-        mock_repository.get_with_subcategories.assert_called_once_with(sample_category.id)
+        mock_repository.get_with_subcategories.assert_called_once_with(sample_category.id, USER_ID)
         assert result == sample_category
 
     def test_get_with_subcategories_not_found(
@@ -121,7 +123,7 @@ class TestGetWithSubcategories:
         mock_repository.get_with_subcategories.return_value = None
 
         with pytest.raises(NotFoundError):
-            category_service.get_with_subcategories(category_id)
+            category_service.get_with_subcategories(category_id, user_id=USER_ID)
 
 
 class TestCreate:
@@ -133,7 +135,7 @@ class TestCreate:
         """Should create a root category (no parent) without any compatibility check."""
         mock_repository.create.return_value = sample_category
 
-        result = category_service.create(name="Transporte", type="expense")
+        result = category_service.create(user_id=USER_ID, name="Transporte", type="expense")
 
         assert result == sample_category
         mock_repository.create.assert_called_once()
@@ -152,6 +154,7 @@ class TestCreate:
         mock_repository.create.return_value = sample_category
 
         result = category_service.create(
+            user_id=USER_ID,
             name="Restaurantes",
             type="expense",
             parent_category_id=parent.id,
@@ -172,6 +175,7 @@ class TestCreate:
 
         with pytest.raises(BusinessRuleError):
             category_service.create(
+                user_id=USER_ID,
                 name="Comida",
                 type="expense",  # EXPENSE child under INCOME parent → invalid
                 parent_category_id=parent.id,
@@ -189,6 +193,7 @@ class TestCreate:
         mock_repository.create.return_value = sample_category
 
         result = category_service.create(
+            user_id=USER_ID,
             name="Subcategoría mixta",
             type="expense",
             parent_category_id=parent.id,
@@ -209,6 +214,7 @@ class TestCreate:
 
         # BOTH child under INCOME parent: outer condition triggers but inner guard lets it pass
         result = category_service.create(
+            user_id=USER_ID,
             name="Categoría mixta",
             type="both",
             parent_category_id=parent.id,
@@ -224,6 +230,7 @@ class TestCreate:
         mock_repository.get_by_client_id.return_value = sample_category
 
         result = category_service.create(
+            user_id=USER_ID,
             name="Duplicate",
             type="expense",
             client_id="client-key-xyz",
@@ -246,6 +253,7 @@ class TestUpdate:
 
         category_service.update(
             category_id=sample_category.id,
+            user_id=USER_ID,
             name="Nuevo nombre",
         )
 
@@ -264,6 +272,7 @@ class TestUpdate:
 
         result = category_service.update(
             category_id=sample_category.id,
+            user_id=USER_ID,
             name="Nombre actualizado",
             color="#00FF00",
         )
@@ -279,6 +288,7 @@ class TestUpdate:
         with pytest.raises(BusinessRuleError) as exc_info:
             category_service.update(
                 category_id=sample_category.id,
+                user_id=USER_ID,
                 parent_category_id=sample_category.id,  # self-reference
             )
 
@@ -298,6 +308,7 @@ class TestUpdate:
         with pytest.raises(BusinessRuleError) as exc_info:
             category_service.update(
                 category_id=sample_category.id,
+                user_id=USER_ID,
                 parent_category_id=parent.id,
             )
 
@@ -310,7 +321,7 @@ class TestUpdate:
         )
 
         with pytest.raises(NotFoundError):
-            category_service.update(category_id=uuid4(), name="Test")
+            category_service.update(category_id=uuid4(), user_id=USER_ID, name="Test")
 
 
 class TestDelete:
@@ -323,7 +334,7 @@ class TestDelete:
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.has_transactions.return_value = False
 
-        category_service.delete(sample_category.id)
+        category_service.delete(sample_category.id, user_id=USER_ID)
 
         mock_repository.delete.assert_called_once_with(sample_category)
 
@@ -335,7 +346,7 @@ class TestDelete:
         mock_repository.get_by_id_or_fail.return_value = sample_category
 
         with pytest.raises(BusinessRuleError) as exc_info:
-            category_service.delete(sample_category.id)
+            category_service.delete(sample_category.id, user_id=USER_ID)
 
         assert "subcategoria" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -348,7 +359,7 @@ class TestDelete:
         mock_repository.has_transactions.return_value = True
 
         with pytest.raises(BusinessRuleError) as exc_info:
-            category_service.delete(sample_category.id)
+            category_service.delete(sample_category.id, user_id=USER_ID)
 
         assert "transaccion" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -360,7 +371,7 @@ class TestDelete:
         )
 
         with pytest.raises(NotFoundError):
-            category_service.delete(uuid4())
+            category_service.delete(uuid4(), user_id=USER_ID)
 
         mock_repository.delete.assert_not_called()
 
@@ -372,7 +383,7 @@ class TestArchive:
         """Should call repository.update with active=False when category exists."""
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.update.return_value = sample_category
-        category_service.archive(sample_category.id)
+        category_service.archive(sample_category.id, user_id=USER_ID)
         mock_repository.update.assert_called_once_with(sample_category, active=False)
 
     def test_archive_not_found_raises(self, category_service, mock_repository):
@@ -380,7 +391,7 @@ class TestArchive:
         from uuid import uuid4 as _uuid4
         mock_repository.get_by_id_or_fail.side_effect = NotFoundError("Category", str(_uuid4()))
         with pytest.raises(NotFoundError):
-            category_service.archive(uuid4())
+            category_service.archive(uuid4(), user_id=USER_ID)
 
 
 class TestHardDelete:
@@ -390,7 +401,7 @@ class TestHardDelete:
         """Should delete when the category has no subcategories and no transactions."""
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.has_transactions.return_value = False
-        category_service.hard_delete(sample_category.id)
+        category_service.hard_delete(sample_category.id, user_id=USER_ID)
         mock_repository.delete.assert_called_once_with(sample_category)
 
     def test_hard_delete_with_subcategories_raises(self, category_service, mock_repository, sample_category):
@@ -398,11 +409,11 @@ class TestHardDelete:
         sample_category.subcategories.count.return_value = 1
         mock_repository.get_by_id_or_fail.return_value = sample_category
         with pytest.raises(BusinessRuleError):
-            category_service.hard_delete(sample_category.id)
+            category_service.hard_delete(sample_category.id, user_id=USER_ID)
 
     def test_hard_delete_with_transactions_raises(self, category_service, mock_repository, sample_category):
         """Should raise BusinessRuleError when category has transactions."""
         mock_repository.get_by_id_or_fail.return_value = sample_category
         mock_repository.has_transactions.return_value = True
         with pytest.raises(BusinessRuleError):
-            category_service.hard_delete(sample_category.id)
+            category_service.hard_delete(sample_category.id, user_id=USER_ID)

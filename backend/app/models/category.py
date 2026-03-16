@@ -8,7 +8,7 @@ organization through parent-child relationships.
 import enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Column, String, Enum, ForeignKey, Index
+from sqlalchemy import Boolean, Column, String, Enum, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -72,11 +72,12 @@ class Category(BaseModel):
         lazy="dynamic",
     )
 
-    # Indexes
+    # Indexes and constraints
     __table_args__ = (
         Index("idx_categories_type", "type"),
         Index("idx_categories_parent", "parent_category_id"),
         Index("idx_categories_active", "active"),
+        UniqueConstraint("user_id", "client_id", name="uq_categories_user_client"),
     )
 
     def __repr__(self) -> str:

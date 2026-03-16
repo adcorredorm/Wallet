@@ -1,5 +1,8 @@
 """
 Transaction service containing business logic for transaction operations.
+
+Every public method accepts a user_id parameter and passes it to the
+repository so queries are always scoped to a single user.
 """
 
 from uuid import UUID
@@ -20,26 +23,28 @@ class TransactionService:
         self.account_repository = AccountRepository()
         self.category_repository = CategoryRepository()
 
-    def get_by_id(self, transaction_id: UUID) -> Transaction:
+    def get_by_id(self, transaction_id: UUID, user_id: UUID) -> Transaction:
         """
         Get a transaction by ID with related data.
 
         Args:
-            transaction_id: Transaction UUID
+            transaction_id: Transaction UUID.
+            user_id: Owner's UUID.
 
         Returns:
-            Transaction instance with account and category loaded
+            Transaction instance with account and category loaded.
 
         Raises:
-            NotFoundError: If transaction not found
+            NotFoundError: If transaction not found or not owned by this user.
         """
-        transaction = self.repository.get_with_relations(transaction_id)
+        transaction = self.repository.get_with_relations(transaction_id, user_id)
         if not transaction:
             raise NotFoundError("Transaction", str(transaction_id))
         return transaction
 
     def get_filtered(
         self,
+        user_id: UUID,
         account_id: UUID | None = None,
         category_id: UUID | None = None,
         type: str | None = None,
@@ -54,24 +59,27 @@ class TransactionService:
         Get transactions with filters and pagination.
 
         Args:
-            account_id: Filter by account
-            category_id: Filter by category
-            type: Filter by transaction type
-            date_from: Filter by start date
-            date_to: Filter by end date
-            tags: Filter by tags
+            user_id: Owner's UUID. Required — only transactions for this user
+                are returned.
+            account_id: Filter by account.
+            category_id: Filter by category.
+            type: Filter by transaction type.
+            date_from: Filter by start date.
+            date_to: Filter by end date.
+            tags: Filter by tags.
             updated_since: Only return records with updated_at >= updated_since
                 (naive UTC). None returns all matching records.
-            page: Page number (1-indexed)
-            limit: Items per page
+            page: Page number (1-indexed).
+            limit: Items per page.
 
         Returns:
-            Tuple of (list of transactions, total count)
+            Tuple of (list of transactions, total count).
         """
         type_enum = TransactionType(type) if type else None
         offset = (page - 1) * limit
 
         return self.repository.get_filtered(
+            user_id=user_id,
             account_id=account_id,
             category_id=category_id,
             type=type_enum,
@@ -85,6 +93,7 @@ class TransactionService:
 
     def create(
         self,
+        user_id: UUID,
         type: str,
         amount: Decimal,
         date: date,
@@ -100,7 +109,7 @@ class TransactionService:
         base_rate: Decimal | None = None,
     ) -> Transaction:
         """
-        Create a new transaction.
+        Create a new transaction for a user.
 
         If client_id is provided and a record with that key already exists in
         the database the existing transaction is returned immediately without
@@ -115,57 +124,48 @@ class TransactionService:
         computation.
 
         Args:
-            type: Transaction type (income or expense)
-            amount: Transaction amount in the account's native currency
-            date: Transaction date
-            account_id: Account ID
-            category_id: Category ID
-            title: Optional title
-            description: Optional description
-            tags: Optional tags
-            client_id: Optional client-generated idempotency key
+            user_id: Owner's UUID.
+            type: Transaction type (income or expense).
+            amount: Transaction amount in the account's native currency.
+            date: Transaction date.
+            account_id: Account ID.
+            category_id: Category ID.
+            title: Optional title.
+            description: Optional description.
+            tags: Optional tags.
+            client_id: Optional client-generated idempotency key.
             original_amount: Amount in the foreign currency before conversion.
-                Must be > 0 when provided.
             original_currency: ISO 4217 code of the foreign currency.
-            exchange_rate: Units of account currency per 1 unit of
-                original_currency at transaction time. Must be > 0 when
-                provided.
+            exchange_rate: Units of account currency per 1 unit of original_currency.
             base_rate: Units of primaryCurrency per 1 unit of the account's
-                native currency at transaction time. Stored as-is; NULL when
-                unavailable offline.
+                native currency. Stored as-is; NULL when unavailable offline.
 
         Returns:
-            Created or pre-existing transaction instance
+            Created or pre-existing transaction instance.
 
         Raises:
-            NotFoundError: If account or category not found
+            NotFoundError: If account or category not found.
             BusinessRuleError: If category type is incompatible with
-                transaction type
+                transaction type.
         """
         if client_id:
-            existing = self.repository.get_by_client_id(client_id)
+            existing = self.repository.get_by_client_id(client_id, user_id)
             if existing:
                 return existing
 
-        # Validate account exists
-        account = self.account_repository.get_by_id_or_fail(account_id)
+        account = self.account_repository.get_by_id_or_fail(account_id, user_id)
+        category = self.category_repository.get_by_id_or_fail(category_id, user_id)
 
-        # Validate category exists
-        category = self.category_repository.get_by_id_or_fail(category_id)
-
-        # Validate category type compatibility
         type_enum = TransactionType(type)
         self._validate_category_type(type_enum, category.type)
 
-        # Resolve multi-currency metadata.
-        # If the original currency matches the account's own currency the three
-        # fields are redundant — clear them so we never store useless data.
         if original_currency is not None and original_currency == account.currency:
             original_amount = None
             original_currency = None
             exchange_rate = None
 
         return self.repository.create(
+            user_id=user_id,
             type=type_enum,
             amount=amount,
             date=date,
@@ -184,6 +184,7 @@ class TransactionService:
     def update(
         self,
         transaction_id: UUID,
+        user_id: UUID,
         type: str | None = None,
         amount: Decimal | None = None,
         date: date | None = None,
@@ -206,46 +207,44 @@ class TransactionService:
         exchange_rate > 0).  Passing only a subset raises BusinessRuleError.
 
         Args:
-            transaction_id: Transaction UUID
-            type: New transaction type
-            amount: New amount in the account's native currency
-            date: New date
-            account_id: New account ID
-            category_id: New category ID
-            title: New title
-            description: New description
-            tags: New tags
+            transaction_id: Transaction UUID.
+            user_id: Owner's UUID.
+            type: New transaction type.
+            amount: New amount in the account's native currency.
+            date: New date.
+            account_id: New account ID.
+            category_id: New category ID.
+            title: New title.
+            description: New description.
+            tags: New tags.
             original_amount: New original amount in the foreign currency.
             original_currency: New ISO 4217 foreign currency code.
-            exchange_rate: New exchange rate (account currency per foreign unit).
+            exchange_rate: New exchange rate.
             base_rate: Units of primaryCurrency per 1 unit of the account's
-                native currency at transaction time. Stored as-is; NULL when
-                unavailable offline.
+                native currency.
 
         Returns:
-            Updated transaction instance
+            Updated transaction instance.
 
         Raises:
-            NotFoundError: If transaction, account, or category not found
+            NotFoundError: If transaction, account, or category not found.
             BusinessRuleError: If new category type is incompatible or if the
-                multi-currency fields are inconsistently provided
+                multi-currency fields are inconsistently provided.
         """
-        transaction = self.repository.get_by_id_or_fail(transaction_id)
+        transaction = self.repository.get_by_id_or_fail(transaction_id, user_id)
 
-        # Validate account if changing
         if account_id:
-            self.account_repository.get_by_id_or_fail(account_id)
+            self.account_repository.get_by_id_or_fail(account_id, user_id)
 
-        # Validate category and type compatibility if changing
         if category_id or type:
             effective_type = TransactionType(type) if type else transaction.type
             effective_category_id = category_id if category_id else transaction.category_id
 
-            category = self.category_repository.get_by_id_or_fail(effective_category_id)
+            category = self.category_repository.get_by_id_or_fail(
+                effective_category_id, user_id
+            )
             self._validate_category_type(effective_type, category.type)
 
-        # Validate multi-currency field consistency when any of the three are
-        # present in the update payload.
         has_currency = original_currency is not None
         has_amount = original_amount is not None
         has_rate = exchange_rate is not None
@@ -253,7 +252,8 @@ class TransactionService:
         if has_currency or has_amount or has_rate:
             if not has_currency:
                 raise BusinessRuleError(
-                    "original_currency es requerido cuando original_amount o exchange_rate son proporcionados"
+                    "original_currency es requerido cuando original_amount o "
+                    "exchange_rate son proporcionados"
                 )
             if not has_amount:
                 raise BusinessRuleError(
@@ -296,17 +296,18 @@ class TransactionService:
 
         return self.repository.update(transaction, **update_data)
 
-    def delete(self, transaction_id: UUID) -> None:
+    def delete(self, transaction_id: UUID, user_id: UUID) -> None:
         """
         Delete a transaction.
 
         Args:
-            transaction_id: Transaction UUID
+            transaction_id: Transaction UUID.
+            user_id: Owner's UUID.
 
         Raises:
-            NotFoundError: If transaction not found
+            NotFoundError: If transaction not found or not owned by this user.
         """
-        transaction = self.repository.get_by_id_or_fail(transaction_id)
+        transaction = self.repository.get_by_id_or_fail(transaction_id, user_id)
         self.repository.delete(transaction)
 
     def _validate_category_type(
@@ -316,16 +317,15 @@ class TransactionService:
         Validate that category type is compatible with transaction type.
 
         Args:
-            transaction_type: Transaction type (INCOME or EXPENSE)
-            category_type: Category type (INCOME, EXPENSE, or BOTH)
+            transaction_type: Transaction type (INCOME or EXPENSE).
+            category_type: Category type (INCOME, EXPENSE, or BOTH).
 
         Raises:
-            BusinessRuleError: If types are incompatible
+            BusinessRuleError: If types are incompatible.
         """
         if category_type == CategoryType.BOTH:
-            return  # BOTH is compatible with both transaction types
+            return
 
-        # Map transaction type to category type
         expected_category_type = (
             CategoryType.INCOME
             if transaction_type == TransactionType.INCOME

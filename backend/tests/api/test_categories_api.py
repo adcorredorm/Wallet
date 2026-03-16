@@ -9,11 +9,32 @@ unit tests under tests/unit/services/.
 
 import json
 import pytest
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch, ANY
 from uuid import uuid4
+
+import jwt
 
 from app.models.category import Category, CategoryType
 from app.utils.exceptions import NotFoundError, BusinessRuleError
+
+_TEST_USER_ID = uuid4()
+_JWT_SECRET = "dev-jwt-secret-change-in-production"
+# Dummy header used when verify_jwt is patched to bypass real JWT validation
+_H = {"Authorization": "Bearer dummy"}
+
+
+def _auth_headers(user_id=None) -> dict:
+    uid = user_id or _TEST_USER_ID
+    payload = {
+        "sub": str(uid),
+        "email": "cat-test@example.com",
+        "name": "Cat Test",
+        "exp": datetime.utcnow() + timedelta(hours=1),
+        "iat": datetime.utcnow(),
+    }
+    token = jwt.encode(payload, _JWT_SECRET, algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +85,27 @@ def _make_category_mock(
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
+def bypass_auth():
+    """
+    Bypass JWT authentication for all tests in this module.
+
+    Patches verify_jwt so it always returns a valid payload containing the
+    test user's UUID.  This allows the @require_auth decorator to succeed
+    without a real JWT token, provided the request includes *any* Bearer
+    token (even a dummy one).
+
+    All client calls in this module pass a dummy Authorization header.
+    """
+    payload = {
+        "sub": str(_TEST_USER_ID),
+        "email": "cat-test@example.com",
+        "name": "Cat Test",
+    }
+    with patch("app.utils.auth.verify_jwt", return_value=payload):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def mock_category_service():
     """
     Patch the CategoryService instance used by the categories blueprint for
@@ -90,11 +132,11 @@ class TestListCategories:
         cat = _make_category_mock()
         mock_category_service.get_all.return_value = [cat]
 
-        response = client.get("/api/v1/categories")
+        response = client.get("/api/v1/categories", headers=_H)
 
         assert response.status_code == 200
         mock_category_service.get_all.assert_called_once_with(
-            type=None, include_archived=False
+            user_id=_TEST_USER_ID, type=None, include_archived=False
         )
 
     def test_include_archived_true_passes_flag(
@@ -103,11 +145,11 @@ class TestListCategories:
         """Should forward include_archived=True to the service."""
         mock_category_service.get_all.return_value = []
 
-        response = client.get("/api/v1/categories?include_archived=true")
+        response = client.get("/api/v1/categories?include_archived=true", headers=_H)
 
         assert response.status_code == 200
         mock_category_service.get_all.assert_called_once_with(
-            type=None, include_archived=True
+            user_id=_TEST_USER_ID, type=None, include_archived=True
         )
 
     def test_include_archived_false_explicit(
@@ -116,10 +158,10 @@ class TestListCategories:
         """Explicitly passing include_archived=false should pass False to service."""
         mock_category_service.get_all.return_value = []
 
-        client.get("/api/v1/categories?include_archived=false")
+        client.get("/api/v1/categories?include_archived=false", headers=_H)
 
         mock_category_service.get_all.assert_called_once_with(
-            type=None, include_archived=False
+            user_id=_TEST_USER_ID, type=None, include_archived=False
         )
 
 
@@ -137,7 +179,7 @@ class TestArchiveCategory:
         category_id = uuid4()
         mock_category_service.archive.return_value = None
 
-        response = client.delete(f"/api/v1/categories/{category_id}")
+        response = client.delete(f"/api/v1/categories/{category_id}", headers=_H)
         body = response.get_json()
 
         assert response.status_code == 200
@@ -151,7 +193,7 @@ class TestArchiveCategory:
         category_id = uuid4()
         mock_category_service.archive.return_value = None
 
-        client.delete(f"/api/v1/categories/{category_id}")
+        client.delete(f"/api/v1/categories/{category_id}", headers=_H)
 
         call_args = mock_category_service.archive.call_args
         assert str(call_args[0][0]) == str(category_id)
@@ -165,7 +207,7 @@ class TestArchiveCategory:
             "Category", str(category_id)
         )
 
-        response = client.delete(f"/api/v1/categories/{category_id}")
+        response = client.delete(f"/api/v1/categories/{category_id}", headers=_H)
 
         assert response.status_code == 404
 
@@ -176,7 +218,7 @@ class TestArchiveCategory:
         category_id = uuid4()
         mock_category_service.archive.return_value = None
 
-        client.delete(f"/api/v1/categories/{category_id}")
+        client.delete(f"/api/v1/categories/{category_id}", headers=_H)
 
         mock_category_service.hard_delete.assert_not_called()
 
@@ -195,7 +237,7 @@ class TestHardDeleteCategory:
         category_id = uuid4()
         mock_category_service.hard_delete.return_value = None
 
-        response = client.delete(f"/api/v1/categories/{category_id}/permanent")
+        response = client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
 
         assert response.status_code == 200
 
@@ -206,7 +248,7 @@ class TestHardDeleteCategory:
         category_id = uuid4()
         mock_category_service.hard_delete.return_value = None
 
-        response = client.delete(f"/api/v1/categories/{category_id}/permanent")
+        response = client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
         body = response.get_json()
 
         assert "permanentemente" in body["message"].lower()
@@ -218,7 +260,7 @@ class TestHardDeleteCategory:
         category_id = uuid4()
         mock_category_service.hard_delete.return_value = None
 
-        client.delete(f"/api/v1/categories/{category_id}/permanent")
+        client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
 
         call_args = mock_category_service.hard_delete.call_args
         assert str(call_args[0][0]) == str(category_id)
@@ -232,7 +274,7 @@ class TestHardDeleteCategory:
             "Category", str(category_id)
         )
 
-        response = client.delete(f"/api/v1/categories/{category_id}/permanent")
+        response = client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
 
         assert response.status_code == 404
 
@@ -245,7 +287,7 @@ class TestHardDeleteCategory:
             "No se puede eliminar una categoria con subcategorias"
         )
 
-        response = client.delete(f"/api/v1/categories/{category_id}/permanent")
+        response = client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
         body = response.get_json()
 
         assert response.status_code == 422
@@ -260,7 +302,7 @@ class TestHardDeleteCategory:
             "No se puede eliminar una categoria con transacciones"
         )
 
-        response = client.delete(f"/api/v1/categories/{category_id}/permanent")
+        response = client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
 
         assert response.status_code == 422
 
@@ -271,7 +313,7 @@ class TestHardDeleteCategory:
         category_id = uuid4()
         mock_category_service.hard_delete.return_value = None
 
-        client.delete(f"/api/v1/categories/{category_id}/permanent")
+        client.delete(f"/api/v1/categories/{category_id}/permanent", headers=_H)
 
         mock_category_service.archive.assert_not_called()
 
@@ -296,6 +338,7 @@ class TestUpdateCategoryActive:
             f"/api/v1/categories/{category_id}",
             data=json.dumps({"active": False}),
             content_type="application/json",
+            headers=_H,
         )
 
         assert response.status_code == 200
@@ -314,6 +357,7 @@ class TestUpdateCategoryActive:
             f"/api/v1/categories/{category_id}",
             data=json.dumps({"active": True}),
             content_type="application/json",
+            headers=_H,
         )
 
         assert response.status_code == 200
@@ -332,6 +376,7 @@ class TestUpdateCategoryActive:
             f"/api/v1/categories/{category_id}",
             data=json.dumps({"name": "Renamed"}),
             content_type="application/json",
+            headers=_H,
         )
 
         call_kwargs = mock_category_service.update.call_args[1]

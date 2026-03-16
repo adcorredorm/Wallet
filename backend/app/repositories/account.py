@@ -1,5 +1,10 @@
 """
 Account repository for database operations.
+
+All query methods that return user-owned data require a user_id parameter
+to enforce per-user data isolation. The calculate_balance method is the
+only exception — it filters by account_id (which is already user-scoped
+through the account lookup) rather than user_id directly.
 """
 
 from datetime import datetime
@@ -7,7 +12,7 @@ from typing import Optional
 from uuid import UUID
 from decimal import Decimal
 
-from sqlalchemy import func, case
+from sqlalchemy import func
 from app.extensions import db
 from app.models import Account, Transaction, Transfer, TransactionType
 from app.repositories.base import BaseRepository
@@ -20,32 +25,44 @@ class AccountRepository(BaseRepository[Account]):
         """Initialize account repository."""
         super().__init__(Account)
 
-    def get_all_active(self) -> list[Account]:
+    def get_all_active(self, user_id: UUID) -> list[Account]:
         """
-        Get all active accounts.
+        Get all active accounts for a specific user.
+
+        Args:
+            user_id: Owner's UUID.
 
         Returns:
-            List of active accounts
+            List of active accounts owned by the user.
         """
         return (
-            db.session.execute(db.select(Account).where(Account.active == True))
+            db.session.execute(
+                db.select(Account).where(
+                    Account.user_id == user_id,
+                    Account.active == True,
+                )
+            )
             .scalars()
             .all()
         )
 
-    def get_by_currency(self, currency: str) -> list[Account]:
+    def get_by_currency(self, currency: str, user_id: UUID) -> list[Account]:
         """
-        Get all accounts with a specific currency.
+        Get all accounts with a specific currency for a user.
 
         Args:
-            currency: Currency code (ISO 4217)
+            currency: Currency code (ISO 4217).
+            user_id: Owner's UUID.
 
         Returns:
-            List of accounts with the specified currency
+            List of accounts with the specified currency.
         """
         return (
             db.session.execute(
-                db.select(Account).where(Account.currency == currency.upper())
+                db.select(Account).where(
+                    Account.user_id == user_id,
+                    Account.currency == currency.upper(),
+                )
             )
             .scalars()
             .all()
@@ -62,10 +79,10 @@ class AccountRepository(BaseRepository[Account]):
         - Subtract all outgoing transfers
 
         Args:
-            account_id: Account UUID
+            account_id: Account UUID.
 
         Returns:
-            Calculated balance as Decimal
+            Calculated balance as Decimal.
         """
         # Sum of income transactions
         income = (
@@ -112,47 +129,56 @@ class AccountRepository(BaseRepository[Account]):
             .scalar()
         )
 
-        balance = Decimal(str(income)) - Decimal(str(expenses)) + Decimal(str(transfers_in)) - Decimal(str(transfers_out))
+        balance = (
+            Decimal(str(income))
+            - Decimal(str(expenses))
+            + Decimal(str(transfers_in))
+            - Decimal(str(transfers_out))
+        )
         return balance
 
     def get_all(
         self,
+        user_id: UUID,
         updated_since: datetime | None = None,
         include_archived: bool = False,
     ) -> list[Account]:
         """
-        Get all accounts, optionally filtered by modification time and archived status.
-
-        Follows the same signature convention as CategoryRepository.get_all and
-        BaseRepository.get_all (updated_since optional kwarg).
+        Get all accounts for a user, optionally filtered by modification time
+        and archived status.
 
         Args:
-            updated_since: If provided, only return accounts with updated_at >= value
-                (naive UTC, inclusive). None returns all matching accounts.
+            user_id: Owner's UUID. Only records owned by this user are returned.
+            updated_since: If provided, only return accounts with updated_at >=
+                value (naive UTC, inclusive). None returns all matching accounts.
             include_archived: When True, include inactive (archived) accounts.
                 For incremental sync, pass True to propagate active=False changes.
 
         Returns:
             List of Account instances.
         """
-        query = db.select(Account)
+        query = db.select(Account).where(Account.user_id == user_id)
         if updated_since is not None:
             query = query.where(Account.updated_at >= updated_since)
         if not include_archived:
             query = query.where(Account.active == True)
         return db.session.execute(query).scalars().all()
 
-    def soft_delete(self, account_id: UUID) -> Account:
+    def soft_delete(self, account_id: UUID, user_id: UUID) -> Account:
         """
         Soft delete an account by setting active to False.
 
         Args:
-            account_id: Account UUID
+            account_id: Account UUID.
+            user_id: Owner's UUID. Used to scope the lookup.
 
         Returns:
-            Updated account instance
+            Updated account instance.
+
+        Raises:
+            NotFoundError: If account not found or not owned by this user.
         """
-        account = self.get_by_id_or_fail(account_id)
+        account = self.get_by_id_or_fail(account_id, user_id)
         account.active = False
         db.session.commit()
         db.session.refresh(account)

@@ -1,9 +1,13 @@
 """
 Accounts API endpoints.
+
+All routes are protected by @require_auth. The authenticated user's UUID is
+read from g.current_user_id (injected by the decorator) and forwarded to
+every service call so data is always scoped to the current user.
 """
 
 from datetime import datetime, timezone
-from flask import Blueprint, jsonify, make_response, request
+from flask import Blueprint, g, jsonify, make_response, request
 from pydantic import ValidationError as PydanticValidationError
 from uuid import UUID
 
@@ -14,6 +18,7 @@ from app.schemas.account import (
     AccountWithBalance,
 )
 from app.services import AccountService
+from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, ValidationError, BusinessRuleError
 from app.utils.responses import success_response, error_response
 from app.utils.sync_cursor import encode_cursor, decode_cursor
@@ -47,9 +52,10 @@ def _parse_client_updated_at(header_value: str | None) -> datetime | None:
 
 
 @accounts_bp.route("", methods=["GET"])
+@require_auth
 def list_accounts():
     """
-    List all accounts.
+    List all accounts for the authenticated user.
 
     When the ``If-Sync-Cursor`` request header is present and valid the endpoint
     operates in incremental sync mode: only accounts modified since the cursor
@@ -58,6 +64,7 @@ def list_accounts():
     in the response so the client can advance its cursor.
 
     Request Headers:
+        Authorization (str): Bearer JWT token.
         If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
 
     Query Parameters:
@@ -68,22 +75,18 @@ def list_accounts():
     Returns:
         200: List of accounts with balances (full sync or incremental with changes)
         304: No changes since cursor (incremental mode only)
+        401: Authentication required
         500: Internal server error
     """
     try:
+        user_id = g.current_user_id
         updated_since = decode_cursor(request.headers.get("If-Sync-Cursor"))
-        # Cursor is captured BEFORE the DB query intentionally.
-        # This means: if a write lands between encode_cursor() and the query,
-        # that write is included in this response AND will be returned again on
-        # the next poll (updated_at > cursor). Returning data twice is safe
-        # (idempotent bulkPut on the client). The alternative — capturing the
-        # cursor after the query — creates a window where writes can be silently
-        # missed. Do not reorder these two lines.
         new_cursor = encode_cursor()
 
         if updated_since is not None:
-            # INCREMENTAL MODE — return only changed accounts as a flat list
-            accounts_with_balances = account_service.get_all_with_balances_since(updated_since)
+            accounts_with_balances = account_service.get_all_with_balances_since(
+                user_id=user_id, updated_since=updated_since
+            )
             if not accounts_with_balances:
                 resp = make_response("", 304)
                 resp.headers["X-Sync-Cursor"] = new_cursor
@@ -99,14 +102,12 @@ def list_accounts():
             resp.headers["X-Sync-Cursor"] = new_cursor
             return resp
 
-        # FULL SYNC MODE — existing behaviour
         include_archived = request.args.get("include_archived", "false").lower() == "true"
 
         accounts_with_balances = account_service.get_all_with_balances(
-            include_archived=include_archived
+            user_id=user_id, include_archived=include_archived
         )
 
-        # Format response with balances
         data = [
             {
                 **AccountResponse.model_validate(account).model_dump(mode="json"),
@@ -125,20 +126,27 @@ def list_accounts():
 
 
 @accounts_bp.route("/<uuid:account_id>", methods=["GET"])
+@require_auth
 def get_account(account_id: UUID):
     """
-    Get a single account by ID.
+    Get a single account by ID for the authenticated user.
+
+    Returns 404 if the account does not exist OR belongs to a different user
+    (ownership is enforced silently — the record simply isn't found).
 
     Path Parameters:
         account_id (UUID): Account ID
 
     Returns:
         200: Account details with balance
+        401: Authentication required
         404: Account not found
         500: Internal server error
     """
     try:
-        account, balance = account_service.get_with_balance(account_id)
+        account, balance = account_service.get_with_balance(
+            account_id, user_id=g.current_user_id
+        )
 
         data = {
             **AccountResponse.model_validate(account).model_dump(mode="json"),
@@ -154,9 +162,10 @@ def get_account(account_id: UUID):
 
 
 @accounts_bp.route("", methods=["POST"])
+@require_auth
 def create_account():
     """
-    Create a new account.
+    Create a new account for the authenticated user.
 
     Request Body:
         AccountCreate schema
@@ -164,14 +173,14 @@ def create_account():
     Returns:
         201: Created account
         400: Validation error
+        401: Authentication required
         500: Internal server error
     """
     try:
-        # Validate request data
         account_data = AccountCreate(**request.json)
 
-        # Create account (idempotent when client_id is present)
         account = account_service.create(
+            user_id=g.current_user_id,
             name=account_data.name,
             type=account_data.type.value,
             currency=account_data.currency,
@@ -196,9 +205,10 @@ def create_account():
 
 
 @accounts_bp.route("/<uuid:account_id>", methods=["PUT"])
+@require_auth
 def update_account(account_id: UUID):
     """
-    Update an existing account.
+    Update an existing account for the authenticated user.
 
     Supports Last-Write-Wins (LWW) conflict detection for offline-first clients.
     When the optional request header X-Client-Updated-At is present its value is
@@ -210,6 +220,7 @@ def update_account(account_id: UUID):
         account_id (UUID): Account ID
 
     Request Headers:
+        Authorization (str): Bearer JWT token.
         X-Client-Updated-At (str, optional): ISO-8601 timestamp of the version
             the client last observed.  Used for LWW conflict detection.
 
@@ -219,20 +230,20 @@ def update_account(account_id: UUID):
     Returns:
         200: Updated account
         400: Validation error
+        401: Authentication required
         404: Account not found
         409: Conflict — server version is newer than client version
         500: Internal server error
     """
     try:
-        # Validate request data
         account_data = AccountUpdate(**request.json)
+        user_id = g.current_user_id
 
-        # LWW conflict detection
         client_updated_at = _parse_client_updated_at(
             request.headers.get("X-Client-Updated-At")
         )
         if client_updated_at is not None:
-            current_account = account_service.get_by_id(account_id)
+            current_account = account_service.get_by_id(account_id, user_id=user_id)
             server_updated_at = current_account.updated_at
             if server_updated_at.tzinfo is None:
                 server_updated_at = server_updated_at.replace(tzinfo=timezone.utc)
@@ -246,9 +257,9 @@ def update_account(account_id: UUID):
                     errors={"server_version": server_data},
                 )
 
-        # Update account
         account = account_service.update(
             account_id=account_id,
+            user_id=user_id,
             name=account_data.name,
             type=account_data.type.value if account_data.type else None,
             currency=account_data.currency,
@@ -269,21 +280,23 @@ def update_account(account_id: UUID):
 
 
 @accounts_bp.route("/<uuid:account_id>", methods=["DELETE"])
+@require_auth
 def delete_account(account_id: UUID):
     """
-    Archive an account (soft delete).
+    Archive an account (soft delete) for the authenticated user.
 
     Path Parameters:
         account_id (UUID): Account ID
 
     Returns:
         200: Account archived successfully
+        401: Authentication required
         404: Account not found
         422: Account has transactions/transfers
         500: Internal server error
     """
     try:
-        account_service.archive(account_id)
+        account_service.archive(account_id, user_id=g.current_user_id)
         return success_response(message="Cuenta archivada exitosamente")
 
     except NotFoundError as e:
@@ -295,6 +308,7 @@ def delete_account(account_id: UUID):
 
 
 @accounts_bp.route("/<uuid:account_id>/permanent", methods=["DELETE"])
+@require_auth
 def hard_delete_account(account_id: UUID):
     """
     Permanently delete an account (hard delete — irreversible).
@@ -306,33 +320,39 @@ def hard_delete_account(account_id: UUID):
 
     Returns:
         200: Account permanently deleted
+        401: Authentication required
         404: Account not found
         422: Account has transactions or transfers
+        500: Internal server error
     """
     try:
-        account_service.delete(account_id)
+        account_service.delete(account_id, user_id=g.current_user_id)
         return success_response(message="Cuenta eliminada permanentemente")
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:
         return error_response(e.message, status_code=422)
+    except Exception as e:
+        return error_response(f"Error al eliminar cuenta: {str(e)}", status_code=500)
 
 
 @accounts_bp.route("/<uuid:account_id>/balance", methods=["GET"])
+@require_auth
 def get_account_balance(account_id: UUID):
     """
-    Get calculated balance for an account.
+    Get calculated balance for an account of the authenticated user.
 
     Path Parameters:
         account_id (UUID): Account ID
 
     Returns:
         200: Account balance
+        401: Authentication required
         404: Account not found
         500: Internal server error
     """
     try:
-        balance = account_service.get_balance(account_id)
+        balance = account_service.get_balance(account_id, user_id=g.current_user_id)
 
         return success_response(
             data={

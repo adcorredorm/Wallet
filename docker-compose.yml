@@ -59,6 +59,13 @@ services:
 
       # CORS configuration for frontend communication
       FLASK_CORS_ORIGINS: ${FLASK_CORS_ORIGINS:-http://localhost:3000,http://frontend:80}
+
+      # Authentication & Authorization
+      # Google OAuth Client ID for backend authentication
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # JWT secret for token signing and verification
+      # DO NOT expose this to the frontend
+      JWT_SECRET: ${JWT_SECRET:-}
     ports:
       # Flask development server port
       # Map to 5001 for external access (5000 is used by macOS AirPlay)
@@ -108,6 +115,10 @@ services:
       # Frontend environment variables
       # Can be used in nginx.conf or during build
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+
+      # Google OAuth Client ID for frontend authentication
+      # Safe to expose - this is a public value
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     healthcheck:
       # Check if Nginx is serving the application
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]

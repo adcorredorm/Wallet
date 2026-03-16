@@ -9,6 +9,8 @@ from uuid import uuid4, UUID
 from unittest.mock import Mock, patch, MagicMock
 
 from app.services.dashboard_crud import DashboardCrudService, MAX_DASHBOARDS, MAX_WIDGETS_PER_DASHBOARD
+
+USER_ID = uuid4()
 from app.models.dashboard import Dashboard
 from app.models.dashboard_widget import DashboardWidget, WidgetType
 from app.schemas.dashboard_crud import (
@@ -97,7 +99,7 @@ class TestListDashboards:
         """Should return dashboards in sort_order from repository."""
         mock_repo.get_all_ordered.return_value = [sample_dashboard]
 
-        result = service.list_dashboards()
+        result = service.list_dashboards(user_id=USER_ID)
 
         mock_repo.get_all_ordered.assert_called_once()
         assert result == [sample_dashboard]
@@ -106,7 +108,7 @@ class TestListDashboards:
         """Should return empty list when no dashboards exist."""
         mock_repo.get_all_ordered.return_value = []
 
-        result = service.list_dashboards()
+        result = service.list_dashboards(user_id=USER_ID)
 
         assert result == []
 
@@ -140,7 +142,7 @@ class TestCreateDashboard:
         mock_repo.create.return_value = sample_dashboard
 
         data = self._make_data()
-        result, created = service.create_dashboard(data)
+        result, created = service.create_dashboard(user_id=USER_ID, data=data)
 
         assert result is sample_dashboard
         assert created is True
@@ -153,7 +155,7 @@ class TestCreateDashboard:
         mock_repo.create.return_value = sample_dashboard
 
         data = self._make_data(sort_order=None)
-        service.create_dashboard(data)
+        service.create_dashboard(user_id=USER_ID, data=data)
 
         call_kwargs = mock_repo.create.call_args.kwargs
         assert call_kwargs["sort_order"] == 6  # max(5) + 1
@@ -164,7 +166,7 @@ class TestCreateDashboard:
         mock_repo.create.return_value = sample_dashboard
 
         data = self._make_data(sort_order=99)
-        service.create_dashboard(data)
+        service.create_dashboard(user_id=USER_ID, data=data)
 
         call_kwargs = mock_repo.create.call_args.kwargs
         assert call_kwargs["sort_order"] == 99
@@ -176,7 +178,7 @@ class TestCreateDashboard:
         mock_repo.get_by_client_id.return_value = sample_dashboard
 
         data = self._make_data(client_id="cli-abc")
-        result, created = service.create_dashboard(data)
+        result, created = service.create_dashboard(user_id=USER_ID, data=data)
 
         assert result is sample_dashboard
         assert created is False
@@ -189,7 +191,7 @@ class TestCreateDashboard:
 
         data = self._make_data()
         with pytest.raises(BusinessRuleError):
-            service.create_dashboard(data)
+            service.create_dashboard(user_id=USER_ID, data=data)
 
         mock_repo.create.assert_not_called()
 
@@ -200,7 +202,7 @@ class TestCreateDashboard:
         mock_repo.create.return_value = sample_dashboard
 
         data = self._make_data(is_default=True)
-        service.create_dashboard(data)
+        service.create_dashboard(user_id=USER_ID, data=data)
 
         mock_repo.unset_default.assert_called_once()
 
@@ -211,7 +213,7 @@ class TestCreateDashboard:
         mock_repo.create.return_value = sample_dashboard
 
         data = self._make_data(is_default=False)
-        service.create_dashboard(data)
+        service.create_dashboard(user_id=USER_ID, data=data)
 
         mock_repo.unset_default.assert_not_called()
 
@@ -228,9 +230,9 @@ class TestGetDashboard:
         """Should return the dashboard when found."""
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
 
-        result = service.get_dashboard(sample_dashboard.id)
+        result = service.get_dashboard(sample_dashboard.id, user_id=USER_ID)
 
-        mock_repo.get_by_id_or_fail.assert_called_once_with(sample_dashboard.id)
+        mock_repo.get_by_id_or_fail.assert_called_once_with(sample_dashboard.id, USER_ID)
         assert result is sample_dashboard
 
     def test_raises_if_not_found(self, service, mock_repo):
@@ -238,7 +240,7 @@ class TestGetDashboard:
         mock_repo.get_by_id_or_fail.side_effect = NotFoundError("Dashboard", str(uuid4()))
 
         with pytest.raises(NotFoundError):
-            service.get_dashboard(uuid4())
+            service.get_dashboard(uuid4(), user_id=USER_ID)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +259,7 @@ class TestUpdateDashboard:
         mock_repo.update.return_value = updated
 
         data = DashboardUpdate(name="Renamed")
-        result = service.update_dashboard(sample_dashboard.id, data)
+        result = service.update_dashboard(sample_dashboard.id, user_id=USER_ID, data=data)
 
         assert result is updated
         mock_repo.update.assert_called_once()
@@ -270,7 +272,7 @@ class TestUpdateDashboard:
         mock_repo.update.return_value = sample_dashboard
 
         data = DashboardUpdate(is_default=True)
-        service.update_dashboard(sample_dashboard.id, data)
+        service.update_dashboard(sample_dashboard.id, user_id=USER_ID, data=data)
 
         mock_repo.unset_default.assert_called_once()
 
@@ -280,7 +282,7 @@ class TestUpdateDashboard:
         mock_repo.update.return_value = sample_dashboard
 
         data = DashboardUpdate(name="Keep name")
-        service.update_dashboard(sample_dashboard.id, data)
+        service.update_dashboard(sample_dashboard.id, user_id=USER_ID, data=data)
 
         mock_repo.unset_default.assert_not_called()
 
@@ -289,7 +291,7 @@ class TestUpdateDashboard:
         mock_repo.get_by_id_or_fail.side_effect = NotFoundError("Dashboard", str(uuid4()))
 
         with pytest.raises(NotFoundError):
-            service.update_dashboard(uuid4(), DashboardUpdate(name="X"))
+            service.update_dashboard(uuid4(), user_id=USER_ID, data=DashboardUpdate(name="X"))
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +306,7 @@ class TestDeleteDashboard:
         """Should call repo.delete with the found dashboard."""
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
 
-        service.delete_dashboard(sample_dashboard.id)
+        service.delete_dashboard(sample_dashboard.id, user_id=USER_ID)
 
         mock_repo.delete.assert_called_once_with(sample_dashboard)
 
@@ -313,7 +315,7 @@ class TestDeleteDashboard:
         mock_repo.get_by_id_or_fail.side_effect = NotFoundError("Dashboard", str(uuid4()))
 
         with pytest.raises(NotFoundError):
-            service.delete_dashboard(uuid4())
+            service.delete_dashboard(uuid4(), user_id=USER_ID)
 
         mock_repo.delete.assert_not_called()
 
@@ -333,9 +335,9 @@ class TestListWidgets:
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
         mock_repo.get_widgets_for_dashboard.return_value = [sample_widget]
 
-        result = service.list_widgets(sample_dashboard.id)
+        result = service.list_widgets(sample_dashboard.id, user_id=USER_ID)
 
-        mock_repo.get_by_id_or_fail.assert_called_once_with(sample_dashboard.id)
+        mock_repo.get_by_id_or_fail.assert_called_once_with(sample_dashboard.id, USER_ID)
         mock_repo.get_widgets_for_dashboard.assert_called_once_with(sample_dashboard.id)
         assert result == [sample_widget]
 
@@ -344,7 +346,7 @@ class TestListWidgets:
         mock_repo.get_by_id_or_fail.side_effect = NotFoundError("Dashboard", str(uuid4()))
 
         with pytest.raises(NotFoundError):
-            service.list_widgets(uuid4())
+            service.list_widgets(uuid4(), user_id=USER_ID)
 
         mock_repo.get_widgets_for_dashboard.assert_not_called()
 
@@ -379,7 +381,7 @@ class TestCreateWidget:
         mock_repo.create_widget.return_value = sample_widget
 
         data = self._make_widget_data()
-        result, created = service.create_widget(sample_dashboard.id, data)
+        result, created = service.create_widget(sample_dashboard.id, user_id=USER_ID, data=data)
 
         assert result is sample_widget
         assert created is True
@@ -394,7 +396,7 @@ class TestCreateWidget:
         mock_repo.get_widget_by_client_id.return_value = sample_widget
 
         data = self._make_widget_data(client_id="wgt-xyz")
-        result, created = service.create_widget(sample_dashboard.id, data)
+        result, created = service.create_widget(sample_dashboard.id, user_id=USER_ID, data=data)
 
         assert result is sample_widget
         assert created is False
@@ -408,7 +410,7 @@ class TestCreateWidget:
 
         data = self._make_widget_data()
         with pytest.raises(BusinessRuleError):
-            service.create_widget(sample_dashboard.id, data)
+            service.create_widget(sample_dashboard.id, user_id=USER_ID, data=data)
 
         mock_repo.create_widget.assert_not_called()
 
@@ -418,7 +420,7 @@ class TestCreateWidget:
 
         data = self._make_widget_data()
         with pytest.raises(NotFoundError):
-            service.create_widget(uuid4(), data)
+            service.create_widget(uuid4(), user_id=USER_ID, data=data)
 
         mock_repo.create_widget.assert_not_called()
 
@@ -440,7 +442,7 @@ class TestUpdateWidget:
         mock_repo.update_widget.return_value = updated
 
         data = WidgetUpdate(title="New Title")
-        result = service.update_widget(sample_dashboard.id, sample_widget.id, data)
+        result = service.update_widget(sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=data)
 
         assert result is updated
         mock_repo.update_widget.assert_called_once()
@@ -454,7 +456,7 @@ class TestUpdateWidget:
         mock_repo.update_widget.return_value = sample_widget
 
         data = WidgetUpdate(position_x=0)
-        service.update_widget(sample_dashboard.id, sample_widget.id, data)
+        service.update_widget(sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=data)
 
         call_kwargs = mock_repo.update_widget.call_args.kwargs
         assert "position_x" in call_kwargs
@@ -472,7 +474,7 @@ class TestUpdateWidget:
 
         data = WidgetUpdate(title="Intruder")
         with pytest.raises(NotFoundError):
-            service.update_widget(sample_dashboard.id, sample_widget.id, data)
+            service.update_widget(sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=data)
 
         mock_repo.update_widget.assert_not_called()
 
@@ -483,7 +485,7 @@ class TestUpdateWidget:
 
         data = WidgetUpdate(title="Ghost")
         with pytest.raises(NotFoundError):
-            service.update_widget(sample_dashboard.id, uuid4(), data)
+            service.update_widget(sample_dashboard.id, uuid4(), user_id=USER_ID, data=data)
 
         mock_repo.update_widget.assert_not_called()
 
@@ -494,7 +496,7 @@ class TestUpdateWidget:
         mock_repo.update_widget.return_value = sample_widget
 
         service.update_widget(
-            sample_dashboard.id, sample_widget.id, WidgetUpdate(position_y=0)
+            sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=WidgetUpdate(position_y=0)
         )
 
         call_kwargs = mock_repo.update_widget.call_args.kwargs
@@ -508,7 +510,7 @@ class TestUpdateWidget:
         mock_repo.update_widget.return_value = sample_widget
 
         service.update_widget(
-            sample_dashboard.id, sample_widget.id, WidgetUpdate(width=1)
+            sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=WidgetUpdate(width=1)
         )
 
         call_kwargs = mock_repo.update_widget.call_args.kwargs
@@ -522,7 +524,7 @@ class TestUpdateWidget:
         mock_repo.update_widget.return_value = sample_widget
 
         service.update_widget(
-            sample_dashboard.id, sample_widget.id, WidgetUpdate(height=1)
+            sample_dashboard.id, sample_widget.id, user_id=USER_ID, data=WidgetUpdate(height=1)
         )
 
         call_kwargs = mock_repo.update_widget.call_args.kwargs
@@ -543,7 +545,7 @@ class TestDeleteWidget:
         mock_repo.get_by_id_or_fail.return_value = sample_dashboard
         mock_repo.get_widget.return_value = sample_widget
 
-        service.delete_widget(sample_dashboard.id, sample_widget.id)
+        service.delete_widget(sample_dashboard.id, sample_widget.id, user_id=USER_ID)
 
         mock_repo.delete_widget.assert_called_once_with(sample_widget)
 
@@ -557,6 +559,6 @@ class TestDeleteWidget:
         mock_repo.get_widget.return_value = sample_widget
 
         with pytest.raises(NotFoundError):
-            service.delete_widget(sample_dashboard.id, sample_widget.id)
+            service.delete_widget(sample_dashboard.id, sample_widget.id, user_id=USER_ID)
 
         mock_repo.delete_widget.assert_not_called()

@@ -3,7 +3,13 @@ Seed data for predefined categories.
 
 This module provides default categories for income and expenses based on
 common personal finance categorization.
+
+The seed_categories function requires a user_id so that per-user idempotency
+checks are scoped correctly: a category that already exists for one user
+should not block creation for another user.
 """
+
+from uuid import UUID
 
 from app.models import Category, CategoryType
 from app.extensions import db
@@ -123,69 +129,83 @@ CATEGORIES = [
 ]
 
 
-def seed_categories() -> None:
+def seed_categories(user_id: UUID) -> None:
     """
-    Seed the database with predefined categories.
+    Seed the database with predefined categories for a specific user.
 
-    Creates parent categories and their subcategories if they don't already exist.
-    This function is idempotent - it can be run multiple times safely.
+    Creates parent categories and their subcategories if they don't already
+    exist for this user.  This function is idempotent — it can be called
+    multiple times for the same user safely.
+
+    Args:
+        user_id: The UUID of the user whose categories should be seeded.
     """
-    print("Seeding categories...")
+    print(f"Seeding categories for user {user_id}...")
 
     for cat_data in CATEGORIES:
-        # Check if parent category already exists
-        existing = Category.query.filter_by(
-            name=cat_data["name"], parent_category_id=None
-        ).first()
+        # Check if parent category already exists for this user
+        existing = db.session.execute(
+            db.select(Category).where(
+                Category.user_id == user_id,
+                Category.name == cat_data["name"],
+                Category.parent_category_id == None,
+            )
+        ).scalar_one_or_none()
 
         if existing:
-            print(f"  - Categoria '{cat_data['name']}' ya existe, omitiendo...")
+            print(f"  - Categoria '{cat_data['name']}' ya existe para este usuario, omitiendo...")
             parent = existing
         else:
-            # Create parent category
             parent = Category(
+                user_id=user_id,
                 name=cat_data["name"],
                 type=cat_data["type"],
                 icon=cat_data.get("icon"),
                 color=cat_data.get("color"),
             )
             db.session.add(parent)
-            db.session.flush()  # Flush to get the ID
+            db.session.flush()
             print(f"  + Categoria '{cat_data['name']}' creada")
 
-        # Create subcategories if they exist
-        if "subcategories" in cat_data:
-            for subcat_data in cat_data["subcategories"]:
-                # Check if subcategory already exists
-                existing_sub = Category.query.filter_by(
-                    name=subcat_data["name"], parent_category_id=parent.id
-                ).first()
+        for subcat_data in cat_data.get("subcategories", []):
+            existing_sub = db.session.execute(
+                db.select(Category).where(
+                    Category.user_id == user_id,
+                    Category.name == subcat_data["name"],
+                    Category.parent_category_id == parent.id,
+                )
+            ).scalar_one_or_none()
 
-                if existing_sub:
-                    print(
-                        f"    - Subcategoria '{subcat_data['name']}' ya existe, omitiendo..."
-                    )
-                else:
-                    # Create subcategory with same type and color as parent
-                    subcategory = Category(
-                        name=subcat_data["name"],
-                        type=cat_data["type"],
-                        icon=subcat_data.get("icon"),
-                        color=cat_data.get("color"),  # Inherit parent color
-                        parent_category_id=parent.id,
-                    )
-                    db.session.add(subcategory)
-                    print(f"    + Subcategoria '{subcat_data['name']}' creada")
+            if existing_sub:
+                print(f"    - Subcategoria '{subcat_data['name']}' ya existe, omitiendo...")
+            else:
+                subcategory = Category(
+                    user_id=user_id,
+                    name=subcat_data["name"],
+                    type=cat_data["type"],
+                    icon=subcat_data.get("icon"),
+                    color=cat_data.get("color"),
+                    parent_category_id=parent.id,
+                )
+                db.session.add(subcategory)
+                print(f"    + Subcategoria '{subcat_data['name']}' creada")
 
-    # Commit all changes
     db.session.commit()
     print("Categorias seeded exitosamente!")
 
 
 if __name__ == "__main__":
-    # Allow running this script directly for testing
+    # Allow running this script directly for testing.
+    # Requires a user_id to be provided as an argument.
+    import sys
+    from uuid import UUID as _UUID
+
+    if len(sys.argv) < 2:
+        print("Usage: python -m app.seeds.categories <user_uuid>")
+        sys.exit(1)
+
     from app import create_app
 
     app = create_app()
     with app.app_context():
-        seed_categories()
+        seed_categories(_UUID(sys.argv[1]))
