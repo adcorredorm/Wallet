@@ -191,14 +191,16 @@ describe('loginWithGoogle', () => {
     expect(mockSetRefreshToken).toHaveBeenCalledWith('opaque-refresh-token')
   })
 
-  it('stores last_user_id in AuthDB via setLastUserId', async () => {
+  it('does NOT call setLastUserId — that is deferred to handlePostLogin', async () => {
+    // last_user_id is set by usePostLoginFlow.handlePostLogin AFTER login,
+    // not by loginWithGoogle itself. This prevents the user-switch detection
+    // from seeing the new ID before it can compare with the old one.
     mockPostAuthGoogle.mockResolvedValueOnce(googleApiResponse)
 
     const store = useAuthStore()
     await store.loginWithGoogle('google-id-token')
 
-    expect(mockSetLastUserId).toHaveBeenCalledOnce()
-    expect(mockSetLastUserId).toHaveBeenCalledWith('user-abc-123')
+    expect(mockSetLastUserId).not.toHaveBeenCalled()
   })
 
   it('sets isAuthenticated to true', async () => {

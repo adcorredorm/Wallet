@@ -35,8 +35,8 @@ def _auth_headers(user_id: str | None = None) -> dict:
     }
 
     # TestingConfig inherits JWT_SECRET from Config base:
-    # "dev-jwt-secret-change-in-production"
-    token = jwt.encode(payload, "dev-jwt-secret-change-in-production", algorithm="HS256")
+    # "test-jwt-secret-for-testing-only"
+    token = jwt.encode(payload, "test-jwt-secret-for-testing-only", algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
 
 

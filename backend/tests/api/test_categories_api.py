@@ -19,7 +19,7 @@ from app.models.category import Category, CategoryType
 from app.utils.exceptions import NotFoundError, BusinessRuleError
 
 _TEST_USER_ID = uuid4()
-_JWT_SECRET = "dev-jwt-secret-change-in-production"
+_JWT_SECRET = "test-jwt-secret-for-testing-only"
 # Dummy header used when verify_jwt is patched to bypass real JWT validation
 _H = {"Authorization": "Bearer dummy"}
 

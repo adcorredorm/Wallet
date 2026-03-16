@@ -120,7 +120,7 @@ class TestGetWithBalance:
 
         assert account == sample_account
         assert balance == expected_balance
-        mock_repository.calculate_balance.assert_called_once_with(sample_account.id)
+        mock_repository.calculate_balance.assert_called_once_with(sample_account.id, USER_ID)
 
     def test_get_with_balance_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""
@@ -285,45 +285,67 @@ class TestArchive:
 
 
 class TestDelete:
-    """Tests for delete method (hard delete with validations)."""
+    """Tests for delete method (hard delete with validations).
+
+    delete() uses db.session.execute() directly (SA 2.0 pattern, replacing
+    deprecated lazy="dynamic" .count()). We patch db.session.execute so
+    unit tests don't need an app context or a real DB connection.
+    """
+
+    def _make_execute_mock(self, txn_count: int, transfer_count: int):
+        """Return a side_effect function that returns mock scalars for the two count queries."""
+        call_results = [txn_count, transfer_count]
+        call_iter = iter(call_results)
+
+        def execute_side_effect(*args, **kwargs):
+            mock_result = Mock()
+            mock_result.scalar.return_value = next(call_iter)
+            return mock_result
+
+        return execute_side_effect
 
     def test_delete_success(self, account_service, mock_repository, sample_account):
         """Should delete account when no transactions or transfers exist."""
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        account_service.delete(sample_account.id, user_id=USER_ID)
+        with patch('app.services.account.db') as mock_db:
+            mock_db.session.execute.side_effect = self._make_execute_mock(0, 0)
+            account_service.delete(sample_account.id, user_id=USER_ID)
 
         mock_repository.delete.assert_called_once_with(sample_account)
 
     def test_delete_with_transactions_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has transactions."""
-        sample_account.transactions.count.return_value = 5
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id, user_id=USER_ID)
+        with patch('app.services.account.db') as mock_db:
+            mock_db.session.execute.side_effect = self._make_execute_mock(5, 0)
+            with pytest.raises(BusinessRuleError) as exc_info:
+                account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transacciones" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
 
     def test_delete_with_transfers_source_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has outgoing transfers."""
-        sample_account.transfers_source.count.return_value = 3
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id, user_id=USER_ID)
+        with patch('app.services.account.db') as mock_db:
+            mock_db.session.execute.side_effect = self._make_execute_mock(0, 3)
+            with pytest.raises(BusinessRuleError) as exc_info:
+                account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transferencias" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
 
     def test_delete_with_transfers_destination_fails(self, account_service, mock_repository, sample_account):
         """Should raise BusinessRuleError when account has incoming transfers."""
-        sample_account.transfers_destination.count.return_value = 2
         mock_repository.get_by_id_or_fail.return_value = sample_account
 
-        with pytest.raises(BusinessRuleError) as exc_info:
-            account_service.delete(sample_account.id, user_id=USER_ID)
+        with patch('app.services.account.db') as mock_db:
+            mock_db.session.execute.side_effect = self._make_execute_mock(0, 2)
+            with pytest.raises(BusinessRuleError) as exc_info:
+                account_service.delete(sample_account.id, user_id=USER_ID)
 
         assert "transferencias" in str(exc_info.value).lower()
         mock_repository.delete.assert_not_called()
@@ -350,7 +372,7 @@ class TestGetBalance:
 
         assert result == expected_balance
         mock_repository.get_by_id_or_fail.assert_called_once_with(sample_account.id, USER_ID)
-        mock_repository.calculate_balance.assert_called_once_with(sample_account.id)
+        mock_repository.calculate_balance.assert_called_once_with(sample_account.id, USER_ID)
 
     def test_get_balance_not_found(self, account_service, mock_repository):
         """Should raise NotFoundError when account doesn't exist."""

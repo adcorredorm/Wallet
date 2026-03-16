@@ -56,6 +56,10 @@ class TestingConfig(Config):
         "TEST_DATABASE_URL",
         "postgresql://wallet_user:wallet_password@db:5432/wallet_test_db"
     )
+    # Fixed secrets for tests — independent of .env so tests always pass
+    # regardless of the production JWT_SECRET value.
+    JWT_SECRET = "test-jwt-secret-for-testing-only"
+    GOOGLE_CLIENT_ID = "test-google-client-id"
 
 
 class ProductionConfig(Config):

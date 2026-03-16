@@ -89,7 +89,7 @@ describe('postAuthGoogle', () => {
   })
 
   it('calls POST /auth/google with the id_token', async () => {
-    mockPost.mockResolvedValueOnce({ data: googleResponse })
+    mockPost.mockResolvedValueOnce({ data: { success: true, data: googleResponse } })
 
     await postAuthGoogle('google-id-token-123')
 
@@ -100,7 +100,7 @@ describe('postAuthGoogle', () => {
   })
 
   it('returns the GoogleAuthResponse data', async () => {
-    mockPost.mockResolvedValueOnce({ data: googleResponse })
+    mockPost.mockResolvedValueOnce({ data: { success: true, data: googleResponse } })
 
     const result = await postAuthGoogle('google-id-token-123')
 
@@ -126,7 +126,7 @@ describe('postAuthRefresh', () => {
   })
 
   it('calls POST /auth/refresh with the refresh_token', async () => {
-    mockPost.mockResolvedValueOnce({ data: refreshResponse })
+    mockPost.mockResolvedValueOnce({ data: { success: true, data: refreshResponse } })
 
     await postAuthRefresh('my-refresh-token')
 
@@ -136,7 +136,7 @@ describe('postAuthRefresh', () => {
   })
 
   it('returns the RefreshResponse data with new tokens', async () => {
-    mockPost.mockResolvedValueOnce({ data: refreshResponse })
+    mockPost.mockResolvedValueOnce({ data: { success: true, data: refreshResponse } })
 
     const result = await postAuthRefresh('my-refresh-token')
 

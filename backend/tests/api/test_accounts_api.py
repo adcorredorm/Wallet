@@ -24,7 +24,7 @@ from app.utils.exceptions import NotFoundError, BusinessRuleError
 # ---------------------------------------------------------------------------
 
 _TEST_USER_ID = uuid4()
-_JWT_SECRET = "dev-jwt-secret-change-in-production"
+_JWT_SECRET = "test-jwt-secret-for-testing-only"
 
 
 def _auth_headers(user_id=None) -> dict:
