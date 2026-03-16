@@ -33,7 +33,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { accountsApi } from '@/api/accounts'
 import type { CreateAccountDto, UpdateAccountDto, AccountBalance } from '@/types'
-import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalAccount } from '@/offline'
 
 export const useAccountsStore = defineStore('accounts', () => {
@@ -89,57 +89,11 @@ export const useAccountsStore = defineStore('accounts', () => {
   // Actions — Reads (offline-first, stale-while-revalidate)
   // ---------------------------------------------------------------------------
 
-  async function fetchAccounts(activeOnly = false) {
+  async function fetchAccounts() {
     loading.value = true
     error.value = null
     try {
-      // fetchAllWithRevalidation:
-      //   1. Returns cached IndexedDB data immediately (fast path).
-      //   2. If online, revalidates with the API in the background.
-      //   3. Calls onFreshData callback with the updated array from the server.
-      //
-      // Why pass the API fetcher as an arrow function?
-      // accountsApi.getAll() accepts an optional `activeOnly` argument. We
-      // capture that argument in the closure so the repository doesn't need to
-      // know about it.
-      const localData = await fetchAllWithRevalidation(
-        db.accounts,
-        () => accountsApi.getAll(activeOnly ? true : undefined).then(
-          (items) => items.map((item: any) => ({
-            ...item,
-            balance: item.balance ? Number(item.balance) : 0
-          }))
-        ),
-        (freshItems) => {
-          // This callback fires after background network revalidation succeeds.
-          // freshItems came from IndexedDB after bulkPut — the bulkPut may have
-          // overwritten the locally-correct balance with the server's stale value
-          // (the list endpoint balance excludes pending offline transactions).
-          //
-          // Restore the correct balance from:
-          //   1. balances.value — set by adjustBalance() in this session
-          //   2. accounts.value — loaded from IndexedDB at the start of fetchAccounts
-          //      (has the value persisted by the most recent adjustBalance() call,
-          //      which was written to IndexedDB BEFORE bulkPut ran)
-          //
-          // Also repair IndexedDB so the next page reload shows the right balance.
-          accounts.value = freshItems.map(item => {
-            const normalized = normalizeBalance(item)
-            const localBalance = balances.value.get(item.id)?.balance
-                               ?? accounts.value.find(a => a.id === item.id)?.balance
-            if (localBalance !== undefined) {
-              db.accounts.update(item.id, { balance: localBalance }).catch(() => {})
-              return { ...normalized, balance: localBalance }
-            }
-            return normalized
-          })
-        },
-        { cleanupOrphans: false }
-      )
-
-      // Populate the store with whatever came back (local cache or first-load
-      // network data). normalizeBalance ensures balance is always a number.
-      accounts.value = localData.map(normalizeBalance)
+      await refreshFromDB()
     } catch (err: any) {
       error.value = err.message || 'Error al cargar cuentas'
       throw err
@@ -604,17 +558,17 @@ export const useAccountsStore = defineStore('accounts', () => {
    *
    * Called by the transactions and transfers stores immediately after an
    * offline write so the UI reflects the correct balance without waiting
-   * for a server round-trip or a /balance API call.
+   * for a sync cycle.
    *
    * Why update both balances.value and accounts.value[idx].balance?
-   * accountsWithBalances prefers balances.value (from the /balance endpoint).
-   * accounts.value[idx].balance is the cold-start fallback when no /balance
-   * fetch has run yet for a given account.
+   * accountsWithBalances prefers balances.value (kept in memory, updated by
+   * adjustBalance on every write and by recomputeBalancesFromTransactions after sync).
+   * accounts.value[idx].balance is the cold-start fallback persisted in IndexedDB.
    */
   function adjustBalance(accountId: string, delta: number) {
     // Derive the current balance from whichever source has it.
-    // balances.value is populated by the /balance endpoint (authoritative).
-    // accounts.value[idx].balance is the fallback from IndexedDB / list endpoint.
+    // balances.value is populated by adjustBalance() and recomputeBalancesFromTransactions().
+    // accounts.value[idx].balance is the fallback from IndexedDB.
     const current = balances.value.get(accountId)
     const account = accounts.value.find(a => a.id === accountId)
     const currentBalance = current?.balance ?? account?.balance ?? 0

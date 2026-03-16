@@ -22,8 +22,9 @@
  * "Todo" preset:
  * Requires an async IndexedDB query on mount to discover the oldest
  * transaction or transfer date. Until that query resolves, the "Todo" button
- * uses a temporary fallback of 1825 days (≈5 years) so the chart is never
- * blank if the user clicks it before the query finishes.
+ * is disabled (todoDays === null) so the user cannot trigger a chart render
+ * with an arbitrary fallback. Once resolved, todoDays holds the real day count
+ * (or 30 for new users with no records).
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -100,7 +101,7 @@ const PRESETS: RangePreset[] = [
 // Resolved day counts for the two dynamic presets.
 // Fallbacks keep the chart functional even if the user clicks before mount resolves.
 const ytdDays = ref<number>(computeYtdDays())
-const todoDays = ref<number>(1825) // fallback ≈5 years until DB query resolves
+const todoDays = ref<number | null>(null) // null = query pending; button disabled until resolved
 
 function computeYtdDays(): number {
   const today = new Date()
@@ -122,7 +123,10 @@ async function resolveOldestDate(): Promise<void> {
   if (oldestTx?.date) dates.push(oldestTx.date)
   if (oldestTr?.date) dates.push(oldestTr.date)
 
-  if (dates.length === 0) return // no records yet — keep fallback
+  if (dates.length === 0) {
+    todoDays.value = 30  // new user: no history yet, default to 30 days
+    return
+  }
 
   const oldestDateStr = dates.sort()[0]  // lexicographic sort is correct for YYYY-MM-DD
   const oldestDate = parseISO(oldestDateStr)
@@ -149,7 +153,7 @@ const rangeDays = computed<number>(() => {
   if (!preset) return 30
   if (preset.staticDays !== null) return preset.staticDays
   if (preset.label === 'YTD') return ytdDays.value
-  if (preset.label === 'Todo') return todoDays.value
+  if (preset.label === 'Todo') return todoDays.value ?? 30
   return 30
 })
 
@@ -282,15 +286,20 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
           v-for="preset in PRESETS"
           :key="preset.label"
           class="px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 whitespace-nowrap min-h-[32px]"
-          :class="
+          :class="[
             selectedLabel === preset.label
               ? 'bg-blue-500 text-white'
-              : 'text-dark-text-secondary hover:text-dark-text-primary'
-          "
+              : 'text-dark-text-secondary hover:text-dark-text-primary',
+            preset.label === 'Todo' && todoDays === null
+              ? 'opacity-50 cursor-not-allowed'
+              : ''
+          ]"
+          :disabled="preset.label === 'Todo' && todoDays === null"
           :aria-pressed="selectedLabel === preset.label"
           @click="selectPreset(preset)"
         >
-          {{ preset.label }}
+          <span v-if="preset.label === 'Todo' && todoDays === null" class="inline-block animate-spin">&#x27F3;</span>
+          <span v-else>{{ preset.label }}</span>
         </button>
       </div>
     </div>

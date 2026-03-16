@@ -36,6 +36,37 @@ import { formatCurrency } from '@/utils/formatters'
 // call, so this is not a second subscription.
 const isOnline = useOnline()
 
+/**
+ * BASE_RATES — fallback exchange rates seeded on first launch.
+ *
+ * Why seed these into Dexie on cold start?
+ * On a user's very first session (or after clearing IndexedDB), the exchange
+ * rates table is empty. Without seeding, useNetWorthHistory would show every
+ * multi-currency account as "no rate found" and fall back to rate=1, which
+ * produces wildly incorrect net worth numbers until the network sync runs.
+ * Seeding reasonable approximations ensures the UI is immediately useful
+ * even before the first successful backend sync.
+ *
+ * Why source: 'system'?
+ * Differentiates these seeded records from network-fetched ones
+ * ('exchangerate.host', 'coingecko'). The sync process will overwrite
+ * them with fresh rates on first successful online sync.
+ *
+ * Rates captured: 2026-03-16. On every minor version release, ask the user
+ * whether to refresh these values with current DB rates.
+ */
+const BASE_RATES: LocalExchangeRate[] = [
+  { currency_code: 'USD', rate_to_usd: 1,              fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'COP', rate_to_usd: 3691.6733650,   fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'EUR', rate_to_usd: 0.8746440,      fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'BRL', rate_to_usd: 5.2654710,      fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'JPY', rate_to_usd: 159.5572970,    fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'ARS', rate_to_usd: 1452.2500000,   fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'GBP', rate_to_usd: 0.7553490,      fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'BTC', rate_to_usd: 0.0000135619,   fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+  { currency_code: 'ETH', rate_to_usd: 0.0004412634,   fetched_at: '2026-03-16T00:00:00Z', source: 'system', updated_at: '2026-03-16T00:00:00Z' },
+]
+
 export const useExchangeRatesStore = defineStore('exchangeRates', () => {
   // ---------------------------------------------------------------------------
   // State
@@ -82,18 +113,21 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
   // ---------------------------------------------------------------------------
 
   /**
-   * Load exchange rates using stale-while-revalidate.
+   * Load exchange rates using stale-while-revalidate with BASE_RATES seeding.
    *
    * Step 1 — Read from IndexedDB immediately.
-   *           The UI renders with whatever is cached. On first launch (cold
-   *           start) this is an empty array; the empty state is intentional.
+   *           If Dexie is empty (cold start), seed BASE_RATES via bulkPut
+   *           so the UI has reasonable approximations before the first sync.
+   *           If Dexie fails entirely, fall back to BASE_RATES in-memory so
+   *           currency conversion is never completely broken.
    *
    * Step 2 — Fire a background network request when online.
    *           On success: upsert every rate into IndexedDB via put() and
    *           update the reactive state so the UI reflects fresh data without
    *           a page reload.
-   *           On network failure: the cached Dexie data remains in rates[].
-   *           error is only set when both sources fail (no cache AND no network).
+   *           On network failure: the cached Dexie data (or BASE_RATES fallback)
+   *           remains in rates[]. error is only set when rates are completely
+   *           empty after all paths are exhausted.
    */
   async function fetchRates(): Promise<void> {
     loading.value = true
@@ -101,12 +135,21 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
 
     try {
       // Step 1 — Synchronous-feeling local read.
-      const localData = await db.exchangeRates.toArray()
+      let localData = await db.exchangeRates.toArray()
+
+      // Cold start: seed BASE_RATES into Dexie so conversion is immediately
+      // available, even before the first successful background network sync.
+      if (localData.length === 0) {
+        await db.exchangeRates.bulkPut(BASE_RATES)
+        localData = BASE_RATES
+      }
+
       rates.value = localData
     } catch (err: any) {
-      // IndexedDB failure is unusual but should not crash the app. We continue
-      // so the network path still has a chance to populate rates[].
+      // IndexedDB failure is unusual but should not crash the app.
+      // Fall back to BASE_RATES in-memory so the conversion helpers work.
       console.warn('[exchangeRates] IndexedDB read failed:', err)
+      rates.value = BASE_RATES
     } finally {
       loading.value = false
     }

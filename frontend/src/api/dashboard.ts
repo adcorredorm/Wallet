@@ -4,31 +4,16 @@
  */
 
 import apiClient from './index'
-import type { DashboardData, AccountBalance } from '@/types'
 
+// Note: getSummary and getAccountBalances were removed (balance is computed locally).
+// getNetWorth and getMonthlySummary are kept for future analytics widget use.
 export const dashboardApi = {
-  /**
-   * Get complete dashboard data
-   * Includes net worth, account balances, recent activity
-   */
-  getSummary(): Promise<DashboardData> {
-    return apiClient.get('/dashboard')
-  },
-
   /**
    * Get net worth (total patrimonio neto across all accounts)
    * This is calculated by summing all account balances
    */
   getNetWorth(): Promise<{ patrimonio_neto: number }> {
     return apiClient.get('/dashboard/net-worth')
-  },
-
-  /**
-   * Get all account balances
-   * Returns array of accounts with their calculated balances
-   */
-  getAccountBalances(): Promise<AccountBalance[]> {
-    return apiClient.get('/dashboard/balances')
   },
 
   /**

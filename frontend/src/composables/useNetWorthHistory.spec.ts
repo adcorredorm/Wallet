@@ -10,15 +10,36 @@
  */
 
 import { createPinia, setActivePinia } from 'pinia'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 
-// Create mock fns via vi.hoisted() — these are available before vi.mock() hoisting
-const { mockTx, mockTr, mockAcc } = vi.hoisted(() => ({
-  mockTx: vi.fn().mockResolvedValue([]),
-  mockTr: vi.fn().mockResolvedValue([]),
-  mockAcc: vi.fn().mockResolvedValue([]),
-}))
+// All vi.hoisted() calls must be grouped together before vi.mock() calls.
+// Vitest hoists vi.mock() blocks to the top of the file during transformation,
+// so any variables used inside mock factories must themselves be hoisted.
+const {
+  mockTx,
+  mockTr,
+  mockAcc,
+  mockSyncStore,
+  mockTransactionsStore,
+  mockTransfersStore,
+} = vi.hoisted(() => {
+  // Mutable state objects — tests modify these directly before each run.
+  // Using plain objects (not Vue refs) because the mock factory captures them
+  // by reference, so mutations in tests are visible to the mock.
+  const syncState = { isSyncing: false, initialSyncComplete: true }
+  const txState = { transactions: [] as unknown[] }
+  const tfState = { transfers: [] as unknown[] }
+
+  return {
+    mockTx: vi.fn().mockResolvedValue([]),
+    mockTr: vi.fn().mockResolvedValue([]),
+    mockAcc: vi.fn().mockResolvedValue([]),
+    mockSyncStore: { state: syncState },
+    mockTransactionsStore: { state: txState },
+    mockTransfersStore: { state: tfState },
+  }
+})
 
 vi.mock('@/offline', () => ({
   db: {
@@ -44,10 +65,29 @@ vi.mock('@/stores/settings', () => ({
   })),
 }))
 
+vi.mock('@/stores/sync', () => ({
+  useSyncStore: vi.fn(() => ({
+    get isSyncing() { return mockSyncStore.state.isSyncing },
+    get initialSyncComplete() { return mockSyncStore.state.initialSyncComplete },
+  })),
+}))
+
+vi.mock('@/stores/transactions', () => ({
+  useTransactionsStore: vi.fn(() => ({
+    get transactions() { return mockTransactionsStore.state.transactions },
+  })),
+}))
+
+vi.mock('@/stores/transfers', () => ({
+  useTransfersStore: vi.fn(() => ({
+    get transfers() { return mockTransfersStore.state.transfers },
+  })),
+}))
+
 import { useNetWorthHistory } from './useNetWorthHistory'
 
-/** Wait for watchEffect async computation to complete */
-async function settle(ms = 40) {
+/** Wait for watchEffect debounce (300ms) + async computation to complete */
+async function settle(ms = 350) {
   await nextTick()
   await new Promise(r => setTimeout(r, ms))
 }
@@ -60,6 +100,10 @@ describe('useNetWorthHistory — empty state', () => {
     mockTx.mockResolvedValue([])
     mockTr.mockResolvedValue([])
     mockAcc.mockResolvedValue([])
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
   })
 
   it('returns isEmpty=true when no transactions or transfers', async () => {
@@ -83,6 +127,10 @@ describe('useNetWorthHistory — single income transaction', () => {
     vi.clearAllMocks()
     mockGetRate.mockReturnValue(1)
     mockTr.mockResolvedValue([])
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
   })
 
   it('produces correct net worth for a single income with base_rate=1', async () => {
@@ -96,7 +144,7 @@ describe('useNetWorthHistory — single income transaction', () => {
       rangeDays: 30,
       endDate: '2026-01-10',
     })
-    await settle(50)
+    await settle(350)
 
     expect(isEmpty.value).toBe(false)
     const pointAfterTx = dataPoints.value.find(p => p.date >= '2026-01-05')
@@ -116,7 +164,7 @@ describe('useNetWorthHistory — single income transaction', () => {
       rangeDays: 30,
       endDate: '2026-01-10',
     })
-    await settle(50)
+    await settle(350)
 
     const pointAfterTx = dataPoints.value.find(p => p.date >= '2026-01-05')
     expect(pointAfterTx).toBeDefined()
@@ -134,7 +182,7 @@ describe('useNetWorthHistory — single income transaction', () => {
       rangeDays: 10,
       endDate: '2026-01-10',
     })
-    await settle(50)
+    await settle(350)
 
     const lastPoint = dataPoints.value[dataPoints.value.length - 1]
     expect(lastPoint.value).toBeCloseTo(300, 1) // 500 - 200
@@ -146,6 +194,10 @@ describe('useNetWorthHistory — transfer handling', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     mockGetRate.mockReturnValue(1)
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
   })
 
   it('transfer is balance-neutral: source loses, destination gains, total unchanged', async () => {
@@ -172,7 +224,7 @@ describe('useNetWorthHistory — transfer handling', () => {
       rangeDays: 30,
       endDate: '2026-01-10',
     })
-    await settle(50)
+    await settle(350)
 
     // Total net worth should be 1000 throughout — transfer is purely internal
     const lastPoint = dataPoints.value[dataPoints.value.length - 1]
@@ -187,6 +239,10 @@ describe('useNetWorthHistory — granularity auto-selection', () => {
     mockTx.mockResolvedValue([])
     mockTr.mockResolvedValue([])
     mockAcc.mockResolvedValue([])
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
   })
 
   it('selects day granularity for 7-day range (1S)', () => {
@@ -217,5 +273,70 @@ describe('useNetWorthHistory — granularity auto-selection', () => {
   it('selects year granularity for 1200-day range', () => {
     const { granularity } = useNetWorthHistory({ rangeDays: 1200 })
     expect(granularity.value).toBe('year')
+  })
+})
+
+describe('useNetWorthHistory — Guard 2 sync blocking', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    mockGetRate.mockReturnValue(1)
+    mockTx.mockResolvedValue([])
+    mockTr.mockResolvedValue([])
+    mockAcc.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    // Reset sync state to safe defaults after fake-timer tests
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
+  })
+
+  it('Guard 2 active: loading stays true while isSyncing=true, initialSyncComplete=false, and Dexie empty', async () => {
+    vi.useFakeTimers()
+
+    mockSyncStore.state.isSyncing = true
+    mockSyncStore.state.initialSyncComplete = false
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
+
+    const { loading } = useNetWorthHistory({ rangeDays: 30 })
+
+    // Advance past debounce delay (300ms) but well under the 15s timeout
+    await vi.advanceTimersByTimeAsync(400)
+    await nextTick()
+
+    // Guard 2 should have fired: loading stays true, computation blocked
+    expect(loading.value).toBe(true)
+  })
+
+  it('Guard 2 timeout: after 15 seconds syncTimedOut unblocks the chart and shows empty state', async () => {
+    vi.useFakeTimers()
+
+    mockSyncStore.state.isSyncing = true
+    mockSyncStore.state.initialSyncComplete = false
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
+
+    const { loading, isEmpty } = useNetWorthHistory({ rangeDays: 30 })
+
+    // Still blocked before timeout
+    await vi.advanceTimersByTimeAsync(400)
+    await nextTick()
+    expect(loading.value).toBe(true)
+
+    // Advance past the 15s timeout — syncTimedOut flips, watchEffect re-runs,
+    // debounce fires, computation runs with empty Dexie → loading=false, isEmpty=true
+    await vi.advanceTimersByTimeAsync(15_001)
+    await nextTick()
+    // Allow debounce (300ms) + async resolution
+    await vi.advanceTimersByTimeAsync(400)
+    await nextTick()
+
+    expect(loading.value).toBe(false)
+    expect(isEmpty.value).toBe(true)
   })
 })

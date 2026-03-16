@@ -26,9 +26,20 @@
  * moment the event was recorded. Stored on the event at write time.
  * When null (created offline with no rate cache), falls back to
  * exchangeRatesStore.getRate(currency, primaryCurrency) at chart-render time.
+ *
+ * Debounce strategy:
+ * The watchEffect wrapper reads all reactive deps synchronously (so Vue tracks
+ * them) and then delegates the heavy IndexedDB work to a debounced function
+ * (300ms). This prevents excessive re-computations when multiple reactive deps
+ * change in rapid succession (e.g. initial store hydration).
+ *
+ * Guard 2 timeout:
+ * syncTimedOut flips after 15s — allowing the chart to unblock even if the
+ * backend sync never completes or completes without transitioning isSyncing→false.
  */
 
-import { ref, computed, watchEffect, type Ref } from 'vue'
+import { ref, computed, watchEffect, onScopeDispose, type Ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import {
   format,
   parseISO,
@@ -147,6 +158,11 @@ function generateBoundaries(
 // Composable
 // ---------------------------------------------------------------------------
 
+// How long to wait before unblocking Guard 2 regardless of sync state.
+// This prevents the skeleton from being shown indefinitely if the backend
+// never responds or never transitions isSyncing to false.
+const SYNC_SKELETON_TIMEOUT_MS = 15_000
+
 export function useNetWorthHistory(
   options: UseNetWorthHistoryOptions = {}
 ): UseNetWorthHistoryReturn {
@@ -183,49 +199,25 @@ export function useNetWorthHistory(
   const _hasEvents = ref(false)
   const isEmpty = computed(() => !_hasEvents.value)
 
-  // watchEffect re-runs whenever any reactive dependency changes:
-  // - _rangeDays (if passed as a Ref)
-  // - granularity (derived from _rangeDays or override)
-  // - settingsStore.primaryCurrency
-  // - exchangeRatesStore.rates / loading (see guard below)
-  watchEffect(async () => {
-    // Read reactive dependencies explicitly so Vue tracks them
-    const rangeDays = _rangeDays.value
-    const gran = granularity.value
-    const primaryCurrency = settingsStore.primaryCurrency
+  // Guard 2 safety valve: flip after 15s so the chart can unblock even if the
+  // sync never completes. Set once on composable creation (outside watchEffect)
+  // so the timer is not reset on every reactive re-run.
+  const syncTimedOut = ref(false)
+  const syncTimeoutId = setTimeout(() => { syncTimedOut.value = true }, SYNC_SKELETON_TIMEOUT_MS)
+  onScopeDispose(() => clearTimeout(syncTimeoutId))
 
-    // Read ALL reactive dependencies BEFORE any early return so Vue tracks
-    // them even on the early-return path and re-runs when they change.
-    const isRatesLoading = exchangeRatesStore.loading
-    const ratesCount = exchangeRatesStore.rates.length
-    // Subscribe to sync state: re-run when isSyncing transitions true→false
-    // so the chart recomputes with fresh IndexedDB data after fullReadSync.
-    // This fixes the hard-refresh bug where the chart shows stale -3M values
-    // and never self-corrects (the transactions.length stays constant at 5
-    // even after sync because the same 5 records are overwritten in place).
-    const isSyncing = syncStore.isSyncing
-    const initialSyncComplete = syncStore.initialSyncComplete
-    // Read unconditionally so Vue tracks these deps in all watchEffect executions
-    const txCount = transactionsStore.transactions.length
-    const tfCount = transfersStore.transfers.length
-
-    // Guard 1: wait for exchange rates (would produce rate=1 for USD otherwise)
-    if (isRatesLoading || ratesCount === 0) {
-      loading.value = true
-      return
-    }
-
-    // Guard 2: show skeleton only on first sync when Dexie has no data.
-    // txCount/tfCount are read unconditionally above so Vue tracks them
-    // even when this branch is skipped on runs where isSyncing=false.
-    // If Dexie has data from previous sessions → render immediately.
-    if (!initialSyncComplete && isSyncing && txCount === 0 && tfCount === 0) {
-      loading.value = true
-      return
-    }
-
-    loading.value = true
-
+  // ---------------------------------------------------------------------------
+  // Debounced computation
+  // ---------------------------------------------------------------------------
+  // runComputation receives all reactive values as plain parameters.
+  // It must NOT read reactive refs directly — it is called from a debounced
+  // context where Vue's dependency tracking is no longer active.
+  // All reactive tracking happens in the synchronous watchEffect wrapper below.
+  const runComputation = useDebounceFn(async (
+    rangeDays: number,
+    gran: Granularity,
+    primaryCurrency: string,
+  ) => {
     try {
       const [txs, transfers, accounts] = await Promise.all([
         db.transactions.toArray(),
@@ -233,6 +225,10 @@ export function useNetWorthHistory(
         db.accounts.toArray(),
       ])
 
+      // options.endDate is a plain string | undefined (non-reactive), so reading it
+      // directly as a closure is safe here. If this is ever upgraded to a Ref<string>,
+      // it must be passed as a parameter to maintain the "no reactive reads inside
+      // runComputation" contract.
       const endDateStr = options.endDate ?? format(new Date(), 'yyyy-MM-dd')
       const endDate = parseISO(endDateStr)
       const startDate = subDays(endDate, rangeDays - 1)
@@ -372,6 +368,55 @@ export function useNetWorthHistory(
     } finally {
       loading.value = false
     }
+  }, 300)
+
+  // ---------------------------------------------------------------------------
+  // Synchronous watchEffect wrapper
+  // ---------------------------------------------------------------------------
+  // Reads ALL reactive dependencies here so Vue tracks them. Passes the current
+  // values as plain parameters to runComputation so the debounced function never
+  // needs to access reactive state directly (which would be outside the tracking
+  // context once the debounce delay fires).
+  watchEffect(() => {
+    // Read ALL reactive deps:
+    const rangeDays = _rangeDays.value
+    const gran = granularity.value
+    const primaryCurrency = settingsStore.primaryCurrency
+
+    // Read unconditionally so Vue tracks these deps even when Guard 1 would have
+    // blocked. Guard 1 has been removed — rates are seeded via BASE_RATES on
+    // cold start. These reads keep Vue tracking for background sync updates.
+    // void suppresses TS6133 "declared but never read".
+    void exchangeRatesStore.loading
+    void exchangeRatesStore.rates.length
+
+    // Subscribe to sync state: re-run when isSyncing or initialSyncComplete
+    // transitions so the chart recomputes with fresh IndexedDB data after sync.
+    const isSyncing = syncStore.isSyncing
+    const initialSyncComplete = syncStore.initialSyncComplete
+
+    // Read unconditionally so Vue tracks these deps in all watchEffect executions.
+    const txCount = transactionsStore.transactions.length
+    const tfCount = transfersStore.transfers.length
+
+    // Read syncTimedOut inside watchEffect so Vue tracks it as a dependency.
+    // When the setTimeout fires and flips syncTimedOut.value, watchEffect re-runs
+    // and Guard 2 is bypassed, unblocking the skeleton after 15s.
+    const timedOut = syncTimedOut.value
+
+    // Guard 2: show skeleton only on first sync when Dexie has no data.
+    // Condition: not yet completed initial sync, sync in progress, no cached
+    // data from previous sessions, and timeout has not fired yet.
+    // If timedOut=true → fall through and render empty state.
+    if (!initialSyncComplete && isSyncing && txCount === 0 && tfCount === 0 && !timedOut) {
+      loading.value = true
+      return
+    }
+
+    // Signal loading before debounced computation so the skeleton shows
+    // immediately on dep change rather than only after the 300ms debounce fires.
+    loading.value = true
+    void runComputation(rangeDays, gran, primaryCurrency)
   })
 
   return {
