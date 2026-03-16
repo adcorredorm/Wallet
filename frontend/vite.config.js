@@ -118,6 +118,12 @@ export default defineConfig({
         target: process.env.BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,
         secure: false
+      },
+      // Health check endpoint — proxied to backend for connectivity verification.
+      '/health': {
+        target: process.env.BACKEND_URL || 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false
       }
     }
   }
