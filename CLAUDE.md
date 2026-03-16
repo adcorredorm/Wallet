@@ -33,6 +33,14 @@ cd frontend && npm run type-check
 cd frontend && npm run lint
 ```
 
+## Dev-Only Utilities
+
+> These commands are for local development only. Never run against production.
+
+| Command | Purpose |
+|---------|---------|
+| `./dev-commands.sh seed-test-data <email>` | Inject 15 months of fake multi-currency test data into a user account. Deletes and recreates all `offline_id LIKE 'test-%'` records on every run. Script: `backend/dev_seed_test_data.py`. After running, do a force full sync in the app (Settings → Forzar sincronización completa). |
+
 ## The Team (Agents)
 
 | Agent | Scope |

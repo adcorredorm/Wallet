@@ -209,6 +209,21 @@ health_check() {
     fi
 }
 
+# DEV ONLY — injects fake financial data into a target user account for testing.
+# Deletes and recreates all records with offline_id prefixed 'test-' on every run.
+seed_test_data() {
+    local email="$1"
+    if [ -z "$email" ]; then
+        error "Please provide the target user email"
+        echo "Usage: ./dev-commands.sh seed-test-data <email>"
+        exit 1
+    fi
+    warning "DEV ONLY: This will overwrite all test data for $email"
+    cd "$PROJECT_DIR"
+    docker-compose $BASE_COMPOSE $DEV_COMPOSE exec backend python dev_seed_test_data.py --email "$email"
+    success "Test data seeded for $email"
+}
+
 clean() {
     warning "This will remove all containers and volumes. Continue? (y/N)"
     read -r response
@@ -258,6 +273,9 @@ ${GREEN}System${NC}
   clean              Remove all containers and volumes (WARNING)
   help               Show this help message
 
+${YELLOW}Dev/Test Only${NC}
+  seed-test-data <email>   Inject fake test data for a user (DEV ONLY — overwrites existing test data)
+
 ${GREEN}Examples${NC}
   ./dev-commands.sh start              # Start with logs
   ./dev-commands.sh start-bg           # Start in background
@@ -265,6 +283,7 @@ ${GREEN}Examples${NC}
   ./dev-commands.sh rebuild backend    # Rebuild backend image
   ./dev-commands.sh db-migrate "Add user table"
   ./dev-commands.sh backend python --version
+  ./dev-commands.sh seed-test-data user@example.com
 
 EOF
 }
@@ -318,6 +337,9 @@ case "${1:-help}" in
         ;;
     health)
         health_check
+        ;;
+    seed-test-data)
+        seed_test_data "$2"
         ;;
     clean)
         clean
