@@ -4,6 +4,9 @@
  */
 
 import apiClient from './index'
+
+// Note: getSummary and getAccountBalances were removed (balance is computed locally).
+// getNetWorth and getMonthlySummary are kept for future analytics widget use.
 export const dashboardApi = {
   /**
    * Get net worth (total patrimonio neto across all accounts)

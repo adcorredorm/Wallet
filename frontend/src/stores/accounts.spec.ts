@@ -55,7 +55,7 @@ import { AccountType } from '@/types/account'
  *                           recomputeBalancesFromTransactions
  * - db.transactions.toArray — used by recomputeBalancesFromTransactions
  * - db.transfers.toArray  — used by recomputeBalancesFromTransactions
- * - fetchAllWithRevalidation — used by fetchAccounts
+ * - fetchAllWithRevalidation — kept in mock for barrel shape completeness; no longer used by fetchAccounts
  * - fetchByIdWithRevalidation — used by fetchAccountById
  * - mutationQueue.enqueue / findPendingCreate — used by write actions
  * - generateTempId        — used by createAccount
