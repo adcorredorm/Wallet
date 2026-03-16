@@ -196,8 +196,13 @@ export function useNetWorthHistory(
 
     // Read ALL reactive dependencies BEFORE any early return so Vue tracks
     // them even on the early-return path and re-runs when they change.
-    const isRatesLoading = exchangeRatesStore.loading
-    const ratesCount = exchangeRatesStore.rates.length
+    // NOTE: Guard 1 removed — BASE_RATES seeding in exchangeRates.ts ensures
+    // rates are never empty on cold start. exchangeRatesStore.loading and
+    // exchangeRatesStore.rates.length are still read here so Vue tracks them
+    // as reactive dependencies and re-runs watchEffect when they change
+    // (e.g. after background sync updates rates). void suppresses TS6133.
+    void exchangeRatesStore.loading
+    void exchangeRatesStore.rates.length
     // Subscribe to sync state: re-run when isSyncing transitions true→false
     // so the chart recomputes with fresh IndexedDB data after fullReadSync.
     // This fixes the hard-refresh bug where the chart shows stale -3M values
@@ -208,12 +213,6 @@ export function useNetWorthHistory(
     // Read unconditionally so Vue tracks these deps in all watchEffect executions
     const txCount = transactionsStore.transactions.length
     const tfCount = transfersStore.transfers.length
-
-    // Guard 1: wait for exchange rates (would produce rate=1 for USD otherwise)
-    if (isRatesLoading || ratesCount === 0) {
-      loading.value = true
-      return
-    }
 
     // Guard 2: show skeleton only on first sync when Dexie has no data.
     // txCount/tfCount are read unconditionally above so Vue tracks them
