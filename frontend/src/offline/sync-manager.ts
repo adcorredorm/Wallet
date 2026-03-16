@@ -105,6 +105,7 @@ import type {
 // ---------------------------------------------------------------------------
 import { useSyncStore } from '@/stores/sync'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * Lazily resolve the sync store.
@@ -120,6 +121,26 @@ function getSyncStore() {
  */
 function getUiStore() {
   return useUiStore()
+}
+
+/**
+ * Lazily resolve the auth store.
+ *
+ * Same rationale as getSyncStore(): the SyncManager is a module-level
+ * singleton instantiated before Pinia is ready. Deferring the call to
+ * the first processQueue() invocation avoids the "no active Pinia" error.
+ *
+ * Why import authStore here at all if the architecture says "free of Pinia
+ * store imports"?
+ * The authStore is used exclusively as a read-only probe (isAuthenticated)
+ * and as a trigger (refresh()) — the SyncManager never mutates auth state
+ * directly. This is identical to how syncStore is used: as a one-way sink
+ * for status signals. The sync engine itself is not driven by auth reactive
+ * state; it reads isAuthenticated once at the start of processQueue() and
+ * then acts on the result imperatively.
+ */
+function getAuthStore() {
+  return useAuthStore()
 }
 
 // ---------------------------------------------------------------------------
@@ -248,12 +269,43 @@ export class SyncManager {
       return
     }
 
+    // ── Task 12: Guest-mode and auth check ────────────────────────────────
+    // Resolve stores lazily (after Pinia is initialised — see module comment).
+    // We check BEFORE setting processing=true so reset() can unblock after
+    // a guest-mode run without needing to clear a flag.
+    //
+    // Why check isGuest first?
+    // isGuest is already true when the user explicitly chose guest mode or
+    // when a previous auth failure put us in guest mode. We respect that flag
+    // without re-checking isAuthenticated to avoid a redundant store lookup.
+    //
+    // Why set isGuest when !isAuthenticated?
+    // processQueue() is called from main.ts on connectivity restore. If the
+    // app just booted and initializeFromStorage() found no refresh_token,
+    // isAuthenticated is false. We signal guest mode here so GuestBanner
+    // becomes visible immediately.
+    //
+    // INVARIANT: IndexedDB is NEVER touched during auth failures — we exit
+    // before any read/write to db or mutationQueue.
+    const syncStore = getSyncStore()
+    const authStore = getAuthStore()
+
+    if (syncStore.isGuest) {
+      console.log('[SyncManager] Guest mode active — skipping sync.')
+      return
+    }
+
+    if (!authStore.isAuthenticated) {
+      console.log('[SyncManager] Not authenticated — entering guest mode, skipping sync.')
+      syncStore.setGuest(true)
+      return
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     this.processing = true
     console.log('[SyncManager] Starting queue processing.')
 
     // ── Phase 5: update sync store ─────────────────────────────────────────
-    // Resolve stores lazily (after Pinia is initialised — see module comment).
-    const syncStore = getSyncStore()
     const uiStore = getUiStore()
 
     // Tell the UI that syncing is active and report the current queue depth.
@@ -347,12 +399,57 @@ export class SyncManager {
       // The check is aimed at the fresh-install / cleared-DB scenario, where
       // the queue is also empty, so mutation processing is a no-op and the
       // post-check is equivalent to a pre-check.
-      const dexieIsEmpty = await this.isDexieEmpty()
-      if (dexieIsEmpty) {
-        console.log('[SyncManager] Dexie is empty — running full sync.')
-        await this.fullReadSync()
-      } else {
-        await this.incrementalSync()
+      //
+      // ── Task 11: 401 interceptor on read-sync ─────────────────────────
+      // We wrap the read-sync in a try/catch that specifically handles 401.
+      // If the token expired mid-session, we attempt a silent refresh and
+      // retry once. If refresh fails, we enter guest mode and abort.
+      //
+      // Why only handle 401 here and not inside fullReadSync/incrementalSync?
+      // The read-sync is a single logical unit: if the first request in a
+      // fullReadSync fails with 401, all subsequent ones will too. Catching
+      // 401 at this level lets us refresh once and retry the entire read-sync
+      // rather than implementing refresh logic in every per-entity call.
+      //
+      // Why only retry once?
+      // If the refresh was successful and we still get 401 on retry, something
+      // is wrong with the server (revoked session, backend bug). Retrying more
+      // than once would be an infinite loop in the worst case. A single retry
+      // covers the normal "token expired mid-sync" case.
+      //
+      // INVARIANT: IndexedDB is NEVER touched if we end up in guest mode —
+      // we exit the try block without calling any write operation on db.
+      // ─────────────────────────────────────────────────────────────────────
+      const runReadSync = async () => {
+        const dexieIsEmpty = await this.isDexieEmpty()
+        if (dexieIsEmpty) {
+          console.log('[SyncManager] Dexie is empty — running full sync.')
+          await this.fullReadSync()
+        } else {
+          await this.incrementalSync()
+        }
+      }
+
+      try {
+        await runReadSync()
+      } catch (readError: unknown) {
+        if (isApiError(readError) && readError.status === 401) {
+          console.warn('[SyncManager] 401 during read-sync — attempting silent token refresh.')
+          const refreshed = await authStore.refresh()
+          if (refreshed) {
+            console.log('[SyncManager] Token refreshed — retrying read-sync.')
+            await runReadSync()
+          } else {
+            console.warn('[SyncManager] Token refresh failed — entering guest mode.')
+            syncStore.setGuest(true)
+            // Exit processQueue without touching IndexedDB — the finally block
+            // will still run to reset the processing flag and sync status.
+            return
+          }
+        } else {
+          // Re-throw non-401 errors so the outer try/finally handles them.
+          throw readError
+        }
       }
 
       // Notify the app that IndexedDB is now fully up to date so the reactive
@@ -394,6 +491,42 @@ export class SyncManager {
         window.dispatchEvent(new CustomEvent('wallet:mutation-queued'))
       }
     }
+  }
+
+  /**
+   * reset() — clear all internal SyncManager state.
+   *
+   * Called by usePostLoginFlow when the user changes: the previous user's
+   * sync cursors and "initial sync complete" flag must be wiped so the new
+   * user's first processQueue() run performs a fresh full-read-sync.
+   *
+   * What does reset() clear?
+   * - processing flag: ensures the next processQueue() call is not treated
+   *   as a concurrent duplicate (e.g. if reset() is called mid-flight, which
+   *   should not happen but is safe to handle).
+   * - syncStore.initialSyncComplete: set to false so the next login triggers
+   *   a full-read-sync rather than an incremental one.
+   * - syncStore.isSyncing: set to false so the header spinner is not stuck.
+   *
+   * Why NOT clear sync cursors here?
+   * Sync cursors (__sync__cursor_*) live in IndexedDB. When we reset for a
+   * user switch, the caller (usePostLoginFlow) already calls db.delete() +
+   * db.open() which wipes the entire WalletDB including those cursor rows.
+   * Calling clearSyncCursors() here would be redundant and would require
+   * the DB to be open, creating a sequencing dependency. We keep reset()
+   * synchronous and store-only.
+   *
+   * Why expose reset() as a public method?
+   * The SyncManager is a singleton. The post-login flow (usePostLoginFlow)
+   * needs to signal "start fresh" without knowing the internals of the
+   * class. A public reset() method is the clean API boundary for that.
+   */
+  reset(): void {
+    this.processing = false
+    const syncStore = getSyncStore()
+    syncStore.setInitialSyncComplete(false)
+    syncStore.setSyncing(false)
+    console.log('[SyncManager] reset() called — internal state cleared.')
   }
 
   /**
@@ -1111,6 +1244,18 @@ export class SyncManager {
   ): Promise<void> {
     const httpStatus = isApiError(error) ? error.status : null
 
+    // ── 401 special case ───────────────────────────────────────────────────
+    // A 401 during mutation flush means the access token expired mid-queue.
+    // It does NOT mean the mutation itself is invalid — the same payload will
+    // succeed after a token refresh. Re-throwing here lets processQueue's
+    // existing 401 handler (which calls authStore.refresh()) intercept it.
+    // If we fall through to the permanent-error branch below, we'd incorrectly
+    // mark valid user data as permanently failed, which is unrecoverable from
+    // the user's perspective without a manual force-sync.
+    if (httpStatus === 401) {
+      throw error
+    }
+
     if (httpStatus !== null && httpStatus >= 400 && httpStatus < 500) {
       // ── Permanent error path ──────────────────────────────────────────────
       const errorMessage = `HTTP ${httpStatus}`
@@ -1455,14 +1600,28 @@ export class SyncManager {
       this.syncDashboards(),
     ])
 
+    const names = ['accounts', 'transactions', 'transfers', 'categories', 'exchange_rates', 'dashboards']
     results.forEach((result, index) => {
-      const names = ['accounts', 'transactions', 'transfers', 'categories', 'exchange_rates', 'dashboards']
       if (result.status === 'rejected') {
         console.warn(`[SyncManager] full-read-sync failed for ${names[index]}:`, result.reason)
       } else {
         console.log(`[SyncManager] full-read-sync completed for ${names[index]}.`)
       }
     })
+
+    // ── Task 11: propagate 401 out of allSettled ──────────────────────────
+    // allSettled never throws — we must inspect the results manually and
+    // re-throw a 401 so the caller (processQueue) can intercept and refresh.
+    // Why re-throw the FIRST 401? Once one entity returns 401, all others
+    // will too — the access token is invalid for the entire session.
+    // Throwing here unwinds fullReadSync and the catch block in processQueue
+    // will call authStore.refresh() → retry the whole read-sync.
+    const firstUnauthorized = results.find(
+      (r) => r.status === 'rejected' && isApiError(r.reason) && r.reason.status === 401
+    )
+    if (firstUnauthorized && firstUnauthorized.status === 'rejected') {
+      throw firstUnauthorized.reason
+    }
   }
 
   private async incrementalSync(): Promise<void> {
@@ -1536,6 +1695,14 @@ export class SyncManager {
         console.warn(`[SyncManager] incremental sync failed for ${entityNames[index]}:`, result.reason)
       }
     })
+
+    // ── Task 11: propagate 401 out of allSettled (same as fullReadSync) ──
+    const firstUnauthorized = results.find(
+      (r) => r.status === 'rejected' && isApiError(r.reason) && r.reason.status === 401
+    )
+    if (firstUnauthorized && firstUnauthorized.status === 'rejected') {
+      throw firstUnauthorized.reason
+    }
   }
 
   private async incrementalSyncExchangeRates(): Promise<void> {

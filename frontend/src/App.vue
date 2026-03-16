@@ -19,6 +19,7 @@ import { useRoute } from 'vue-router'
 import { useAccountsStore, useCategoriesStore } from '@/stores'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseToast from '@/components/ui/BaseToast.vue'
+import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
 
 const route = useRoute()
 const accountsStore = useAccountsStore()
@@ -55,5 +56,8 @@ onMounted(async () => {
 
     <!-- Global toast notifications -->
     <BaseToast />
+
+    <!-- Global async confirmation dialog (resolves uiStore.showConfirm() Promises) -->
+    <AppConfirmDialog />
   </div>
 </template>
