@@ -15,7 +15,6 @@ from app.schemas.account import (
     AccountCreate,
     AccountUpdate,
     AccountResponse,
-    AccountWithBalance,
 )
 from app.services import AccountService
 from app.utils.auth import require_auth
@@ -63,6 +62,9 @@ def list_accounts():
     returned with no body.  A fresh ``X-Sync-Cursor`` header is always included
     in the response so the client can advance its cursor.
 
+    Balance is intentionally omitted from all responses — it is computed
+    locally by the frontend from Dexie transaction data.
+
     Request Headers:
         Authorization (str): Bearer JWT token.
         If-Sync-Cursor (str, optional): Opaque cursor from a previous response.
@@ -73,7 +75,7 @@ def list_accounts():
             so that deletions propagate to the client).
 
     Returns:
-        200: List of accounts with balances (full sync or incremental with changes)
+        200: List of accounts (full sync or incremental with changes)
         304: No changes since cursor (incremental mode only)
         401: Authentication required
         500: Internal server error
@@ -84,19 +86,16 @@ def list_accounts():
         new_cursor = encode_cursor()
 
         if updated_since is not None:
-            accounts_with_balances = account_service.get_all_with_balances_since(
-                user_id=user_id, updated_since=updated_since
+            accounts = account_service.get_all(
+                user_id=user_id, include_archived=True, updated_since=updated_since
             )
-            if not accounts_with_balances:
+            if not accounts:
                 resp = make_response("", 304)
                 resp.headers["X-Sync-Cursor"] = new_cursor
                 return resp
             data = [
-                {
-                    **AccountResponse.model_validate(account).model_dump(mode="json"),
-                    "balance": str(balance),
-                }
-                for account, balance in accounts_with_balances
+                AccountResponse.model_validate(account).model_dump(mode="json")
+                for account in accounts
             ]
             resp = make_response(jsonify({"success": True, "data": data}), 200)
             resp.headers["X-Sync-Cursor"] = new_cursor
@@ -104,16 +103,13 @@ def list_accounts():
 
         include_archived = request.args.get("include_archived", "false").lower() == "true"
 
-        accounts_with_balances = account_service.get_all_with_balances(
+        accounts = account_service.get_all(
             user_id=user_id, include_archived=include_archived
         )
 
         data = [
-            {
-                **AccountResponse.model_validate(account).model_dump(mode="json"),
-                "balance": str(balance),
-            }
-            for account, balance in accounts_with_balances
+            AccountResponse.model_validate(account).model_dump(mode="json")
+            for account in accounts
         ]
 
         body, status = success_response(data=data)
@@ -134,25 +130,20 @@ def get_account(account_id: UUID):
     Returns 404 if the account does not exist OR belongs to a different user
     (ownership is enforced silently — the record simply isn't found).
 
+    Balance is intentionally omitted — it is computed locally by the frontend.
+
     Path Parameters:
         account_id (UUID): Account ID
 
     Returns:
-        200: Account details with balance
+        200: Account details
         401: Authentication required
         404: Account not found
         500: Internal server error
     """
     try:
-        account, balance = account_service.get_with_balance(
-            account_id, user_id=g.current_user_id
-        )
-
-        data = {
-            **AccountResponse.model_validate(account).model_dump(mode="json"),
-            "balance": str(balance),
-        }
-
+        account = account_service.get_by_id(account_id, user_id=g.current_user_id)
+        data = AccountResponse.model_validate(account).model_dump(mode="json")
         return success_response(data=data)
 
     except NotFoundError as e:
@@ -336,32 +327,3 @@ def hard_delete_account(account_id: UUID):
         return error_response(f"Error al eliminar cuenta: {str(e)}", status_code=500)
 
 
-@accounts_bp.route("/<uuid:account_id>/balance", methods=["GET"])
-@require_auth
-def get_account_balance(account_id: UUID):
-    """
-    Get calculated balance for an account of the authenticated user.
-
-    Path Parameters:
-        account_id (UUID): Account ID
-
-    Returns:
-        200: Account balance
-        401: Authentication required
-        404: Account not found
-        500: Internal server error
-    """
-    try:
-        balance = account_service.get_balance(account_id, user_id=g.current_user_id)
-
-        return success_response(
-            data={
-                "account_id": str(account_id),
-                "balance": str(balance),
-            }
-        )
-
-    except NotFoundError as e:
-        return error_response(e.message, status_code=404)
-    except Exception as e:
-        return error_response(f"Error al calcular balance: {str(e)}", status_code=500)
