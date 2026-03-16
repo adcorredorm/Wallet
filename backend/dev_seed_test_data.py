@@ -453,6 +453,70 @@ def _seed_income_transactions(user_id, accs, cats, months, db) -> None:
     print(f"  Created {total_tx} income transactions")
 
 
+def _seed_efectivo_spending(user_id, accs, cats, months, db) -> list:
+    """
+    Seed Efectivo COP spending with sawtooth balance pattern.
+    Guarantees 5-8 transactions per week using random.sample.
+    Returns list of (date, 200_000) replenishment transfers needed.
+    """
+    print("Seeding Efectivo COP spending...")
+
+    from datetime import timedelta
+
+    acc = accs["efectivo-cop"]
+    COMIDA_SUBS = ["comida-mercado", "comida-antojos"]
+
+    refills = []
+    balance = 0.0
+    seq_global = 0
+
+    if not months:
+        return refills
+
+    start_date = date(months[0][0], months[0][1], 1)
+    end_date = date.today()
+
+    # Initial refill on day 1
+    refills.append((start_date, 200_000))
+    balance = 200_000.0
+
+    current = start_date
+    while current <= end_date:
+        # Collect available days in this week
+        week_days = []
+        for day_offset in range(7):
+            d = current + timedelta(days=day_offset)
+            if d <= end_date:
+                week_days.append(d)
+        if not week_days:
+            current += timedelta(days=7)
+            continue
+
+        # Guarantee 5-8 transactions this week
+        week_txs = random.randint(5, 8)
+        chosen_days = sorted(random.sample(week_days, min(week_txs, len(week_days))))
+
+        for tx_date in chosen_days:
+            amount = random.randint(5_000, 35_000)
+            # Refill if balance would drop below 20,000
+            if balance - amount < 20_000:
+                refills.append((tx_date, 200_000))
+                balance += 200_000.0
+
+            cat_slug = random.choice(COMIDA_SUBS) if random.random() < 0.6 else "transporte"
+            seq_global += 1
+            offline_id = f"test-tx-efectivo-cop-{tx_date.year:04d}-{tx_date.month:02d}-{seq_global:03d}"
+            db.session.add(_make_tx(
+                user_id, acc, cats[cat_slug], "expense", amount, tx_date, offline_id
+            ))
+            balance -= amount
+
+        current += timedelta(days=7)
+
+    print(f"  Created {seq_global} Efectivo COP spending transactions, {len(refills)} refills needed")
+    return refills
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
