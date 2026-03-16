@@ -69,6 +69,29 @@ def rand_day(year: int, month: int, day_min: int = 1, day_max: int = None) -> da
     return date(year, month, random.randint(day_min, day_max))
 
 
+def _clean_test_data(user_id, db) -> None:
+    from app.models.dashboard_widget import DashboardWidget
+    from app.models.dashboard import Dashboard
+    from app.models.transaction import Transaction
+    from app.models.transfer import Transfer
+    from app.models.account import Account
+    from app.models.category import Category
+
+    print("Cleaning previous test data...")
+
+    for Model in [DashboardWidget, Dashboard, Transaction, Transfer, Account, Category]:
+        deleted = db.session.execute(
+            db.delete(Model).where(
+                Model.user_id == user_id,
+                Model.offline_id.like("test-%"),
+            )
+        ).rowcount
+        print(f"  Deleted {deleted} {Model.__tablename__}")
+
+    db.session.commit()
+    print("Clean done.")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
