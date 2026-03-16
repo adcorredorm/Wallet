@@ -9,7 +9,6 @@ from app.schemas.account import (
     AccountCreate,
     AccountUpdate,
     AccountResponse,
-    AccountWithBalance,
 )
 from app.schemas.category import (
     CategoryCreate,
@@ -54,7 +53,6 @@ __all__ = [
     "AccountCreate",
     "AccountUpdate",
     "AccountResponse",
-    "AccountWithBalance",
     # Category schemas
     "CategoryCreate",
     "CategoryUpdate",
