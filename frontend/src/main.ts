@@ -44,10 +44,12 @@ app.use(router)
  * caso lo hace en modo invitado.
  */
 const authStore = useAuthStore()
-await authStore.initializeFromStorage()
 
-// Mount application
-app.mount('#app')
+// Silent session restore before mount — using .then() instead of top-level
+// await for compatibility with the es2020 build target.
+authStore.initializeFromStorage().then(() => {
+  app.mount('#app')
+})
 
 /**
  * Service Worker Registration (Phase 1 — offline app shell)
