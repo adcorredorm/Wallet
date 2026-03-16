@@ -22,16 +22,18 @@
  */
 
 import axios from 'axios'
-import { API_BASE_URL } from './index'
 import apiClient from './index'
 
 // Base URL para los endpoints públicos de auth.
-// Elimina '/api/v1' del final para obtener el host/path base.
+// Derivada directamente de import.meta.env para evitar el import circular:
+//   api/index.ts → stores/auth → api/auth → api/index (TDZ en API_BASE_URL)
+// Eliminamos '/api/v1' del final para obtener el host/path base.
 // Casos:
 //   'http://localhost:5001/api/v1' → 'http://localhost:5001'  (dev)
 //   '/api/v1'                      → ''                       (prod con nginx)
 const AUTH_BASE_URL = (import.meta.env.VITE_AUTH_BASE_URL as string | undefined)
-  ?? (API_BASE_URL ?? 'http://localhost:5000').replace(/\/api\/v1\/?$/, '')
+  ?? (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1')
+    .replace(/\/api\/v1\/?$/, '')
 
 // Cliente público sin interceptores — para endpoints /auth/* que no
 // requieren Authorization header.
