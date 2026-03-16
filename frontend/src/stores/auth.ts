@@ -156,8 +156,10 @@ export const useAuthStore = defineStore('auth', () => {
     // Persistir refresh_token en AuthDB
     await setRefreshToken(response.refresh_token)
 
-    // Persistir last_user_id para detectar cambios de usuario en el futuro
-    await setLastUserId(response.user.id)
+    // NOTA: last_user_id se actualiza en handlePostLogin (usePostLoginFlow),
+    // DESPUÉS de detectar si hay cambio de usuario. No lo actualizamos aquí
+    // porque si lo hacemos antes, handlePostLogin leerá el nuevo ID y nunca
+    // detectará que el usuario cambió.
 
     return response
   }
