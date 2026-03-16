@@ -28,6 +28,10 @@ def create_app(config_name: str = "development") -> Flask:
     config = get_config(config_name)
     app.config.from_object(config)
 
+    # Validate required env vars for production (raises ValueError if missing)
+    if hasattr(config, 'validate'):
+        config.validate()
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)

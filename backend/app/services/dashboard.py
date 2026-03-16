@@ -41,7 +41,7 @@ class DashboardService:
         balances_by_currency: dict[str, Decimal] = defaultdict(Decimal)
 
         for account in active_accounts:
-            balance = self.account_repository.calculate_balance(account.id)
+            balance = self.account_repository.calculate_balance(account.id, user_id)
             balances_by_currency[account.currency] += balance
 
         balances = [

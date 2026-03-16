@@ -67,7 +67,11 @@ export function usePostLoginFlow() {
       })
 
       if (syncGuest) {
-        // Sincronizar datos guest — son suyos
+        // Sincronizar datos guest — son suyos.
+        // Desviación intencional del ADD: el ADD dice que para is_new_user=true
+        // siempre debe mostrarse el prompt de seed después del sync. Aquí lo
+        // omitimos porque el usuario ya tiene datos propios — mostrar el seed
+        // sería confuso y potencialmente duplicaría categorías/cuentas.
         syncManager.processQueue()
         return
       }
@@ -98,6 +102,7 @@ export function usePostLoginFlow() {
     // Clear all local data — belongs to previous user
     await db.delete()
     await db.open()
+    syncManager.reset()
     await setLastUserId(newUserId)
     // Force full page reload to clear all in-memory Pinia store state.
     // Without this, stores still hold the previous user's data even after

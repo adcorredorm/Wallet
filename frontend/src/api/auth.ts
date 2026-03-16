@@ -115,6 +115,8 @@ export async function postAuthLogout(refreshToken: string): Promise<void> {
  * Solo puede llamarse una vez — 409 si el usuario ya tiene datos.
  */
 export async function postOnboardingSeed(): Promise<OnboardingSeedResponse> {
-  const response = await apiClient.post<OnboardingSeedResponse>('/onboarding/seed')
-  return response.data
+  // apiClient interceptor unwraps { success, data } automatically — response.data
+  // already holds the inner OnboardingSeedResponse after unwrapping.
+  const response = await apiClient.post<{ success: boolean; data: OnboardingSeedResponse }>('/onboarding/seed')
+  return response.data as unknown as OnboardingSeedResponse
 }

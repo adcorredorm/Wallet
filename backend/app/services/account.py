@@ -76,7 +76,7 @@ class AccountService:
             NotFoundError: If account not found or not owned by this user.
         """
         account = self.repository.get_by_id_or_fail(account_id, user_id)
-        balance = self.repository.calculate_balance(account_id)
+        balance = self.repository.calculate_balance(account_id, user_id)
         return account, balance
 
     def get_all_with_balances(
@@ -97,7 +97,7 @@ class AccountService:
         # Acceptable for personal use with few accounts. Optimize with a single aggregated
         # query if performance becomes an issue.
         return [
-            (account, self.repository.calculate_balance(account.id))
+            (account, self.repository.calculate_balance(account.id, user_id))
             for account in accounts
         ]
 
@@ -127,7 +127,7 @@ class AccountService:
         # Acceptable for personal use with few accounts. Optimize with a single aggregated
         # query if performance becomes an issue.
         return [
-            (account, self.repository.calculate_balance(account.id))
+            (account, self.repository.calculate_balance(account.id, user_id))
             for account in accounts
         ]
 
@@ -297,4 +297,4 @@ class AccountService:
             NotFoundError: If account not found or not owned by this user.
         """
         self.repository.get_by_id_or_fail(account_id, user_id)
-        return self.repository.calculate_balance(account_id)
+        return self.repository.calculate_balance(account_id, user_id)

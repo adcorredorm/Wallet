@@ -68,7 +68,7 @@ class AccountRepository(BaseRepository[Account]):
             .all()
         )
 
-    def calculate_balance(self, account_id: UUID) -> Decimal:
+    def calculate_balance(self, account_id: UUID, user_id: UUID) -> Decimal:
         """
         Calculate account balance from transactions and transfers.
 
@@ -80,6 +80,8 @@ class AccountRepository(BaseRepository[Account]):
 
         Args:
             account_id: Account UUID.
+            user_id: Owner UUID — used as a defense-in-depth filter to prevent
+                     cross-user balance leaks if called without prior ownership check.
 
         Returns:
             Calculated balance as Decimal.
@@ -89,6 +91,7 @@ class AccountRepository(BaseRepository[Account]):
             db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
                 Transaction.account_id == account_id,
+                Transaction.user_id == user_id,
                 Transaction.type == TransactionType.INCOME,
             )
             .scalar()
@@ -99,6 +102,7 @@ class AccountRepository(BaseRepository[Account]):
             db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
                 Transaction.account_id == account_id,
+                Transaction.user_id == user_id,
                 Transaction.type == TransactionType.EXPENSE,
             )
             .scalar()
@@ -118,14 +122,20 @@ class AccountRepository(BaseRepository[Account]):
                     0,
                 )
             )
-            .filter(Transfer.destination_account_id == account_id)
+            .filter(
+                Transfer.destination_account_id == account_id,
+                Transfer.user_id == user_id,
+            )
             .scalar()
         )
 
         # Sum of outgoing transfers
         transfers_out = (
             db.session.query(func.coalesce(func.sum(Transfer.amount), 0))
-            .filter(Transfer.source_account_id == account_id)
+            .filter(
+                Transfer.source_account_id == account_id,
+                Transfer.user_id == user_id,
+            )
             .scalar()
         )
 
