@@ -51,9 +51,8 @@ const recentTransactions = computed(() =>
 onMounted(async () => {
   loading.value = true
   try {
-    // Step 1 — Load from IndexedDB immediately (non-blocking, returns fast).
-    // Both calls return cached data right away; background revalidation will
-    // update the reactive refs when the network responds.
+    // Load from IndexedDB (Dexie-only, no network call).
+    // SyncManager handles background updates via wallet:sync-complete → refreshFromDB().
     await Promise.all([
       accountsStore.fetchAccounts(),
       transactionsStore.fetchTransactions()
