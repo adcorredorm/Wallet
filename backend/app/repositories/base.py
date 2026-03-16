@@ -67,18 +67,18 @@ class BaseRepository(Generic[T]):
             .one_or_none()
         )
 
-    def get_by_client_id(self, client_id: str, user_id: UUID) -> Optional[T]:
+    def get_by_offline_id(self, offline_id: str, user_id: UUID) -> Optional[T]:
         """
         Get a record by client-generated idempotency key, scoped to a user.
 
         Supports the offline-first pattern: when a client retries a creation
-        request after an uncertain response, it sends the same client_id so
+        request after an uncertain response, it sends the same offline_id so
         the server can detect the duplicate and return the previously persisted
-        record. The user_id scope prevents one user's client_id from matching
+        record. The user_id scope prevents one user's offline_id from matching
         another user's records.
 
         Args:
-            client_id: Client-generated idempotency key (max 100 characters).
+            offline_id: Client-generated idempotency key (max 100 characters).
             user_id: Owner's UUID.
 
         Returns:
@@ -87,7 +87,7 @@ class BaseRepository(Generic[T]):
         return (
             db.session.execute(
                 db.select(self.model).where(
-                    self.model.client_id == client_id,
+                    self.model.offline_id == offline_id,
                     self.model.user_id == user_id,
                 )
             )
