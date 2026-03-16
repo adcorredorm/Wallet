@@ -13,6 +13,7 @@ import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatDateRelative } from '@/utils/formatters'
 import type { Transaction } from '@/types'
 import type { LocalTransaction } from '@/offline/types'
+import { useCategoriesStore } from '@/stores/categories'
 
 interface Props {
   /**
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   click: []
 }>()
 
+const categoriesStore = useCategoriesStore()
+
 const isIncome = computed(() => props.transaction.type === 'income')
 
 const amountColor = computed(() => {
@@ -39,8 +42,15 @@ const amountColor = computed(() => {
 
 const formattedDate = computed(() => formatDateRelative(props.transaction.date))
 
-const categoryIcon = computed(() => props.transaction.category?.icon || '📝')
-const categoryName = computed(() => props.transaction.category?.name || 'Sin categoría')
+// Transactions synced from server carry a nested category object.
+// Pending offline transactions only have category_id — fall back to the
+// categories store so newly created transactions display correctly before sync.
+const resolvedCategory = computed(() =>
+  props.transaction.category
+    ?? categoriesStore.categories.find(c => c.id === props.transaction.category_id)
+)
+const categoryIcon = computed(() => resolvedCategory.value?.icon || '📝')
+const categoryName = computed(() => resolvedCategory.value?.name || 'Sin categoría')
 const accountName = computed(() => props.transaction.account?.name || 'Cuenta')
 const currency = computed(() => props.transaction.account?.currency || 'USD')
 
