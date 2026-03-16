@@ -55,17 +55,36 @@ export function usePostLoginFlow() {
   }
 
   async function handleNewUser(): Promise<void> {
-    // Sync any guest mutations first (they belong to this new user)
-    syncManager.processQueue()
+    const txCount = await db.transactions.count()
 
-    const accepted = await uiStore.showConfirm({
+    if (txCount > 0) {
+      // Tiene datos como invitado — preguntar si los quiere sincronizar
+      const syncGuest = await uiStore.showConfirm({
+        title: 'Tienes datos como invitado',
+        message: `Detectamos que tienes ${txCount} transacción(es) creadas sin cuenta. ¿Deseas sincronizarlas en tu perfil?`,
+        confirmLabel: 'Sí, sincronizar',
+        cancelLabel: 'No, descartarlos',
+      })
+
+      if (syncGuest) {
+        // Sincronizar datos guest — son suyos
+        syncManager.processQueue()
+        return
+      }
+
+      // Descartó los datos guest — vaciar cola y preguntar por seed
+      await mutationQueue.clear()
+    }
+
+    // Sin datos (o los descartó): prompt de seed
+    const useSeed = await uiStore.showConfirm({
       title: '¿Cómo quieres empezar?',
       message: '¿Quieres empezar con cuentas y categorías de ejemplo o prefieres empezar desde cero?',
       confirmLabel: 'Usar ejemplos',
       cancelLabel: 'Empezar desde cero',
     })
 
-    if (accepted) {
+    if (useSeed) {
       try {
         await postOnboardingSeed()
         syncManager.processQueue()
