@@ -111,8 +111,18 @@ def upgrade() -> None:
             {"uid": first_user_id},
         )
     else:
-        # No users exist: delete all orphan domain data (test / empty environment)
-        for table, _, _ in DOMAIN_TABLES:
+        # No users exist: delete all orphan domain data (test / empty environment).
+        # Must delete in FK dependency order to avoid constraint violations:
+        # dashboard_widgets → dashboards, transfers/transactions → accounts/categories
+        DELETE_ORDER = [
+            "dashboard_widgets",
+            "dashboards",
+            "transfers",
+            "transactions",
+            "categories",
+            "accounts",
+        ]
+        for table in DELETE_ORDER:
             conn.execute(sa.text(f"DELETE FROM {table} WHERE user_id IS NULL"))
         conn.execute(sa.text("DELETE FROM user_settings WHERE user_id IS NULL"))
 
