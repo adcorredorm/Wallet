@@ -7,7 +7,6 @@ repository so queries are always scoped to a single user.
 
 from datetime import datetime
 from uuid import UUID
-from decimal import Decimal
 
 from sqlalchemy import select, func
 
@@ -27,18 +26,34 @@ class AccountService:
         self.repository = AccountRepository()
 
     def get_all(
-        self, user_id: UUID, include_archived: bool = False
+        self,
+        user_id: UUID,
+        include_archived: bool = False,
+        updated_since: datetime | None = None,
     ) -> list[Account]:
         """
         Get all accounts for a user, optionally including archived ones.
 
+        When ``updated_since`` is provided the repository's incremental-sync
+        path is used and ``include_archived`` is forwarded as-is (callers
+        should pass ``include_archived=True`` for incremental sync so that
+        soft-deleted accounts propagate to clients).
+
         Args:
             user_id: Owner's UUID.
             include_archived: Whether to include inactive accounts.
+            updated_since: Optional cutoff timestamp; when set only accounts
+                with updated_at >= updated_since are returned.
 
         Returns:
             List of accounts.
         """
+        if updated_since is not None:
+            return self.repository.get_all(
+                user_id=user_id,
+                include_archived=include_archived,
+                updated_since=updated_since,
+            )
         if include_archived:
             return self.repository.get_all(user_id=user_id, include_archived=True)
         return self.repository.get_all_active(user_id=user_id)
@@ -58,78 +73,6 @@ class AccountService:
             NotFoundError: If account not found or not owned by this user.
         """
         return self.repository.get_by_id_or_fail(account_id, user_id)
-
-    def get_with_balance(
-        self, account_id: UUID, user_id: UUID
-    ) -> tuple[Account, Decimal]:
-        """
-        Get an account with its calculated balance.
-
-        Args:
-            account_id: Account UUID.
-            user_id: Owner's UUID.
-
-        Returns:
-            Tuple of (account instance, balance).
-
-        Raises:
-            NotFoundError: If account not found or not owned by this user.
-        """
-        account = self.repository.get_by_id_or_fail(account_id, user_id)
-        balance = self.repository.calculate_balance(account_id, user_id)
-        return account, balance
-
-    def get_all_with_balances(
-        self, user_id: UUID, include_archived: bool = False
-    ) -> list[tuple[Account, Decimal]]:
-        """
-        Get all accounts with their calculated balances.
-
-        Args:
-            user_id: Owner's UUID.
-            include_archived: Whether to include inactive accounts.
-
-        Returns:
-            List of tuples (account, balance).
-        """
-        accounts = self.get_all(user_id=user_id, include_archived=include_archived)
-        # N+1: issues 4 queries per account (income, expenses, transfers_in, transfers_out).
-        # Acceptable for personal use with few accounts. Optimize with a single aggregated
-        # query if performance becomes an issue.
-        return [
-            (account, self.repository.calculate_balance(account.id, user_id))
-            for account in accounts
-        ]
-
-    def get_all_with_balances_since(
-        self, user_id: UUID, updated_since: datetime
-    ) -> list[tuple[Account, Decimal]]:
-        """
-        Return accounts modified since updated_since with balances.
-
-        Always includes archived accounts (to propagate active=False changes).
-        Used by incremental sync.
-
-        Args:
-            user_id: Owner's UUID.
-            updated_since: Cutoff timestamp (naive UTC, inclusive). Only accounts
-                with updated_at >= updated_since are returned.
-
-        Returns:
-            List of tuples (account, balance) for accounts modified since the cutoff.
-        """
-        accounts = self.repository.get_all(
-            user_id=user_id,
-            updated_since=updated_since,
-            include_archived=True,
-        )
-        # N+1: issues 4 queries per account (income, expenses, transfers_in, transfers_out).
-        # Acceptable for personal use with few accounts. Optimize with a single aggregated
-        # query if performance becomes an issue.
-        return [
-            (account, self.repository.calculate_balance(account.id, user_id))
-            for account in accounts
-        ]
 
     def create(
         self,
@@ -281,20 +224,3 @@ class AccountService:
             )
 
         self.repository.delete(account)
-
-    def get_balance(self, account_id: UUID, user_id: UUID) -> Decimal:
-        """
-        Get calculated balance for an account.
-
-        Args:
-            account_id: Account UUID.
-            user_id: Owner's UUID.
-
-        Returns:
-            Account balance.
-
-        Raises:
-            NotFoundError: If account not found or not owned by this user.
-        """
-        self.repository.get_by_id_or_fail(account_id, user_id)
-        return self.repository.calculate_balance(account_id, user_id)
