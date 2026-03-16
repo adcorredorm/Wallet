@@ -518,6 +518,147 @@ def _seed_efectivo_spending(user_id, accs, cats, months, db) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Transfer helpers
+# ---------------------------------------------------------------------------
+
+def _make_transfer(user_id, source_acc, dest_acc, amount_source, tx_date, offline_id,
+                   destination_amount=None, destination_currency=None,
+                   exchange_rate=None, base_rate=None):
+    from app.models.transfer import Transfer
+    return Transfer(
+        user_id=user_id,
+        offline_id=offline_id,
+        source_account_id=source_acc.id,
+        destination_account_id=dest_acc.id,
+        amount=round(float(amount_source), 2),
+        date=tx_date,
+        destination_amount=destination_amount,
+        destination_currency=destination_currency,
+        exchange_rate=exchange_rate,
+        base_rate=base_rate or BASE_RATES.get(source_acc.currency, 1.0),
+        tags=["test"],
+    )
+
+
+def _seed_credit_payment_transfers(user_id, accs, monthly_credito_cop, monthly_credito_usd, months, db) -> None:
+    """Pay credit card balances to zero on days 2-4 each month."""
+    print("Seeding credit payment transfers...")
+
+    principal = accs["principal-cop"]
+    credito_cop = accs["credito-cop"]
+    credito_usd = accs["credito-usd"]
+    total = 0
+
+    for year, month in months:
+        pay_day = rand_day(year, month, 2, 4)
+
+        # Pay Crédito COP — exact balance from that month's expenses
+        cop_balance = monthly_credito_cop.get((year, month), 0)
+        if cop_balance > 0:
+            offline_id = f"test-tr-principal-cop-credito-cop-{year:04d}-{month:02d}-01"
+            db.session.add(_make_transfer(
+                user_id, principal, credito_cop, cop_balance, pay_day, offline_id
+            ))
+            total += 1
+
+        # Pay Crédito USD — cross-currency COP→USD
+        usd_balance = monthly_credito_usd.get((year, month), 0.0)
+        if usd_balance > 0:
+            cop_per_usd = sample_rate(USD_TO_COP_BASE)
+            cop_amount = round(usd_balance * cop_per_usd, 2)
+            usd_per_cop = round(1.0 / cop_per_usd, 8)   # USD per 1 COP (destination/source)
+            offline_id = f"test-tr-principal-cop-credito-usd-{year:04d}-{month:02d}-01"
+            db.session.add(_make_transfer(
+                user_id, principal, credito_usd, cop_amount, pay_day, offline_id,
+                destination_amount=round(usd_balance, 2),
+                destination_currency="USD",
+                exchange_rate=usd_per_cop,
+                base_rate=BASE_RATES["COP"],
+            ))
+            total += 1
+
+    print(f"  Created {total} credit payment transfers")
+
+
+def _seed_other_transfers(user_id, accs, months, vac_month, efectivo_refills, db) -> None:
+    """Seed savings transfers, efectivo refills, USD top-up, and BRL vacation inflows."""
+    print("Seeding other transfers...")
+
+    principal = accs["principal-cop"]
+    inversion = accs["inversion-cop"]
+    efectivo = accs["efectivo-cop"]
+    ahorro_usd = accs["ahorro-usd"]
+    vacaciones_brl = accs["vacaciones-brl"]
+    total = 0
+
+    for year, month in months:
+        # --- Principal → Inversión COP: 2-3 times/month, 300k-600k COP each ---
+        count = random.randint(2, 3)
+        for n in range(count):
+            amount = random.randint(300_000, 600_000)
+            tx_date = rand_day(year, month, 10, 25)
+            offline_id = f"test-tr-principal-cop-inversion-cop-{year:04d}-{month:02d}-{n+1:02d}"
+            db.session.add(_make_transfer(user_id, principal, inversion, amount, tx_date, offline_id))
+            total += 1
+
+        # --- Principal → Ahorro USD: 1x/month, 400,000 COP → ~97 USD, cross-currency ---
+        cop_per_usd = sample_rate(USD_TO_COP_BASE)
+        cop_amount = 400_000.0
+        usd_amount = round(cop_amount / cop_per_usd, 2)
+        usd_per_cop = round(1.0 / cop_per_usd, 8)
+        ahorro_day = rand_day(year, month, 13, 17)
+        offline_id = f"test-tr-principal-cop-ahorro-usd-{year:04d}-{month:02d}-01"
+        db.session.add(_make_transfer(
+            user_id, principal, ahorro_usd, cop_amount, ahorro_day, offline_id,
+            destination_amount=usd_amount,
+            destination_currency="USD",
+            exchange_rate=usd_per_cop,
+            base_rate=BASE_RATES["COP"],
+        ))
+        total += 1
+
+    # --- Principal → Efectivo COP: sawtooth refills ---
+    for i, (refill_date, refill_amount) in enumerate(efectivo_refills):
+        offline_id = f"test-tr-principal-cop-efectivo-cop-{refill_date.year:04d}-{refill_date.month:02d}-{i+1:03d}"
+        db.session.add(_make_transfer(user_id, principal, efectivo, refill_amount, refill_date, offline_id))
+        total += 1
+
+    # --- Principal COP → Vacaciones BRL: 2 transfers during vacation month ---
+    vac_year, vac_month_num = vac_month
+    vac_last = month_last_day(vac_year, vac_month_num)
+
+    cop_per_brl_1 = sample_rate(BRL_TO_COP_BASE)
+    brl_amount_1 = round(2_500_000 / cop_per_brl_1, 2)
+    brl_per_cop_1 = round(1.0 / cop_per_brl_1, 8)
+    db.session.add(_make_transfer(
+        user_id, principal, vacaciones_brl,
+        2_500_000.0, date(vac_year, vac_month_num, 1),
+        f"test-tr-principal-cop-vacaciones-brl-{vac_year:04d}-{vac_month_num:02d}-01",
+        destination_amount=brl_amount_1,
+        destination_currency="BRL",
+        exchange_rate=brl_per_cop_1,
+        base_rate=BASE_RATES["COP"],
+    ))
+    total += 1
+
+    cop_per_brl_2 = sample_rate(BRL_TO_COP_BASE)
+    brl_amount_2 = round(1_800_000 / cop_per_brl_2, 2)
+    brl_per_cop_2 = round(1.0 / cop_per_brl_2, 8)
+    db.session.add(_make_transfer(
+        user_id, principal, vacaciones_brl,
+        1_800_000.0, date(vac_year, vac_month_num, min(5, vac_last)),
+        f"test-tr-principal-cop-vacaciones-brl-{vac_year:04d}-{vac_month_num:02d}-02",
+        destination_amount=brl_amount_2,
+        destination_currency="BRL",
+        exchange_rate=brl_per_cop_2,
+        base_rate=BASE_RATES["COP"],
+    ))
+    total += 1
+
+    print(f"  Created {total} other transfers")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
