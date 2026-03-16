@@ -406,6 +406,53 @@ def _seed_vacaciones_brl_expenses(user_id, accs, cats, vac_month, db) -> None:
     print(f"  Created {total_tx} Vacaciones BRL expense transactions")
 
 
+def _seed_income_transactions(user_id, accs, cats, months, db) -> None:
+    """Seed income: monthly salary (cross-currency USD→COP), bimonthly returns, quarterly interest."""
+    print("Seeding income transactions...")
+
+    principal = accs["principal-cop"]
+    inversion = accs["inversion-cop"]
+    total_tx = 0
+
+    for i, (year, month) in enumerate(months):
+        # --- Salary (cross-currency USD→COP, monthly) ---
+        rate = sample_rate(USD_TO_COP_BASE)           # COP per 1 USD, ±20% variation
+        original_usd = round(random.uniform(2_850, 3_150), 2)
+        amount_cop = round(original_usd * rate, 2)
+        salary_day = rand_day(year, month, 3, 7)
+        offline_id = f"test-tx-principal-cop-salary-{year:04d}-{month:02d}-01"
+        db.session.add(_make_tx(
+            user_id, principal, cats["salario"], "income", amount_cop, salary_day, offline_id,
+            original_amount=original_usd,
+            original_currency="USD",
+            exchange_rate=rate,
+            base_rate=BASE_RATES["COP"],
+        ))
+        total_tx += 1
+
+        # --- Investment returns (every 2 months: indices 1, 3, 5, 7, 9, 11, 13) ---
+        if i % 2 == 1:
+            amount = random.randint(300_000, 800_000)
+            rend_day = rand_day(year, month)
+            offline_id = f"test-tx-principal-cop-rend-{year:04d}-{month:02d}-01"
+            db.session.add(_make_tx(
+                user_id, principal, cats["rendimientos"], "income", amount, rend_day, offline_id
+            ))
+            total_tx += 1
+
+        # --- Quarterly interest on Inversión COP (indices 2, 5, 8, 11, 14) ---
+        if i % 3 == 2:
+            amount = random.randint(150_000, 400_000)
+            int_day = rand_day(year, month, 10, 20)
+            offline_id = f"test-tx-inversion-cop-interes-{year:04d}-{month:02d}-01"
+            db.session.add(_make_tx(
+                user_id, inversion, cats["interes-inversion"], "income", amount, int_day, offline_id
+            ))
+            total_tx += 1
+
+    print(f"  Created {total_tx} income transactions")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
