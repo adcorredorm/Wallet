@@ -21,7 +21,7 @@ class ExchangeRateRepository:
 
     Unlike entity repositories, ExchangeRate does not extend BaseRepository
     because the primary key is a string currency_code rather than a UUID, and
-    there is no client_id idempotency column on this table.
+    there is no offline_id idempotency column on this table.
     """
 
     def get_all(self, updated_since: datetime | None = None) -> list[ExchangeRate]:
