@@ -193,11 +193,11 @@ def seed_user():
         db.session.add(dashboard)
         db.session.flush()  # get dashboard.id for widget FKs
 
-        _time_last_month = {"type": "dynamic", "value": "last_month"}
+        _time_this_month = {"type": "dynamic", "value": "this_month"}
         _filters_expense = {"type": "expense"}
         _filters_income = {"type": "income"}
 
-        # Widget 1: Gastos del último mes por categoría — gráfico de línea (2 cols)
+        # Widget 1: Gastos de este mes por categoría — gráfico de línea (2 cols)
         db.session.add(DashboardWidget(
             user_id=user_id,
             dashboard_id=dashboard.id,
@@ -205,7 +205,7 @@ def seed_user():
             title="Gastos por Categoría",
             position_x=0, position_y=0, width=2, height=2,
             config={
-                "time_range": _time_last_month,
+                "time_range": _time_this_month,
                 "filters": _filters_expense,
                 "granularity": "week",
                 "group_by": "category",
@@ -214,7 +214,7 @@ def seed_user():
             client_id="seed-widget-expenses-by-category",
         ))
 
-        # Widget 2: Ingresos del último mes — número (1 col)
+        # Widget 2: Ingresos de este mes — número (1 col)
         db.session.add(DashboardWidget(
             user_id=user_id,
             dashboard_id=dashboard.id,
@@ -222,7 +222,7 @@ def seed_user():
             title="Ingresos del Mes",
             position_x=2, position_y=0, width=1, height=1,
             config={
-                "time_range": _time_last_month,
+                "time_range": _time_this_month,
                 "filters": _filters_income,
                 "granularity": "month",
                 "group_by": "none",
@@ -239,7 +239,7 @@ def seed_user():
             title="Gastos por Día de la Semana",
             position_x=2, position_y=1, width=1, height=1,
             config={
-                "time_range": _time_last_month,
+                "time_range": _time_this_month,
                 "filters": _filters_expense,
                 "granularity": "day",
                 "group_by": "day_of_week",
