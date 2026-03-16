@@ -148,8 +148,8 @@ const builtConfig = computed<WidgetConfig>(() => ({
       ? { type: 'dynamic', value: form.dynamic_preset }
       : { type: 'static', value: { from: form.static_from, to: form.static_to } },
   filters: {
-    ...(form.account_ids.length ? { account_ids: form.account_ids } : {}),
-    ...(form.category_ids.length ? { category_ids: form.category_ids } : {}),
+    ...(form.account_ids.length ? { account_ids: [...form.account_ids] } : {}),
+    ...(form.category_ids.length ? { category_ids: [...form.category_ids] } : {}),
     ...(form.tx_type ? { type: form.tx_type as 'income' | 'expense' } : {}),
     ...(form.amount_min != null ? { amount_min: form.amount_min } : {}),
     ...(form.amount_max != null ? { amount_max: form.amount_max } : {})
