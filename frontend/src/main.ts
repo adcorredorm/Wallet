@@ -49,6 +49,14 @@ const authStore = useAuthStore()
 // await for compatibility with the es2020 build target.
 authStore.initializeFromStorage().then(() => {
   app.mount('#app')
+  // Check backend reachability at boot.
+  // onOnline() only fires on transitions — if the device is already online,
+  // no transition fires. This call handles the cold-start case.
+  checkAndSetOnline().then((reachable) => {
+    if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[boot] Backend connectivity check failed:', err)
+  })
 })
 
 /**
@@ -91,12 +99,13 @@ void updateServiceWorker
  * regardless of which routes the user visits. A component-based registration
  * would fire once per component mount and could register multiple watchers.
  *
- * Why check isOnline.value at boot?
+ * Why call checkAndSetOnline() at boot?
  * The onOnline() watcher only fires on *transitions* (false → true). If the
  * device is already online when the app starts, no transition event fires and
  * the queue would never be processed until the next connectivity change. The
- * explicit boot-time check handles the "user opens the app with WiFi already
- * active and has queued mutations from a previous offline session" scenario.
+ * explicit boot-time health check handles the "user opens the app with WiFi
+ * already active and has queued mutations from a previous offline session"
+ * scenario, and also detects when the backend itself is down at launch time.
  *
  * Why not import syncManager from '@/offline' (the barrel)?
  * We import directly from '@/offline/sync-manager' to avoid a circular
@@ -110,6 +119,7 @@ void updateServiceWorker
  */
 import { syncManager } from '@/offline/sync-manager'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { checkBackendHealth } from '@/api/health'
 import { useSyncStore } from '@/stores/sync'
 import { useAccountsStore } from '@/stores/accounts'
 import { useTransactionsStore } from '@/stores/transactions'
@@ -119,7 +129,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useDashboardsStore } from '@/stores/dashboards'
 
-const { isOnline, onOnline, onOffline } = useNetworkStatus()
+const { onOnline, onOffline } = useNetworkStatus()
 
 /**
  * Phase 5 — Wire the sync store to network events.
@@ -127,17 +137,40 @@ const { isOnline, onOnline, onOffline } = useNetworkStatus()
  * Why set it here and not inside the syncStore itself?
  * The syncStore is a plain Pinia store with no side effects. It does not know
  * about VueUse or navigator.onLine — it just holds state. main.ts is the
- * correct place to wire external signals (navigator.onLine events) into the
+ * correct place to wire external signals (network + backend health) into the
  * store, just as it wires syncManager.processQueue() to network transitions.
  *
- * Why syncStore.setOnline(isOnline.value) synchronously?
- * The onOnline / onOffline callbacks only fire on *transitions*. If the app
- * starts while already offline, no transition fires and syncStore.isOnline
- * would remain stuck at its initial navigator.onLine value. Setting it once
- * synchronously here guarantees the store reflects the true initial state.
+ * Why checkAndSetOnline() instead of syncStore.setOnline(isOnline.value)?
+ * navigator.onLine only reflects device-level connectivity. The backend can
+ * be down even when the device has internet. checkAndSetOnline() actively
+ * probes the /health endpoint so syncStore.isOnline tracks backend
+ * reachability, not just network presence.
  */
 const syncStore = useSyncStore()
-syncStore.setOnline(isOnline.value)
+
+/**
+ * Checks whether the backend is reachable and updates syncStore.isOnline.
+ *
+ * Why short-circuit on navigator.onLine === false?
+ * If the device has no network at all, a health-check HTTP call would
+ * fail immediately anyway. Skipping it avoids a 5-second timeout wait
+ * and signals offline instantly.
+ *
+ * Why not use isOnline.value (VueUse) here?
+ * After this change, isOnline.value still reflects navigator.onLine —
+ * it is only used for the short-circuit guard. The source of truth for
+ * "can we sync?" is syncStore.isOnline (backend-reachable), which this
+ * function sets.
+ */
+async function checkAndSetOnline(): Promise<boolean> {
+  if (!navigator.onLine) {
+    syncStore.setOnline(false)
+    return false
+  }
+  const reachable = await checkBackendHealth()
+  syncStore.setOnline(reachable)
+  return reachable
+}
 
 /**
  * Phase 3.3 — Load user settings at boot.
@@ -164,42 +197,37 @@ exchangeRatesStore.fetchRates().catch((err) => {
   console.warn('[boot] Exchange rates failed to load:', err)
 })
 
+// On device regaining network — check backend and sync if reachable.
 onOnline(() => {
-  syncStore.setOnline(true)
+  checkAndSetOnline().then((reachable) => {
+    if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[online] Backend connectivity check failed:', err)
+  })
 })
 
 onOffline(() => {
   syncStore.setOnline(false)
 })
 
-// Process any mutations queued during a previous offline session.
-if (isOnline.value) {
-  syncManager.processQueue()
-}
-
-// Re-process the queue every time the device regains connectivity.
-onOnline(() => {
-  syncManager.processQueue()
-})
-
 // Trigger an immediate sync whenever a new mutation is enqueued while online.
 // The SyncManager's `processing` flag prevents concurrent runs — extra calls
 // while a sync is already in progress are silent no-ops.
 window.addEventListener('wallet:mutation-queued', () => {
-  if (isOnline.value) {
+  // Guard on syncStore.isOnline (backend-reachable), not navigator.onLine.
+  if (syncStore.isOnline) {
     syncManager.processQueue()
   }
 })
 
-// Periodic sync every 30 seconds.
-// Handles the case where the backend goes down and comes back up without
-// the device losing internet connectivity — the browser never fires an
-// 'online' event in that scenario, so pending/error mutations would be
-// stuck until the next page load. This poll recovers them automatically.
+// Periodic connectivity check every 30 seconds.
+// Handles backend-came-back-without-network-event and backend-went-down cases.
 setInterval(() => {
-  if (isOnline.value) {
-    syncManager.processQueue()
-  }
+  checkAndSetOnline().then((reachable) => {
+    if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[poll] Backend connectivity check failed:', err)
+  })
 }, 30_000)
 
 // After the SyncManager completes a full sync cycle (queue flushed +

@@ -119,7 +119,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
-      // Health check endpoint — also at the root, not under /api/v1.
+      // Health check endpoint — proxied to backend for connectivity verification.
       '/health': {
         target: process.env.BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,

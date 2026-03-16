@@ -30,7 +30,7 @@ describe('checkBackendHealth', () => {
     expect(await checkBackendHealth()).toBe(false)
   })
 
-  it('returns false on network error (no response)', async () => {
+  it('returns false on network error and never rejects', async () => {
     mockGet.mockRejectedValueOnce(new Error('Network Error'))
     expect(await checkBackendHealth()).toBe(false)
   })
@@ -38,10 +38,5 @@ describe('checkBackendHealth', () => {
   it('returns false on timeout', async () => {
     mockGet.mockRejectedValueOnce({ code: 'ECONNABORTED', message: 'timeout' })
     expect(await checkBackendHealth()).toBe(false)
-  })
-
-  it('never throws', async () => {
-    mockGet.mockRejectedValueOnce(new Error('fatal'))
-    await expect(checkBackendHealth()).resolves.toBe(false)
   })
 })
