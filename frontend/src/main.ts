@@ -104,9 +104,9 @@ void updateServiceWorker
  * sync-manager imports from api/* which import from '@/types'. Using the
  * barrel here is fine too — kept as direct import for explicit clarity.
  *
- * Note: useNetworkStatus() calls useOnline() internally. useOnline() is also
- * called inside repository.ts at module level. VueUse ensures both share the
- * exact same underlying Ref<boolean> — there is only one global listener.
+ * Note: useNetworkStatus() calls useOnline() internally. VueUse ensures all
+ * callers share the exact same underlying Ref<boolean> — there is only one
+ * global listener.
  */
 import { syncManager } from '@/offline/sync-manager'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'

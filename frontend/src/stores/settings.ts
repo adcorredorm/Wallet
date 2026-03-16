@@ -19,7 +19,7 @@
  * trivial to add new settings without touching the store internals.
  * Callers narrow the type at the point of use via getSetting<T>().
  *
- * Why NOT use fetchAllWithRevalidation() from repository.ts?
+ * Why NOT use fetchAllWithRevalidation()?
  * That helper is designed for Dexie tables whose rows form a typed array
  * (LocalAccount[], etc.) and returns the array after a bulkPut. Settings
  * are stored as individual rows keyed by string (key = 'primary_currency'),

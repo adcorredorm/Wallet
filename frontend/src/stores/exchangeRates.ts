@@ -4,7 +4,7 @@
  * Manages cached foreign-exchange rates following the same offline-first
  * stale-while-revalidate pattern used by the accounts store.
  *
- * Why NOT use fetchAllWithRevalidation from @/offline/repository?
+ * Why NOT use fetchAllWithRevalidation()?
  * That generic helper requires TServer extends { id: string; updated_at: string }.
  * LocalExchangeRate has no `id` or `updated_at` — its PK is `currency_code`
  * and the recency field is `fetched_at`. Forcing a mismatched generic would
@@ -169,8 +169,8 @@ export const useExchangeRatesStore = defineStore('exchangeRates', () => {
         }
 
         // Re-read from IndexedDB after all puts so the reactive state reflects
-        // exactly what is stored locally (same strategy as fetchAllWithRevalidation
-        // using table.toArray() after bulkPut).
+        // exactly what is stored locally (same pattern as other offline-first
+        // stores: table.toArray() after bulkPut).
         const updatedLocal = await db.exchangeRates.toArray()
         rates.value = updatedLocal
       } catch (networkErr: any) {

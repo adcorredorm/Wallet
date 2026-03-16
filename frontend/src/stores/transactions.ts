@@ -168,7 +168,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     }
   }
 
-  async function fetchByAccount(accountId: string) {
+  async function fetchByAccount(accountId: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
