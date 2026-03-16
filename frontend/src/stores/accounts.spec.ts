@@ -351,3 +351,59 @@ describe('useAccountsStore — recomputeBalancesFromTransactions', () => {
     expect(store.balances.get('acc-1')!.currency).toBe('GBP')
   })
 })
+
+// ---------------------------------------------------------------------------
+// fetchAccounts — simplified Dexie-only implementation
+// ---------------------------------------------------------------------------
+describe('useAccountsStore — fetchAccounts (Dexie-only)', () => {
+  it('loads accounts from IndexedDB via refreshFromDB', async () => {
+    const { db } = await import('@/offline')
+    const { fetchAllWithRevalidation } = await import('@/offline')
+    const fixture = [makeAccount({ id: 'acc-dexie', balance: 500 })]
+    ;(db.accounts.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fixture)
+
+    const store = setup()
+    await store.fetchAccounts()
+
+    // accounts populated from IndexedDB
+    expect(store.accounts).toHaveLength(1)
+    expect(store.accounts[0].id).toBe('acc-dexie')
+    // fetchAllWithRevalidation must NOT have been called — pure Dexie path
+    expect(fetchAllWithRevalidation).not.toHaveBeenCalled()
+  })
+
+  it('sets loading to false after a successful fetch', async () => {
+    const { db } = await import('@/offline')
+    ;(db.accounts.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
+
+    const store = setup()
+    await store.fetchAccounts()
+
+    expect(store.loading).toBe(false)
+  })
+
+  it('sets loading to false and rethrows when IndexedDB fails', async () => {
+    const { db } = await import('@/offline')
+    ;(db.accounts.toArray as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('IDB error')
+    )
+
+    const store = setup()
+    await expect(store.fetchAccounts()).rejects.toThrow('IDB error')
+    expect(store.loading).toBe(false)
+    expect(store.error).toBe('IDB error')
+  })
+
+  it('normalizes string balances returned by IndexedDB', async () => {
+    const { db } = await import('@/offline')
+    ;(db.accounts.toArray as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      makeAccount({ id: 'acc-1', balance: '99.9' as unknown as number }),
+    ])
+
+    const store = setup()
+    await store.fetchAccounts()
+
+    expect(store.accounts[0].balance).toBe(99.9)
+    expect(typeof store.accounts[0].balance).toBe('number')
+  })
+})

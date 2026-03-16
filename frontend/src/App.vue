@@ -30,7 +30,7 @@ onMounted(async () => {
   // Fetch accounts and categories in parallel for faster initial load
   // Using Promise.allSettled instead of Promise.all so one failure doesn't block others
   const results = await Promise.allSettled([
-    accountsStore.fetchAccounts(true), // Load only active accounts
+    accountsStore.fetchAccounts(),
     categoriesStore.fetchCategories()
   ])
 

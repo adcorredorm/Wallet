@@ -55,7 +55,7 @@ onMounted(async () => {
     // Both calls return cached data right away; background revalidation will
     // update the reactive refs when the network responds.
     await Promise.all([
-      accountsStore.fetchAccounts(true),
+      accountsStore.fetchAccounts(),
       transactionsStore.fetchTransactions({ limit: 5 })
     ])
   } catch (error: any) {

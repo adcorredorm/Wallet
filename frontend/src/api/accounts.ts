@@ -4,7 +4,7 @@
  */
 
 import apiClient from './index'
-import type { Account, CreateAccountDto, UpdateAccountDto, AccountBalance, ApiResponse } from '@/types'
+import type { Account, CreateAccountDto, UpdateAccountDto } from '@/types'
 
 export const accountsApi = {
   /**
@@ -23,14 +23,6 @@ export const accountsApi = {
    */
   getById(id: string): Promise<Account> {
     return apiClient.get(`/accounts/${id}`)
-  },
-
-  /**
-   * Get account balance (calculated from transactions)
-   * @param id - Account UUID
-   */
-  getBalance(id: string): Promise<AccountBalance> {
-    return apiClient.get(`/accounts/${id}/balance`)
   },
 
   /**

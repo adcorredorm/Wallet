@@ -23,20 +23,3 @@ export interface ApiError {
   status: number
   errors?: Record<string, string[]>
 }
-
-// Dashboard specific types
-export interface DashboardData {
-  net_worth: number
-  accounts: Array<{
-    id: string
-    name: string
-    balance: number
-    currency: string
-  }>
-  recent_transactions: any[]
-  monthly_summary?: {
-    income: number
-    expenses: number
-    balance: number
-  }
-}
