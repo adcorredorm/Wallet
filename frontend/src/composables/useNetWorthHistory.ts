@@ -38,7 +38,7 @@
  * backend sync never completes or completes without transitioning isSyncing→false.
  */
 
-import { ref, computed, watchEffect, type Ref } from 'vue'
+import { ref, computed, watchEffect, onScopeDispose, type Ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import {
   format,
@@ -203,7 +203,8 @@ export function useNetWorthHistory(
   // sync never completes. Set once on composable creation (outside watchEffect)
   // so the timer is not reset on every reactive re-run.
   const syncTimedOut = ref(false)
-  setTimeout(() => { syncTimedOut.value = true }, SYNC_SKELETON_TIMEOUT_MS)
+  const syncTimeoutId = setTimeout(() => { syncTimedOut.value = true }, SYNC_SKELETON_TIMEOUT_MS)
+  onScopeDispose(() => clearTimeout(syncTimeoutId))
 
   // ---------------------------------------------------------------------------
   // Debounced computation
@@ -224,6 +225,10 @@ export function useNetWorthHistory(
         db.accounts.toArray(),
       ])
 
+      // options.endDate is a plain string | undefined (non-reactive), so reading it
+      // directly as a closure is safe here. If this is ever upgraded to a Ref<string>,
+      // it must be passed as a parameter to maintain the "no reactive reads inside
+      // runComputation" contract.
       const endDateStr = options.endDate ?? format(new Date(), 'yyyy-MM-dd')
       const endDate = parseISO(endDateStr)
       const startDate = subDays(endDate, rangeDays - 1)
