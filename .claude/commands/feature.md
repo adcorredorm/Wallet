@@ -89,6 +89,15 @@ After the agent responds:
 2. **Wait for user approval of the ADD before continuing** — if the user requests changes, re-launch the architect with the feedback
 3. Once approved, write the ADD into the body of the main Notion page
 
+### Phase 1 — MCP Health Check
+
+Before proceeding to Phase 2, verify all MCPs are operational:
+
+1. **Notion**: fetch the main feature page using `mcp__notion__notion-fetch` (the page already exists at this point — use the saved page ID)
+2. **Playwright**: use the Playwright MCP browser tool to navigate to `about:blank` — this confirms the browser process is responsive
+
+If either check fails, report the exact error to the user and **pause**. Do not proceed to Phase 2 until the user confirms the MCP is working.
+
 ---
 
 ## Phase 2: Create sub-tickets
@@ -136,15 +145,21 @@ For each sub-task that has an agent (not `User` tagged), launch the correspondin
 >
 > Do NOT implement yet. Return only the plan."
 
-After all agents respond, present all plans to the user. **Wait for explicit approval of each plan before starting implementation.** If the user requests changes to a plan, re-launch the relevant agent with the feedback.
+After all agents respond, verify each plan against the ADD **without user intervention**:
 
-Write each approved plan into the body of the corresponding Notion sub-ticket.
+1. For each plan, dispatch a `general-purpose` reviewer subagent with:
+   - The full ADD
+   - The plan to review
+   - The agent's assigned sub-task and acceptance criteria
+   - Instruction: "Review this implementation plan against the ADD. Check: (1) all acceptance criteria are covered, (2) the approach is consistent with the ADD's design decisions, (3) no scope is added or removed without justification. Return APPROVED or a list of specific issues."
+2. If the reviewer returns issues: re-launch the original agent with the ADD, its plan, and the reviewer's feedback. Repeat until APPROVED (max 3 iterations).
+3. If a plan fails after 3 iterations, pause and surface the issue to the user with a clear explanation.
+
+Once all plans are approved by the reviewer, write each plan into the body of the corresponding Notion sub-ticket and proceed directly to Phase 4 — no user confirmation needed.
 
 ---
 
 ## Phase 4: Implementation
-
-**DO NOT START WITHOUT USER CONFIRMATION OF ALL PLANS.**
 
 Use `superpowers:using-git-worktrees` to set up an isolated workspace before starting implementation.
 
