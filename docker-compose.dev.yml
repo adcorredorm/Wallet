@@ -125,6 +125,9 @@ services:
       # service name (backend:5000), not the host port mapping (localhost:5001).
       BACKEND_URL: http://backend:5000
 
+      # Google OAuth Client ID — passed from root .env so credentials stay out of git
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+
       # Frontend-specific environment
       NODE_ENV: development
 
