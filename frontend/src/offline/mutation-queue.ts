@@ -179,6 +179,11 @@ export class MutationQueue {
       })
     }
   }
+
+  /** Remove all pending mutations from the queue (guest data discard on login). */
+  async clear(): Promise<void> {
+    await db.pendingMutations.clear()
+  }
 }
 
 /**

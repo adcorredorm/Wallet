@@ -27,9 +27,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePostLoginFlow } from '@/composables/usePostLoginFlow'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { handlePostLogin } = usePostLoginFlow()
 
 const isLoading = ref(false)
 const error = ref<string | null>(null)
@@ -67,8 +69,8 @@ async function handleGoogleCallback(response: { credential: string }): Promise<v
   error.value = null
 
   try {
-    await authStore.loginWithGoogle(response.credential)
-    // Navegamos al home — la lógica post-login (onboarding, etc.) se maneja allí
+    const { is_new_user } = await authStore.loginWithGoogle(response.credential)
+    await handlePostLogin(is_new_user)
     await router.push('/')
   } catch (err: unknown) {
     error.value = err instanceof Error

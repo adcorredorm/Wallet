@@ -11,6 +11,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+export interface ConfirmDialogOptions {
+  title: string
+  message: string
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
+interface ConfirmDialogState {
+  options: ConfirmDialogOptions
+  resolve: (value: boolean) => void
+}
+
 export interface Toast {
   id: string
   message: string
@@ -21,9 +33,10 @@ export interface Toast {
 export const useUiStore = defineStore('ui', () => {
   // State
   const toasts = ref<Toast[]>([])
-  const isDrawerOpen = ref(false) // Renamed from isMobileMenuOpen for clarity
+  const isDrawerOpen = ref(false)
   const activeModal = ref<string | null>(null)
   const globalLoading = ref(false)
+  const confirmDialog = ref<ConfirmDialogState | null>(null)
 
   // Toast management
   function showToast(message: string, type: Toast['type'] = 'info', duration = 3000) {
@@ -93,12 +106,27 @@ export const useUiStore = defineStore('ui', () => {
     globalLoading.value = isLoading
   }
 
+  // Async confirm dialog — resolves true (confirm) or false (cancel)
+  function showConfirm(options: ConfirmDialogOptions): Promise<boolean> {
+    return new Promise((resolve) => {
+      confirmDialog.value = { options, resolve }
+    })
+  }
+
+  function resolveConfirm(value: boolean): void {
+    if (confirmDialog.value) {
+      confirmDialog.value.resolve(value)
+      confirmDialog.value = null
+    }
+  }
+
   return {
     // State
     toasts,
     isDrawerOpen,
     activeModal,
     globalLoading,
+    confirmDialog,
     // Actions
     showToast,
     removeToast,
@@ -112,6 +140,8 @@ export const useUiStore = defineStore('ui', () => {
     openDrawer,
     openModal,
     closeModal,
-    setGlobalLoading
+    setGlobalLoading,
+    showConfirm,
+    resolveConfirm,
   }
 })
