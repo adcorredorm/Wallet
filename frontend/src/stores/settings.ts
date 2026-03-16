@@ -19,12 +19,12 @@
  * trivial to add new settings without touching the store internals.
  * Callers narrow the type at the point of use via getSetting<T>().
  *
- * Why NOT use fetchAllWithRevalidation()?
- * That helper is designed for Dexie tables whose rows form a typed array
- * (LocalAccount[], etc.) and returns the array after a bulkPut. Settings
- * are stored as individual rows keyed by string (key = 'primary_currency'),
- * not as an integer-PK array. The revalidation logic is short enough to
- * inline here without coupling to the generic helper.
+ * Why not use the stale-while-revalidate pattern used by other stores?
+ * Other stores revalidate typed arrays via bulkPut on a table whose rows share
+ * a common shape (LocalAccount[], etc.). Settings are stored as individual rows
+ * keyed by string (key = 'primary_currency'), not as an array of uniform
+ * entities. The revalidation logic here is short enough to inline directly,
+ * which is cleaner than forcing the settings shape into a generic helper.
  */
 
 import { defineStore } from 'pinia'

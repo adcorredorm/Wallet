@@ -23,14 +23,6 @@ vi.mock('@/offline', () => ({
   },
 }))
 
-vi.mock('@/api/transfers', () => ({
-  transfersApi: {
-    getAll: vi.fn().mockResolvedValue([]),
-    getById: vi.fn().mockResolvedValue(null),
-    getByAccount: vi.fn().mockResolvedValue([]),
-  },
-}))
-
 const mockGetRate = vi.fn()
 const mockAdjustBalance = vi.fn()
 

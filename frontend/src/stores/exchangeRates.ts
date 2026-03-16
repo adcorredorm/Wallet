@@ -4,12 +4,12 @@
  * Manages cached foreign-exchange rates following the same offline-first
  * stale-while-revalidate pattern used by the accounts store.
  *
- * Why NOT use fetchAllWithRevalidation()?
- * That generic helper requires TServer extends { id: string; updated_at: string }.
- * LocalExchangeRate has no `id` or `updated_at` — its PK is `currency_code`
- * and the recency field is `fetched_at`. Forcing a mismatched generic would
- * require brittle type casts. Instead, this store implements the same three-step
- * SWR pattern directly, which is cleaner and easier to understand.
+ * Why not use the stale-while-revalidate pattern used by other stores?
+ * Other stores revalidate entities that carry `id` and `updated_at` fields.
+ * LocalExchangeRate has neither — its primary key is `currency_code` and its
+ * recency field is `fetched_at`. Adapting a generic SWR helper to this shape
+ * would require brittle type casts. Instead, this store implements the same
+ * three-step pattern directly, which is cleaner and easier to understand.
  *
  * Why no PendingMutation queue for exchange rates?
  * Exchange rates are read-only from the frontend's perspective. The server

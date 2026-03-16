@@ -26,14 +26,6 @@ vi.mock('@/offline', () => ({
   },
 }))
 
-vi.mock('@/api/transactions', () => ({
-  transactionsApi: {
-    getAll: vi.fn().mockResolvedValue([]),
-    getById: vi.fn().mockResolvedValue(null),
-    getByAccount: vi.fn().mockResolvedValue([]),
-  },
-}))
-
 // We will control these store return values in each test
 const mockGetRate = vi.fn()
 const mockAdjustBalance = vi.fn()
