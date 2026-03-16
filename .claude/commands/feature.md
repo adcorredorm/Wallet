@@ -231,6 +231,22 @@ If any check fails:
 - Re-launch it with the full failure output and a reference to its approved plan
 - Repeat until all checks pass cleanly
 
+### Phase 5 — Consolidate worktrees
+
+Use `superpowers:finishing-a-development-branch` to merge all feature worktrees into `main` and clean up the worktree directories. If there are merge conflicts, report them to the user before continuing — do not attempt to auto-resolve conflicts.
+
+### Phase 5 — Boot Docker dev environment
+
+Run `make -f Makefile.docker up-dev` and wait for all services (db, backend, frontend) to report healthy. Check `docker compose logs --tail=20` per service for errors.
+
+If a service fails to start:
+- **DB / Docker config** → re-launch `docker-manager` with the full logs and its approved plan
+- **Backend crash / migration failure** → re-launch `backend-architect` with the full logs and its approved plan
+
+If the service still fails after one retry: pause and report to the user with the full logs and what was attempted.
+
+Only proceed to Phase 6 once all services are running cleanly.
+
 ---
 
 ## Phase 6: QA — User-directed testing
