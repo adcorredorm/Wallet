@@ -25,7 +25,7 @@ import type {
   UpdateTransferDto,
   TransferFilters
 } from '@/types'
-import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalTransfer } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'

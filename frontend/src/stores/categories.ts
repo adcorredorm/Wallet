@@ -30,7 +30,7 @@ import { ref, computed } from 'vue'
 import { categoriesApi } from '@/api/categories'
 import { CategoryType } from '@/types/category'
 import type { CreateCategoryDto, UpdateCategoryDto } from '@/types'
-import { db, fetchAllWithRevalidation, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
+import { db, fetchByIdWithRevalidation, generateTempId, mutationQueue } from '@/offline'
 import type { LocalCategory } from '@/offline'
 
 /**
