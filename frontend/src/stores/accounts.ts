@@ -558,17 +558,17 @@ export const useAccountsStore = defineStore('accounts', () => {
    *
    * Called by the transactions and transfers stores immediately after an
    * offline write so the UI reflects the correct balance without waiting
-   * for a server round-trip or a /balance API call.
+   * for a sync cycle.
    *
    * Why update both balances.value and accounts.value[idx].balance?
-   * accountsWithBalances prefers balances.value (from the /balance endpoint).
-   * accounts.value[idx].balance is the cold-start fallback when no /balance
-   * fetch has run yet for a given account.
+   * accountsWithBalances prefers balances.value (kept in memory, updated by
+   * adjustBalance on every write and by recomputeBalancesFromTransactions after sync).
+   * accounts.value[idx].balance is the cold-start fallback persisted in IndexedDB.
    */
   function adjustBalance(accountId: string, delta: number) {
     // Derive the current balance from whichever source has it.
-    // balances.value is populated by the /balance endpoint (authoritative).
-    // accounts.value[idx].balance is the fallback from IndexedDB / list endpoint.
+    // balances.value is populated by adjustBalance() and recomputeBalancesFromTransactions().
+    // accounts.value[idx].balance is the fallback from IndexedDB.
     const current = balances.value.get(accountId)
     const account = accounts.value.find(a => a.id === accountId)
     const currentBalance = current?.balance ?? account?.balance ?? 0
