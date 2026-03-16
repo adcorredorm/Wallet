@@ -112,6 +112,12 @@ export default defineConfig({
         target: process.env.BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,
         secure: false
+      },
+      // Auth endpoints (/auth/*) are not under /api/v1 — proxy them too.
+      '/auth': {
+        target: process.env.BACKEND_URL || 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false
       }
     }
   }
