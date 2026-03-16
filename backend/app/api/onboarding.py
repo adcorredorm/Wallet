@@ -12,6 +12,7 @@ from app.extensions import db
 from app.models.account import Account, AccountType
 from app.models.category import Category, CategoryType
 from app.models.dashboard import Dashboard
+from app.models.dashboard_widget import DashboardWidget, WidgetType
 from app.repositories.account import AccountRepository
 from app.utils.auth import require_auth
 from app.utils.responses import error_response, success_response
@@ -179,16 +180,74 @@ def seed_user():
                 db.session.add(subcategory)
                 categories_created += 1
 
-        # --- Create default dashboard ---
+        # --- Create default dashboard (3 columns) ---
         dashboard = Dashboard(
             user_id=user_id,
             name="Mi Dashboard",
             is_default=True,
             sort_order=0,
             display_currency="COP",
+            layout_columns=3,
             client_id="seed-default-dashboard",
         )
         db.session.add(dashboard)
+        db.session.flush()  # get dashboard.id for widget FKs
+
+        _time_last_month = {"type": "dynamic", "value": "last_month"}
+        _filters_expense = {"type": "expense"}
+        _filters_income = {"type": "income"}
+
+        # Widget 1: Gastos del último mes por categoría — gráfico de línea (2 cols)
+        db.session.add(DashboardWidget(
+            user_id=user_id,
+            dashboard_id=dashboard.id,
+            widget_type=WidgetType.LINE,
+            title="Gastos por Categoría",
+            position_x=0, position_y=0, width=2, height=2,
+            config={
+                "time_range": _time_last_month,
+                "filters": _filters_expense,
+                "granularity": "week",
+                "group_by": "category",
+                "aggregation": "sum",
+            },
+            client_id="seed-widget-expenses-by-category",
+        ))
+
+        # Widget 2: Ingresos del último mes — número (1 col)
+        db.session.add(DashboardWidget(
+            user_id=user_id,
+            dashboard_id=dashboard.id,
+            widget_type=WidgetType.NUMBER,
+            title="Ingresos del Mes",
+            position_x=2, position_y=0, width=1, height=1,
+            config={
+                "time_range": _time_last_month,
+                "filters": _filters_income,
+                "granularity": "month",
+                "group_by": "none",
+                "aggregation": "sum",
+            },
+            client_id="seed-widget-income-number",
+        ))
+
+        # Widget 3: Gastos por día de la semana — barras (1 col)
+        db.session.add(DashboardWidget(
+            user_id=user_id,
+            dashboard_id=dashboard.id,
+            widget_type=WidgetType.BAR,
+            title="Gastos por Día de la Semana",
+            position_x=2, position_y=1, width=1, height=1,
+            config={
+                "time_range": _time_last_month,
+                "filters": _filters_expense,
+                "granularity": "day",
+                "group_by": "day_of_week",
+                "aggregation": "sum",
+            },
+            client_id="seed-widget-expenses-by-dow",
+        ))
+
         dashboard_created = True
 
         db.session.commit()
