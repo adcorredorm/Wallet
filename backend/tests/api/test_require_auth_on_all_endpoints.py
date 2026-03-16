@@ -57,10 +57,6 @@ class TestAccountsRequireAuth:
         resp = client.delete(f"/api/v1/accounts/{uid}/permanent")
         _assert_401(resp, f"DELETE /api/v1/accounts/{uid}/permanent")
 
-    def test_get_balance_requires_auth(self, client, uid):
-        resp = client.get(f"/api/v1/accounts/{uid}/balance")
-        _assert_401(resp, f"GET /api/v1/accounts/{uid}/balance")
-
 
 # ---------------------------------------------------------------------------
 # Categories

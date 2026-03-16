@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
-from decimal import Decimal
 from enum import Enum
 
 
@@ -167,14 +166,3 @@ class AccountResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class AccountWithBalance(AccountResponse):
-    """
-    Schema for account with calculated balance.
-
-    Extends AccountResponse with dynamically calculated balance.
-    Balance is never stored in the database.
-    """
-
-    balance: Decimal = Field(..., description="Calculated account balance")
