@@ -37,7 +37,7 @@ class Dashboard(BaseModel):
             "layout_columns >= 1 AND layout_columns <= 4",
             name="ck_dashboards_layout_columns",
         ),
-        UniqueConstraint("user_id", "client_id", name="uq_dashboards_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_dashboards_user_offline"),
     )
 
     def __repr__(self) -> str:

@@ -90,7 +90,7 @@ class DashboardWidget(BaseModel):
         CheckConstraint("height >= 1 AND height <= 3", name="ck_widgets_height"),
         CheckConstraint("position_x >= 0", name="ck_widgets_position_x"),
         CheckConstraint("position_y >= 0", name="ck_widgets_position_y"),
-        UniqueConstraint("user_id", "client_id", name="uq_widgets_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_widgets_user_offline"),
     )
 
     def __repr__(self) -> str:

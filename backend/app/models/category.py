@@ -77,7 +77,7 @@ class Category(BaseModel):
         Index("idx_categories_type", "type"),
         Index("idx_categories_parent", "parent_category_id"),
         Index("idx_categories_active", "active"),
-        UniqueConstraint("user_id", "client_id", name="uq_categories_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_categories_user_offline"),
     )
 
     def __repr__(self) -> str:
