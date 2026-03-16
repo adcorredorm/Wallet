@@ -220,6 +220,85 @@ def _clean_test_data(user_id, db) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Transaction helpers
+# ---------------------------------------------------------------------------
+
+def _make_tx(user_id, account, category, tx_type, amount, tx_date,
+             offline_id, original_amount=None, original_currency=None,
+             exchange_rate=None, base_rate=None):
+    from app.models.transaction import Transaction, TransactionType
+    return Transaction(
+        user_id=user_id,
+        offline_id=offline_id,
+        account_id=account.id,
+        category_id=category.id,
+        type=TransactionType.INCOME if tx_type == "income" else TransactionType.EXPENSE,
+        amount=amount,
+        date=tx_date,
+        original_amount=original_amount,
+        original_currency=original_currency,
+        exchange_rate=exchange_rate,
+        base_rate=base_rate or BASE_RATES.get(account.currency, 1.0),
+    )
+
+
+def _seed_credito_cop_expenses(user_id, accs, cats, months, db) -> dict:
+    """
+    Seed Crédito COP expense transactions (~20-30/month).
+    Returns {(year, month): total_cop_expenses}.
+    """
+    print("Seeding Crédito COP expenses...")
+
+    acc = accs["credito-cop"]
+
+    # (category_slug, freq_min, freq_max, amount_min, amount_max)
+    EXPENSE_TYPES = [
+        ("comida-restaurantes", 6, 8,  25_000,  80_000),
+        ("comida-antojos",      3, 5,   8_000,  25_000),
+        ("salidas-bares",       2, 3,  40_000, 120_000),
+        ("salidas-eventos",     1, 2,  50_000, 200_000),
+        ("compras-ropa",        1, 2,  80_000, 300_000),
+        ("compras-tecnologia",  0, 1, 100_000, 500_000),
+        ("transporte",          4, 6,  10_000,  35_000),
+        ("regalos",             1, 2,  30_000, 150_000),
+    ]
+
+    monthly_totals = {}
+    total_tx = 0
+
+    for year, month in months:
+        month_total = 0
+        seq = 0
+        last = month_last_day(year, month)
+        # Use Mon-Sat days (weekday 0-5), with occasional Sunday
+        available_days = [
+            date(year, month, d)
+            for d in range(1, last + 1)
+            if date(year, month, d).weekday() < 6
+        ]
+        random.shuffle(available_days)
+        day_idx = 0
+
+        for cat_slug, freq_min, freq_max, amt_min, amt_max in EXPENSE_TYPES:
+            count = random.randint(freq_min, freq_max)
+            for _ in range(count):
+                amount = random.randint(amt_min, amt_max)
+                tx_date = available_days[day_idx % len(available_days)]
+                day_idx += 1
+                seq += 1
+                offline_id = f"test-tx-credito-cop-{year:04d}-{month:02d}-{seq:02d}"
+                tx = _make_tx(user_id, acc, cats[cat_slug], "expense", amount, tx_date, offline_id)
+                db.session.add(tx)
+                month_total += amount
+                total_tx += 1
+
+        monthly_totals[(year, month)] = month_total
+
+    print(f"  Created {total_tx} Crédito COP expense transactions")
+    return monthly_totals
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
