@@ -28,7 +28,7 @@ class CategoryCreate(BaseModel):
         icon: Optional icon identifier (max 50 characters)
         color: Optional color in hex format (#RRGGBB)
         parent_category_id: Optional parent category ID for subcategories
-        client_id: Optional client-generated UUID for offline idempotency.
+        offline_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
     """
@@ -38,7 +38,7 @@ class CategoryCreate(BaseModel):
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     parent_category_id: Optional[UUID] = None
-    client_id: Optional[str] = Field(None, max_length=100)
+    offline_id: Optional[str] = Field(None, max_length=100)
 
     @field_validator("color")
     @classmethod

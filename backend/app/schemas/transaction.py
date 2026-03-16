@@ -35,7 +35,7 @@ class TransactionCreate(BaseModel):
         title: Optional transaction title (max 100 characters)
         description: Optional description (max 500 characters)
         tags: List of tags (max 10, each max 50 characters)
-        client_id: Optional client-generated UUID for offline idempotency.
+        offline_id: Optional client-generated UUID for offline idempotency.
             When provided, a retry of the same creation request will return
             the existing record instead of creating a duplicate.
         original_amount: Amount in the foreign currency before conversion.
@@ -59,7 +59,7 @@ class TransactionCreate(BaseModel):
     title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
-    client_id: Optional[str] = Field(None, max_length=100)
+    offline_id: Optional[str] = Field(None, max_length=100)
     original_amount: Optional[Decimal] = None
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
