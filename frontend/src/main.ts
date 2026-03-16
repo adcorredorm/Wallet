@@ -54,6 +54,8 @@ authStore.initializeFromStorage().then(() => {
   // no transition fires. This call handles the cold-start case.
   checkAndSetOnline().then((reachable) => {
     if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[boot] Backend connectivity check failed:', err)
   })
 })
 
@@ -199,6 +201,8 @@ exchangeRatesStore.fetchRates().catch((err) => {
 onOnline(() => {
   checkAndSetOnline().then((reachable) => {
     if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[online] Backend connectivity check failed:', err)
   })
 })
 
@@ -221,6 +225,8 @@ window.addEventListener('wallet:mutation-queued', () => {
 setInterval(() => {
   checkAndSetOnline().then((reachable) => {
     if (reachable) syncManager.processQueue()
+  }).catch((err) => {
+    console.warn('[poll] Backend connectivity check failed:', err)
   })
 }, 30_000)
 
