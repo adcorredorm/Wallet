@@ -92,7 +92,7 @@ class Transaction(BaseModel):
         Index("idx_transactions_account_type", "account_id", "type"),
         Index("idx_transactions_category", "category_id"),
         Index("idx_transactions_date", "date"),
-        UniqueConstraint("user_id", "client_id", name="uq_transactions_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_transactions_user_offline"),
     )
 
     def __repr__(self) -> str:

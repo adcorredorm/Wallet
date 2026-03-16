@@ -57,7 +57,7 @@ export interface WidgetConfig {
 /** Dashboard entity */
 export interface Dashboard {
   id: string
-  client_id?: string
+  offline_id?: string
   name: string
   description?: string | null
   /** ISO 4217 currency code — applies to all widgets in this dashboard */
@@ -77,7 +77,7 @@ export interface DashboardWithWidgets extends Dashboard {
 /** Dashboard widget entity */
 export interface DashboardWidget {
   id: string
-  client_id?: string
+  offline_id?: string
   dashboard_id: string
   widget_type: WidgetType
   title: string
@@ -92,7 +92,7 @@ export interface DashboardWidget {
 
 /** DTO for creating a dashboard */
 export interface CreateDashboardDto {
-  client_id?: string
+  offline_id?: string
   name: string
   description?: string | null
   /** Required — UI should default to user's primaryCurrency */
@@ -114,7 +114,7 @@ export interface UpdateDashboardDto {
 
 /** DTO for creating a widget */
 export interface CreateWidgetDto {
-  client_id?: string
+  offline_id?: string
   widget_type: WidgetType
   title: string
   position_x?: number

@@ -92,7 +92,7 @@ class TransferService:
         date: date,
         description: str | None = None,
         tags: list[str] | None = None,
-        client_id: str | None = None,
+        offline_id: str | None = None,
         destination_amount: Decimal | None = None,
         exchange_rate: Decimal | None = None,
         destination_currency: str | None = None,
@@ -101,7 +101,7 @@ class TransferService:
         """
         Create a new transfer, handling both same-currency and cross-currency cases.
 
-        If client_id is provided and a record with that key already exists in
+        If offline_id is provided and a record with that key already exists in
         the database the existing transfer is returned immediately without
         inserting a duplicate row (offline-first idempotency).
 
@@ -120,7 +120,7 @@ class TransferService:
             date: Transfer date.
             description: Optional description.
             tags: Optional tags.
-            client_id: Optional client-generated idempotency key.
+            offline_id: Optional client-generated idempotency key.
             destination_amount: Amount credited to destination account in its
                 currency. Required for cross-currency transfers.
             exchange_rate: Exchange rate at transfer time. Required for
@@ -138,8 +138,8 @@ class TransferService:
             ValidationError: If cross-currency transfer is missing
                 destination_amount or exchange_rate.
         """
-        if client_id:
-            existing = self.repository.get_by_client_id(client_id, user_id)
+        if offline_id:
+            existing = self.repository.get_by_offline_id(offline_id, user_id)
             if existing:
                 return existing
 
@@ -172,7 +172,7 @@ class TransferService:
             date=date,
             description=description,
             tags=tags or [],
-            client_id=client_id,
+            offline_id=offline_id,
             destination_amount=destination_amount,
             exchange_rate=exchange_rate,
             destination_currency=resolved_destination_currency,

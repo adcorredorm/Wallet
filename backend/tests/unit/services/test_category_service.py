@@ -226,14 +226,14 @@ class TestCreate:
     def test_create_idempotency_returns_existing_record(
         self, category_service, mock_repository, sample_category
     ):
-        """Should return the existing category without re-creating when client_id matches."""
-        mock_repository.get_by_client_id.return_value = sample_category
+        """Should return the existing category without re-creating when offline_id matches."""
+        mock_repository.get_by_offline_id.return_value = sample_category
 
         result = category_service.create(
             user_id=USER_ID,
             name="Duplicate",
             type="expense",
-            client_id="client-key-xyz",
+            offline_id="client-key-xyz",
         )
 
         assert result == sample_category

@@ -2,7 +2,7 @@
 UserSetting model for per-user key/value configuration.
 
 Unlike other models, UserSetting does not inherit from BaseModel — it has no
-UUID id and no client_id. Its primary key is the composite (user_id, key),
+UUID id and no offline_id. Its primary key is the composite (user_id, key),
 meaning each user has their own independent set of settings.
 """
 

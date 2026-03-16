@@ -19,7 +19,7 @@ def test_user_setting_has_no_id_column(app):
     assert "id" not in columns
 
 
-def test_user_setting_has_no_client_id_column(app):
-    """UserSetting has no client_id — it is not an offline-first sync model."""
+def test_user_setting_has_no_offline_id_column(app):
+    """UserSetting has no offline_id — it is not an offline-first sync model."""
     columns = {c.name for c in UserSetting.__table__.columns}
-    assert "client_id" not in columns
+    assert "offline_id" not in columns

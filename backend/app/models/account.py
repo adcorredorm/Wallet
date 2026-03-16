@@ -72,7 +72,7 @@ class Account(BaseModel):
     )
 
     __table_args__ = (
-        UniqueConstraint("user_id", "client_id", name="uq_accounts_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_accounts_user_offline"),
     )
 
     def __repr__(self) -> str:

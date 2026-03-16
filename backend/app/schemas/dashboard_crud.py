@@ -56,7 +56,7 @@ class WidgetConfig(BaseModel):
 
 class DashboardCreate(BaseModel):
     """Request body for POST /api/v1/dashboards."""
-    client_id: Optional[str] = Field(None, max_length=100)
+    offline_id: Optional[str] = Field(None, max_length=100)
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     display_currency: str = Field(..., min_length=3, max_length=10)
@@ -78,7 +78,7 @@ class DashboardUpdate(BaseModel):
 class DashboardResponse(BaseModel):
     """Serialized Dashboard (without widgets)."""
     id: UUID
-    client_id: Optional[str] = None
+    offline_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     display_currency: str
@@ -100,7 +100,7 @@ ALLOWED_WIDGET_TYPES = {"line", "pie", "bar", "stacked_bar", "number"}
 
 class WidgetCreate(BaseModel):
     """Request body for POST /api/v1/dashboards/:id/widgets."""
-    client_id: Optional[str] = Field(None, max_length=100)
+    offline_id: Optional[str] = Field(None, max_length=100)
     widget_type: str = Field(..., description="line|pie|bar|stacked_bar|number")
     title: str = Field(..., min_length=1, max_length=100)
     position_x: int = Field(0, ge=0)
@@ -138,7 +138,7 @@ class WidgetUpdate(BaseModel):
 class WidgetResponse(BaseModel):
     """Serialized DashboardWidget."""
     id: UUID
-    client_id: Optional[str] = None
+    offline_id: Optional[str] = None
     dashboard_id: UUID
     widget_type: str
     title: str

@@ -168,7 +168,7 @@ class TestCreate:
         destination.currency = "COP"
 
         mock_account_repo.get_by_id_or_fail.side_effect = [origin, destination]
-        mock_transfer_repo.get_by_client_id.return_value = None
+        mock_transfer_repo.get_by_offline_id.return_value = None
         mock_transfer_repo.create.return_value = mock_transfer
 
         result = transfer_service.create(
@@ -187,9 +187,9 @@ class TestCreate:
     def test_create_idempotency_returns_existing_record(
         self, transfer_service, mock_transfer_repo, mock_account_repo, mock_transfer
     ):
-        """Should return the existing transfer immediately when client_id matches a record."""
-        client_id = "client-uuid-abc123"
-        mock_transfer_repo.get_by_client_id.return_value = mock_transfer
+        """Should return the existing transfer immediately when offline_id matches a record."""
+        offline_id = "client-uuid-abc123"
+        mock_transfer_repo.get_by_offline_id.return_value = mock_transfer
 
         result = transfer_service.create(
             user_id=USER_ID,
@@ -197,7 +197,7 @@ class TestCreate:
             destination_account_id=uuid4(),
             amount=Decimal("500.00"),
             date=date(2026, 3, 1),
-            client_id=client_id,
+            offline_id=offline_id,
         )
 
         assert result == mock_transfer

@@ -223,7 +223,7 @@ export const useDashboardsStore = defineStore('dashboards', () => {
         entity_type: 'dashboard',
         entity_id: tempId,
         operation: 'create',
-        payload: { ...payload, client_id: tempId } as Record<string, unknown>,
+        payload: { ...payload, offline_id: tempId } as Record<string, unknown>,
       })
 
       return optimistic
@@ -370,7 +370,7 @@ export const useDashboardsStore = defineStore('dashboards', () => {
         entity_id: tempId,
         operation: 'create',
         // dashboard_id is included so SyncManager can route to the correct endpoint
-        payload: { ...dto, dashboard_id: dashboardId, client_id: tempId } as Record<string, unknown>,
+        payload: { ...dto, dashboard_id: dashboardId, offline_id: tempId } as Record<string, unknown>,
       })
 
       return optimistic
@@ -586,12 +586,12 @@ export const useDashboardsStore = defineStore('dashboards', () => {
       // previous session, causing updateWidget/deleteWidget calls to 404.
       if (currentDashboard.value) {
         // Primary lookup: by id (normal case).
-        // Fallback: by client_id (handles tempId → realId reconciliation).
+        // Fallback: by offline_id (handles tempId → realId reconciliation).
         // After the SyncManager resolves a temp-* dashboard ID to the server UUID,
-        // the Dexie record has id=realId and client_id=tempId. If currentDashboard
+        // the Dexie record has id=realId and offline_id=tempId. If currentDashboard
         // still holds the tempId, the primary lookup fails — the fallback finds it.
         const freshDash = data.find(d => d.id === currentDashboard.value!.id)
-          ?? data.find(d => d.client_id === currentDashboard.value!.id)
+          ?? data.find(d => d.offline_id === currentDashboard.value!.id)
 
         if (freshDash) {
           // Query widgets by freshDash.id (not currentDashboard.value.id).

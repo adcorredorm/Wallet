@@ -20,15 +20,15 @@ class BaseModel(db.Model):
 
     Provides:
     - UUID primary key
-    - client_id for offline-first idempotency (optional client-generated UUID)
+    - offline_id for offline-first idempotency (optional client-generated UUID)
     - created_at timestamp
     - updated_at timestamp (auto-updated on modification)
     - to_dict() method for serialization
 
-    The client_id column enables offline-first support: clients operating without
+    The offline_id column enables offline-first support: clients operating without
     connectivity can generate a UUID locally and include it on creation requests.
     If the network request is retried after an uncertain response, the server will
-    detect the existing client_id and return the previously created record instead
+    detect the existing offline_id and return the previously created record instead
     of producing a duplicate.
     """
 
@@ -36,7 +36,7 @@ class BaseModel(db.Model):
     __allow_unmapped__ = True
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    client_id = Column(String(100), nullable=True, index=True)
+    offline_id = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,

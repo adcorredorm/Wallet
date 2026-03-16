@@ -220,7 +220,7 @@ def create_transfer():
             date=transfer_data.date,
             description=transfer_data.description,
             tags=transfer_data.tags,
-            client_id=transfer_data.client_id,
+            offline_id=transfer_data.offline_id,
             destination_amount=transfer_data.destination_amount,
             exchange_rate=transfer_data.exchange_rate,
             base_rate=transfer_data.base_rate,

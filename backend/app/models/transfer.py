@@ -81,7 +81,7 @@ class Transfer(BaseModel):
         Index("idx_transfers_source", "source_account_id"),
         Index("idx_transfers_destination", "destination_account_id"),
         Index("idx_transfers_date", "date"),
-        UniqueConstraint("user_id", "client_id", name="uq_transfers_user_client"),
+        UniqueConstraint("user_id", "offline_id", name="uq_transfers_user_offline"),
     )
 
     def __repr__(self) -> str:

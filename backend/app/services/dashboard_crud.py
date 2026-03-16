@@ -32,7 +32,7 @@ class DashboardCrudService:
     - Maximum 10 dashboards per user.
     - Maximum 12 widgets per dashboard.
     - Single-default invariant for dashboards (per user).
-    - client_id idempotency for dashboards and widgets.
+    - offline_id idempotency for dashboards and widgets.
     - Automatic sort_order assignment when omitted.
     """
 
@@ -90,8 +90,8 @@ class DashboardCrudService:
         Raises:
             BusinessRuleError: If dashboard limit (10) per user would be exceeded.
         """
-        if data.client_id:
-            existing = self.repo.get_by_client_id(data.client_id, user_id)
+        if data.offline_id:
+            existing = self.repo.get_by_offline_id(data.offline_id, user_id)
             if existing:
                 return existing, False
 
@@ -115,7 +115,7 @@ class DashboardCrudService:
             layout_columns=data.layout_columns,
             is_default=data.is_default,
             sort_order=sort_order,
-            client_id=data.client_id,
+            offline_id=data.offline_id,
         )
         return dashboard, True
 
@@ -210,9 +210,9 @@ class DashboardCrudService:
         """
         self.repo.get_by_id_or_fail(dashboard_id, user_id)
 
-        if data.client_id:
-            existing_widget = self.repo.get_widget_by_client_id(
-                data.client_id, user_id
+        if data.offline_id:
+            existing_widget = self.repo.get_widget_by_offline_id(
+                data.offline_id, user_id
             )
             if existing_widget:
                 return existing_widget, False
@@ -235,7 +235,7 @@ class DashboardCrudService:
             width=data.width,
             height=data.height,
             config=config_dict,
-            client_id=data.client_id,
+            offline_id=data.offline_id,
         )
         self._touch_dashboard(dashboard_id)
         return widget, True

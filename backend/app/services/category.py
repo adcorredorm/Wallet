@@ -120,12 +120,12 @@ class CategoryService:
         icon: str | None = None,
         color: str | None = None,
         parent_category_id: UUID | None = None,
-        client_id: str | None = None,
+        offline_id: str | None = None,
     ) -> Category:
         """
         Create a new category for a user.
 
-        If client_id is provided and a record with that key already exists in
+        If offline_id is provided and a record with that key already exists in
         the database the existing category is returned immediately without
         inserting a duplicate row (offline-first idempotency).
 
@@ -136,7 +136,7 @@ class CategoryService:
             icon: Optional icon identifier.
             color: Optional color in hex format.
             parent_category_id: Optional parent category ID.
-            client_id: Optional client-generated idempotency key.
+            offline_id: Optional client-generated idempotency key.
 
         Returns:
             Created or pre-existing category instance.
@@ -147,8 +147,8 @@ class CategoryService:
         """
         from app.models.category import CategoryType
 
-        if client_id:
-            existing = self.repository.get_by_client_id(client_id, user_id)
+        if offline_id:
+            existing = self.repository.get_by_offline_id(offline_id, user_id)
             if existing:
                 return existing
 
@@ -170,7 +170,7 @@ class CategoryService:
             icon=icon,
             color=color,
             parent_category_id=parent_category_id,
-            client_id=client_id,
+            offline_id=offline_id,
         )
 
     def update(

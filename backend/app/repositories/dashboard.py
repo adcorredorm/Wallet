@@ -112,14 +112,14 @@ class DashboardRepository(BaseRepository[Dashboard]):
         """
         return db.session.get(DashboardWidget, widget_id)
 
-    def get_widget_by_client_id(
-        self, client_id: str, user_id: UUID
+    def get_widget_by_offline_id(
+        self, offline_id: str, user_id: UUID
     ) -> Optional[DashboardWidget]:
-        """Get a DashboardWidget by its client_id idempotency key, scoped to a user
+        """Get a DashboardWidget by its offline_id idempotency key, scoped to a user
         via the parent dashboard's user_id.
 
         Args:
-            client_id: Client-generated idempotency key.
+            offline_id: Client-generated idempotency key.
             user_id: Owner's UUID.
 
         Returns:
@@ -130,7 +130,7 @@ class DashboardRepository(BaseRepository[Dashboard]):
                 db.select(DashboardWidget)
                 .join(Dashboard, DashboardWidget.dashboard_id == Dashboard.id)
                 .where(
-                    DashboardWidget.client_id == client_id,
+                    DashboardWidget.offline_id == offline_id,
                     Dashboard.user_id == user_id,
                 )
             )
