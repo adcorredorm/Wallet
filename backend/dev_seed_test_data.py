@@ -443,7 +443,7 @@ def _seed_income_transactions(user_id, accs, cats, months, db) -> None:
         # --- Quarterly interest on Inversión COP (indices 2, 5, 8, 11, 14) ---
         if i % 3 == 2:
             amount = random.randint(150_000, 400_000)
-            int_day = rand_day(year, month, 10, 20)
+            int_day = rand_day(year, month, 1, 10)  # days 1-10: always past even in current month
             offline_id = f"test-tx-inversion-cop-interes-{year:04d}-{month:02d}-01"
             db.session.add(_make_tx(
                 user_id, inversion, cats["interes-inversion"], "income", amount, int_day, offline_id
