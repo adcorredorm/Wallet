@@ -585,12 +585,22 @@ export const useDashboardsStore = defineStore('dashboards', () => {
       // Without this, after fullReadSync the store may hold stale IDs from the
       // previous session, causing updateWidget/deleteWidget calls to 404.
       if (currentDashboard.value) {
-        const freshWidgets = await db.dashboardWidgets
-          .where('dashboard_id')
-          .equals(currentDashboard.value.id)
-          .toArray()
+        // Primary lookup: by id (normal case).
+        // Fallback: by client_id (handles tempId → realId reconciliation).
+        // After the SyncManager resolves a temp-* dashboard ID to the server UUID,
+        // the Dexie record has id=realId and client_id=tempId. If currentDashboard
+        // still holds the tempId, the primary lookup fails — the fallback finds it.
         const freshDash = data.find(d => d.id === currentDashboard.value!.id)
+          ?? data.find(d => d.client_id === currentDashboard.value!.id)
+
         if (freshDash) {
+          // Query widgets by freshDash.id (not currentDashboard.value.id).
+          // After reconciliation, dashboard_id on widgets is updated to the real UUID,
+          // so querying by the old tempId would return zero results.
+          const freshWidgets = await db.dashboardWidgets
+            .where('dashboard_id')
+            .equals(freshDash.id)
+            .toArray()
           currentDashboard.value = {
             ...freshDash,
             widgets: freshWidgets as LocalDashboardWidget[]

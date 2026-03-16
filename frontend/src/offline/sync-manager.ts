@@ -680,8 +680,17 @@ export class SyncManager {
     const dashboard = await db.dashboards.get(tempId)
     if (dashboard?.server_id) return dashboard.server_id
 
+    // Fallback: after replaceEntityWithRealId the temp-* record is deleted and
+    // replaced with a realId record that preserves client_id = tempId. Since
+    // client_id is not indexed we do a full scan — acceptable for a small table.
+    const dashboardByClientId = await db.dashboards.filter(d => d.client_id === tempId).first()
+    if (dashboardByClientId?.server_id) return dashboardByClientId.server_id
+
     const widget = await db.dashboardWidgets.get(tempId)
     if (widget?.server_id) return widget.server_id
+
+    const widgetByClientId = await db.dashboardWidgets.filter(w => w.client_id === tempId).first()
+    if (widgetByClientId?.server_id) return widgetByClientId.server_id
 
     return undefined
   }
@@ -1283,6 +1292,12 @@ export class SyncManager {
       if (mutation.operation === 'create') {
         await this.blockDependents(mutation.entity_type, mutation.entity_id)
       }
+
+      // Remove the mutation from the queue. A permanent 4xx means the server
+      // will never accept this payload — leaving it in the queue would cause
+      // the leftover-mutations check to re-trigger processQueue indefinitely,
+      // creating an infinite loop of failed retries and "Datos sincronizados" toasts.
+      await mutationQueue.remove(mutation.id!)
     } else {
       // ── Transient error path (back-off + retry) ───────────────────────────
       const nextRetryCount = mutation.retry_count + 1
@@ -1325,6 +1340,9 @@ export class SyncManager {
         if (mutation.operation === 'create') {
           await this.blockDependents(mutation.entity_type, mutation.entity_id)
         }
+
+        // Same reason as permanent 4xx: remove to stop the leftover loop.
+        await mutationQueue.remove(mutation.id!)
       }
     }
   }
