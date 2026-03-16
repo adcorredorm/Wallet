@@ -69,6 +69,76 @@ def rand_day(year: int, month: int, day_min: int = 1, day_max: int = None) -> da
     return date(year, month, random.randint(day_min, day_max))
 
 
+def _seed_categories(user_id, db) -> dict:
+    """Seed test categories. Returns {slug: Category} mapping."""
+    from app.models.category import Category, CategoryType
+
+    print("Seeding categories...")
+
+    CATEGORY_DEFS = [
+        # income
+        ("salario",           "Salario Test",            CategoryType.INCOME,   []),
+        ("rendimientos",      "Rendimientos Test",        CategoryType.INCOME,   []),
+        ("interes-inversion", "Interés Inversión Test",  CategoryType.INCOME,   []),
+        # expense
+        ("facturas",      "Facturas Test",      CategoryType.EXPENSE, [
+            ("facturas-arriendo",   "Arriendo"),
+            ("facturas-servicios",  "Servicios"),
+            ("facturas-internet",   "Internet"),
+        ]),
+        ("comida",        "Comida Test",        CategoryType.EXPENSE, [
+            ("comida-mercado",      "Mercado"),
+            ("comida-extra",        "Extra"),
+            ("comida-restaurantes", "Restaurantes"),
+            ("comida-antojos",      "Antojos"),
+        ]),
+        ("salidas",       "Salidas Test",       CategoryType.EXPENSE, [
+            ("salidas-bares",   "Bares"),
+            ("salidas-eventos", "Eventos"),
+        ]),
+        ("compras",       "Compras Test",       CategoryType.EXPENSE, [
+            ("compras-ropa",       "Ropa"),
+            ("compras-tecnologia", "Tecnología"),
+        ]),
+        ("transporte",    "Transporte Test",    CategoryType.EXPENSE, []),
+        ("regalos",       "Regalos Test",       CategoryType.EXPENSE, []),
+        ("viaje-brasil",  "Viaje Brasil Test",  CategoryType.EXPENSE, [
+            ("viaje-brasil-hospedaje",   "Hospedaje"),
+            ("viaje-brasil-comida",      "Comida BRL"),
+            ("viaje-brasil-actividades", "Actividades"),
+        ]),
+    ]
+
+    cats = {}
+    for slug, name, ctype, subcats in CATEGORY_DEFS:
+        parent = Category(
+            user_id=user_id,
+            offline_id=f"test-category-{slug}",
+            name=name,
+            type=ctype,
+            active=True,
+        )
+        db.session.add(parent)
+        db.session.flush()
+        cats[slug] = parent
+
+        for sub_slug, sub_name in subcats:
+            child = Category(
+                user_id=user_id,
+                offline_id=f"test-category-{sub_slug}",
+                name=sub_name,
+                type=ctype,
+                active=True,
+                parent_category_id=parent.id,
+            )
+            db.session.add(child)
+            db.session.flush()
+            cats[sub_slug] = child
+
+    print(f"  Created {len(cats)} categories")
+    return cats
+
+
 def _clean_test_data(user_id, db) -> None:
     from app.models.dashboard_widget import DashboardWidget
     from app.models.dashboard import Dashboard
