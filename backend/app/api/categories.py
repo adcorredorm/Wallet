@@ -187,7 +187,7 @@ def create_category():
             icon=category_data.icon,
             color=category_data.color,
             parent_category_id=category_data.parent_category_id,
-            client_id=category_data.client_id,
+            offline_id=category_data.offline_id,
         )
 
         data = CategoryResponse.model_validate(category).model_dump(mode="json")

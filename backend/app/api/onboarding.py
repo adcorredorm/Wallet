@@ -134,14 +134,14 @@ def seed_user():
     try:
         # --- Create accounts ---
         for acc_def in _SEED_ACCOUNTS:
-            client_id = f"seed-{acc_def['name'].lower().replace(' ', '-')}"
+            offline_id = f"seed-{acc_def['name'].lower().replace(' ', '-')}"
             account = Account(
                 user_id=user_id,
                 name=acc_def["name"],
                 type=acc_def["type"],
                 currency=acc_def["currency"],
                 tags=["auto-generated"],
-                client_id=client_id,
+                offline_id=offline_id,
             )
             db.session.add(account)
             accounts_created += 1
@@ -150,21 +150,21 @@ def seed_user():
 
         # --- Create categories (with subcategories) ---
         for cat_def in _SEED_CATEGORIES:
-            parent_client_id = f"seed-{cat_def['name'].lower().replace(' ', '-')}"
+            parent_offline_id = f"seed-{cat_def['name'].lower().replace(' ', '-')}"
             parent = Category(
                 user_id=user_id,
                 name=cat_def["name"],
                 type=cat_def["type"],
                 icon=cat_def.get("icon"),
                 color=cat_def.get("color"),
-                client_id=parent_client_id,
+                offline_id=parent_offline_id,
             )
             db.session.add(parent)
             db.session.flush()  # get parent.id for subcategory FK
             categories_created += 1
 
             for sub_def in cat_def.get("subcategories", []):
-                sub_client_id = (
+                sub_offline_id = (
                     f"seed-{cat_def['name'].lower().replace(' ', '-')}"
                     f"-{sub_def['name'].lower().replace(' ', '-')}"
                 )
@@ -175,7 +175,7 @@ def seed_user():
                     icon=sub_def.get("icon"),
                     color=cat_def.get("color"),
                     parent_category_id=parent.id,
-                    client_id=sub_client_id,
+                    offline_id=sub_offline_id,
                 )
                 db.session.add(subcategory)
                 categories_created += 1
@@ -188,7 +188,7 @@ def seed_user():
             sort_order=0,
             display_currency="COP",
             layout_columns=3,
-            client_id="seed-default-dashboard",
+            offline_id="seed-default-dashboard",
         )
         db.session.add(dashboard)
         db.session.flush()  # get dashboard.id for widget FKs
@@ -211,7 +211,7 @@ def seed_user():
                 "group_by": "category",
                 "aggregation": "sum",
             },
-            client_id="seed-widget-expenses-by-category",
+            offline_id="seed-widget-expenses-by-category",
         ))
 
         # Widget 2: Ingresos de este mes — número (1 col)
@@ -228,7 +228,7 @@ def seed_user():
                 "group_by": "none",
                 "aggregation": "sum",
             },
-            client_id="seed-widget-income-number",
+            offline_id="seed-widget-income-number",
         ))
 
         # Widget 3: Gastos por día de la semana — barras (1 col)
@@ -245,7 +245,7 @@ def seed_user():
                 "group_by": "day_of_week",
                 "aggregation": "sum",
             },
-            client_id="seed-widget-expenses-by-dow",
+            offline_id="seed-widget-expenses-by-dow",
         ))
 
         dashboard_created = True

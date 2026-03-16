@@ -213,7 +213,7 @@ def create_transaction():
         # Validate request data
         transaction_data = TransactionCreate(**request.json)
 
-        # Create transaction (idempotent when client_id is present)
+        # Create transaction (idempotent when offline_id is present)
         transaction = transaction_service.create(
             user_id=g.current_user_id,
             type=transaction_data.type.value,
@@ -224,7 +224,7 @@ def create_transaction():
             title=transaction_data.title,
             description=transaction_data.description,
             tags=transaction_data.tags,
-            client_id=transaction_data.client_id,
+            offline_id=transaction_data.offline_id,
             original_amount=transaction_data.original_amount,
             original_currency=transaction_data.original_currency,
             exchange_rate=transaction_data.exchange_rate,

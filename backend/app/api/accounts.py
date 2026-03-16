@@ -177,7 +177,7 @@ def create_account():
             currency=account_data.currency,
             description=account_data.description,
             tags=account_data.tags,
-            client_id=account_data.client_id,
+            offline_id=account_data.offline_id,
         )
 
         data = AccountResponse.model_validate(account).model_dump(mode="json")
