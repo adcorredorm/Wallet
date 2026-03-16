@@ -138,28 +138,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
   // Actions — Reads (offline-first, stale-while-revalidate)
   // ---------------------------------------------------------------------------
 
-  async function fetchTransactions(customFilters?: TransactionFilters) {
+  async function fetchTransactions() {
     loading.value = true
     error.value = null
     try {
-      const appliedFilters = customFilters || filters.value
-
-      // Why read ALL local transactions when filters may be set?
-      // IndexedDB compound queries for arbitrary filter combinations would
-      // require extra indexes and complex Dexie where() chains that mirror the
-      // backend filtering logic. For Phase 2, we accept showing the full local
-      // cache as the stale value — the network revalidation then replaces it
-      // with the correctly filtered server result.
-      const localData = await fetchAllWithRevalidation(
-        db.transactions,
-        () => transactionsApi.getAll(appliedFilters),
-        (freshItems) => {
-          transactions.value = [...freshItems].sort(byDateDesc)
-        },
-        { cleanupOrphans: false }
-      )
-
-      transactions.value = [...localData].sort(byDateDesc)
+      await refreshFromDB()
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transacciones'
       throw err

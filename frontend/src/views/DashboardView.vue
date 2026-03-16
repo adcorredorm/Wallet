@@ -56,7 +56,7 @@ onMounted(async () => {
     // update the reactive refs when the network responds.
     await Promise.all([
       accountsStore.fetchAccounts(),
-      transactionsStore.fetchTransactions({ limit: 5 })
+      transactionsStore.fetchTransactions()
     ])
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar el dashboard')

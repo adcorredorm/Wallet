@@ -50,22 +50,11 @@ export const useTransfersStore = defineStore('transfers', () => {
   // Actions — Reads (offline-first, stale-while-revalidate)
   // ---------------------------------------------------------------------------
 
-  async function fetchTransfers(customFilters?: TransferFilters) {
+  async function fetchTransfers() {
     loading.value = true
     error.value = null
     try {
-      const appliedFilters = customFilters || filters.value
-
-      const localData = await fetchAllWithRevalidation(
-        db.transfers,
-        () => transfersApi.getAll(appliedFilters),
-        (freshItems) => {
-          transfers.value = freshItems
-        },
-        { cleanupOrphans: false }
-      )
-
-      transfers.value = localData
+      await refreshFromDB()
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencias'
       throw err
@@ -103,33 +92,6 @@ export const useTransfersStore = defineStore('transfers', () => {
       }
     } catch (err: any) {
       error.value = err.message || 'Error al cargar transferencia'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function fetchByAccount(accountId: string, customFilters?: TransferFilters) {
-    loading.value = true
-    error.value = null
-    try {
-      const localData = await fetchAllWithRevalidation(
-        db.transfers,
-        () => transfersApi.getByAccount(accountId, customFilters),
-        (freshItems) => {
-          transfers.value = freshItems
-        },
-        { cleanupOrphans: false }
-      )
-
-      // Narrow the stale result to transfers involving this account.
-      // This mirrors the existing getTransfersByAccount() logic and ensures
-      // the UI shows relevant-only data even before revalidation completes.
-      transfers.value = localData.filter(t =>
-        t.source_account_id === accountId || t.destination_account_id === accountId
-      )
-    } catch (err: any) {
-      error.value = err.message || 'Error al cargar transferencias de la cuenta'
       throw err
     } finally {
       loading.value = false
@@ -380,7 +342,6 @@ export const useTransfersStore = defineStore('transfers', () => {
     // Actions
     fetchTransfers,
     fetchTransferById,
-    fetchByAccount,
     createTransfer,
     updateTransfer,
     deleteTransfer,

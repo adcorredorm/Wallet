@@ -203,46 +203,15 @@ export const useCategoriesStore = defineStore('categories', () => {
   // Actions — Reads (offline-first, stale-while-revalidate)
   // ---------------------------------------------------------------------------
 
-  async function fetchCategories(type?: CategoryType) {
-    // Reset error state at the start of each fetch.
-    // This ensures previous errors don't block new attempts.
+  async function fetchCategories() {
     error.value = null
     loading.value = true
-
     try {
-      // Note: the original store does NOT re-throw on error for categories,
-      // because category load failures should not break navigation. We
-      // preserve that behaviour here.
-      //
-      // fetchAllWithRevalidation will:
-      //   - Serve local cache immediately (even if type filter can't be
-      //     applied locally — we filter client-side below as a fallback).
-      //   - Revalidate with the API in the background with the proper type
-      //     filter applied server-side.
-      const localData = await fetchAllWithRevalidation(
-        db.categories,
-        () => categoriesApi.getAll(type, true),
-        (freshItems) => {
-          // Background revalidation succeeded — replace with correctly
-          // filtered server data.
-          categories.value = freshItems
-        },
-        { cleanupOrphans: false }
-      )
-
-      // Apply client-side filter on the stale local data so the UI shows
-      // only the requested category type while waiting for the network.
-      categories.value = type
-        ? localData.filter(cat => cat.type === type || cat.type === 'both')
-        : localData
-
-      return categories.value
+      await refreshFromDB()
     } catch (err: any) {
       console.error('Categories store fetch error:', err)
       error.value = err.message || 'Error al cargar categorías'
       // Don't throw — let the component handle the error state.
-      // This prevents the error from bubbling up and breaking navigation.
-      return []
     } finally {
       loading.value = false
     }
