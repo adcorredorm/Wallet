@@ -48,17 +48,37 @@ onMounted(() => {
     return
   }
 
-  if (!window.google?.accounts?.id) {
-    error.value = 'No se pudo cargar el SDK de Google. Verifica tu conexión.'
-    return
+  // SDK carga con async defer — puede no estar listo en onMounted.
+  // Esperamos hasta 5s con polling antes de mostrar error.
+  const initSdk = () => {
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCallback,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      })
+      return
+    }
+    let attempts = 0
+    const interval = setInterval(() => {
+      attempts++
+      if (window.google?.accounts?.id) {
+        clearInterval(interval)
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCallback,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        })
+      } else if (attempts >= 50) {
+        clearInterval(interval)
+        error.value = 'No se pudo cargar el SDK de Google. Verifica tu conexión.'
+      }
+    }, 100)
   }
 
-  window.google.accounts.id.initialize({
-    client_id: clientId,
-    callback: handleGoogleCallback,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  })
+  initSdk()
 })
 
 // ---------------------------------------------------------------------------
