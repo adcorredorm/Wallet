@@ -39,6 +39,7 @@ import {
   postAuthLogout,
   type GoogleAuthResponse
 } from '@/api/auth'
+import { useSyncStore } from '@/stores/sync'
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -149,6 +150,9 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = response.access_token
     user.value = extractUserFromJwt(response.access_token)
 
+    // Salir del modo invitado — el usuario ya está autenticado
+    useSyncStore().setGuest(false)
+
     // Persistir refresh_token en AuthDB
     await setRefreshToken(response.refresh_token)
 
@@ -177,9 +181,10 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await postAuthRefresh(storedRefreshToken)
 
-      // Actualizar estado en memoria
+      // Actualizar estado en memoria y salir del modo invitado
       accessToken.value = response.access_token
       user.value = extractUserFromJwt(response.access_token)
+      useSyncStore().setGuest(false)
 
       // Rotar refresh_token en AuthDB — el token viejo ya es inválido
       await setRefreshToken(response.refresh_token)
