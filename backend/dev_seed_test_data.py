@@ -69,6 +69,42 @@ def rand_day(year: int, month: int, day_min: int = 1, day_max: int = None) -> da
     return date(year, month, random.randint(day_min, day_max))
 
 
+def _seed_accounts(user_id, db) -> dict:
+    """Seed test accounts. Returns {slug: Account} mapping."""
+    from app.models.account import Account, AccountType
+
+    print("Seeding accounts...")
+
+    ACCOUNT_DEFS = [
+        ("principal-cop",  "Principal COP",  AccountType.DEBIT,  "COP"),
+        ("inversion-cop",  "Inversión COP",  AccountType.DEBIT,  "COP"),
+        ("efectivo-cop",   "Efectivo COP",   AccountType.CASH,   "COP"),
+        ("credito-cop",    "Crédito COP",    AccountType.CREDIT, "COP"),
+        ("ahorro-usd",     "Ahorro USD",     AccountType.DEBIT,  "USD"),
+        ("credito-usd",    "Crédito USD",    AccountType.CREDIT, "USD"),
+        ("vacaciones-brl", "Vacaciones BRL", AccountType.DEBIT,  "BRL"),
+    ]
+
+    accs = {}
+    for slug, name, atype, currency in ACCOUNT_DEFS:
+        acc = Account(
+            user_id=user_id,
+            offline_id=f"test-account-{slug}",
+            name=name,
+            type=atype,
+            currency=currency,
+            active=True,
+            description=None,
+            tags=["test"],
+        )
+        db.session.add(acc)
+        db.session.flush()
+        accs[slug] = acc
+
+    print(f"  Created {len(accs)} accounts")
+    return accs
+
+
 def _seed_categories(user_id, db) -> dict:
     """Seed test categories. Returns {slug: Category} mapping."""
     from app.models.category import Category, CategoryType
