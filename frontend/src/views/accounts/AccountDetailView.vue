@@ -6,7 +6,7 @@
  * Archive/hard-delete/restore pattern replaces the previous single Eliminar button.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
@@ -47,6 +47,22 @@ const deleting = ref(false)
 // Computed async on mount; hard-delete is disabled until this resolves (false by default
 // keeps the button disabled until we know it is safe to enable).
 const hasMovements = ref(true)
+
+// Stats panel — full aggregate over all account transactions (not just current page)
+const statsIncome = ref(0)
+const statsExpense = ref(0)
+const statsTxCount = ref(0)
+
+async function fetchStats() {
+  try {
+    const txs = await db.transactions.where('account_id').equals(accountId).toArray()
+    statsIncome.value = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+    statsExpense.value = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+    statsTxCount.value = txs.length
+  } catch {
+    // Non-critical — stats panel shows 0 on error
+  }
+}
 
 const account = computed(() =>
   accountsStore.accounts.find(a => a.id === accountId)
@@ -90,7 +106,13 @@ onMounted(async () => {
   } catch {
     // On error leave hasMovements = true so the button stays disabled (safe default)
   }
+
+  void fetchStats()
 })
+
+const onStatsSync = () => void fetchStats()
+onMounted(() => window.addEventListener('wallet:sync-complete', onStatsSync))
+onUnmounted(() => window.removeEventListener('wallet:sync-complete', onStatsSync))
 
 function editAccount() {
   router.push(`/accounts/${accountId}/edit`)
@@ -276,6 +298,38 @@ function goToTransaction(transaction: any) {
         </div>
       </div>
     </BaseCard>
+
+    <!-- Stats panel -->
+    <div class="grid grid-cols-3 gap-3">
+      <BaseCard padding="sm">
+        <div class="text-center">
+          <p class="text-xs text-dark-text-secondary mb-1">Ingresos</p>
+          <CurrencyDisplay
+            :amount="statsIncome"
+            :currency="account.currency"
+            size="sm"
+            class="text-green-400 font-semibold"
+          />
+        </div>
+      </BaseCard>
+      <BaseCard padding="sm">
+        <div class="text-center">
+          <p class="text-xs text-dark-text-secondary mb-1">Gastos</p>
+          <CurrencyDisplay
+            :amount="statsExpense"
+            :currency="account.currency"
+            size="sm"
+            class="text-red-400 font-semibold"
+          />
+        </div>
+      </BaseCard>
+      <BaseCard padding="sm">
+        <div class="text-center">
+          <p class="text-xs text-dark-text-secondary mb-1">Transacciones</p>
+          <p class="text-base font-semibold">{{ statsTxCount }}</p>
+        </div>
+      </BaseCard>
+    </div>
 
     <!-- Movimientos (transacciones + transferencias) -->
     <div>
