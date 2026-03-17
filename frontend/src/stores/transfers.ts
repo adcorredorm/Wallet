@@ -270,8 +270,9 @@ export const useTransfersStore = defineStore('transfers', () => {
         return
       }
 
-      // Entity exists on the server — mark pending, remove from UI, enqueue DELETE.
-      await db.transfers.update(id, { _sync_status: 'pending' })
+      // Entity exists on the server — hard-delete from Dexie, remove from UI, enqueue DELETE.
+      // Same rationale as deleteTransaction: hard-delete so usePaginatedList never shows it.
+      await db.transfers.delete(id)
       transfers.value = transfers.value.filter(t => t.id !== id)
       if (transfer) {
         // Same reversal logic as the pending-CREATE path above.

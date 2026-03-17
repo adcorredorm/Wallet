@@ -359,8 +359,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
         return
       }
 
-      // Entity exists on the server — mark pending, remove from UI, enqueue DELETE.
-      await db.transactions.update(id, { _sync_status: 'pending' })
+      // Entity exists on the server — hard-delete from Dexie, remove from UI, enqueue DELETE.
+      // Hard-delete (not mark-pending) so usePaginatedList never shows the item again.
+      // The mutation queue handles server sync; markError in SyncManager is a no-op on
+      // a missing record, and the server DELETE is still sent regardless.
+      await db.transactions.delete(id)
       transactions.value = transactions.value.filter(t => t.id !== id)
       if (tx) {
         const accountsStore = useAccountsStore()
