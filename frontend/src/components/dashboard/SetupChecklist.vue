@@ -1,9 +1,23 @@
 <script setup lang="ts">
+/**
+ * SetupChecklist Component
+ *
+ * Shown on the dashboard in place of the patrimony chart when the user
+ * has not yet created at least one account AND one category.
+ *
+ * Why this component?
+ * - First-time users don't know they need an account + category before
+ *   creating a transaction. This card guides them step by step.
+ * - It is purely presentational: visibility is controlled by DashboardView
+ *   (shown when showChecklist = !hasAccounts || !hasCategories).
+ * - When both prerequisites are met, DashboardView hides this component
+ *   and shows NetWorthChart instead.
+ *
+ * Mobile-first: compact card layout, touch-friendly buttons (min 44px).
+ */
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAccountsStore, useCategoriesStore } from '@/stores'
 
-const router = useRouter()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
 
@@ -31,11 +45,11 @@ const title = computed(() =>
     <!-- Account row -->
     <div
       class="bg-dark-bg-primary rounded-lg px-3 py-2.5 mb-2 flex items-center gap-3"
-      :class="{ 'opacity-50': hasAccounts }"
+      :class="{ 'opacity-60': hasAccounts }"
     >
       <div
         class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm"
-        :class="hasAccounts ? 'bg-accent-green text-white' : 'border-2 border-dark-border text-dark-text-secondary'"
+        :class="hasAccounts ? 'bg-accent-green text-white !opacity-100' : 'border-2 border-dark-border text-dark-text-secondary'"
       >
         <span v-if="hasAccounts" data-testid="account-done">✓</span>
         <span v-else>💳</span>
@@ -46,24 +60,24 @@ const title = computed(() =>
         </p>
         <p v-if="!hasAccounts" class="text-xs text-dark-text-secondary">Bancaria, tarjeta o efectivo</p>
       </div>
-      <button
+      <router-link
         v-if="!hasAccounts"
         data-testid="account-create-btn"
+        to="/accounts/new"
         class="btn-primary text-xs px-3 py-1.5 flex-shrink-0"
-        @click="router.push('/accounts/new')"
       >
         Crear →
-      </button>
+      </router-link>
     </div>
 
     <!-- Category row -->
     <div
       class="bg-dark-bg-primary rounded-lg px-3 py-2.5 flex items-center gap-3"
-      :class="{ 'opacity-50': hasCategories }"
+      :class="{ 'opacity-60': hasCategories }"
     >
       <div
         class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm"
-        :class="hasCategories ? 'bg-accent-green text-white' : 'border-2 border-dark-border text-dark-text-secondary'"
+        :class="hasCategories ? 'bg-accent-green text-white !opacity-100' : 'border-2 border-dark-border text-dark-text-secondary'"
       >
         <span v-if="hasCategories" data-testid="category-done">✓</span>
         <span v-else>🏷️</span>
@@ -74,14 +88,14 @@ const title = computed(() =>
         </p>
         <p v-if="!hasCategories" class="text-xs text-dark-text-secondary">Para organizar tus gastos e ingresos</p>
       </div>
-      <button
+      <router-link
         v-if="!hasCategories"
         data-testid="category-create-btn"
+        to="/categories/new"
         class="btn-primary text-xs px-3 py-1.5 flex-shrink-0"
-        @click="router.push('/categories/new')"
       >
         Crear →
-      </button>
+      </router-link>
     </div>
   </div>
 </template>

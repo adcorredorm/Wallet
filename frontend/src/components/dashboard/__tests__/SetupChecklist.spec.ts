@@ -3,12 +3,6 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SetupChecklist from '../SetupChecklist.vue'
 
-// Mock router — using vi.fn() so individual tests can override the return value
-const mockPush = vi.fn()
-vi.mock('vue-router', () => ({
-  useRouter: vi.fn(() => ({ push: mockPush }))
-}))
-
 // Mock stores
 vi.mock('@/stores', () => ({
   useAccountsStore: vi.fn(),
@@ -17,6 +11,12 @@ vi.mock('@/stores', () => ({
 
 import { useAccountsStore, useCategoriesStore } from '@/stores'
 
+// RouterLink stub: renders an <a> that forwards href and data-testid so assertions work
+const RouterLinkStub = {
+  template: '<a :href="to" v-bind="$attrs"><slot /></a>',
+  props: ['to'],
+}
+
 function mountWith({ hasAccounts = false, hasCategories = false }) {
   ;(useAccountsStore as any).mockReturnValue({
     activeAccounts: hasAccounts ? [{ id: '1', name: 'Cuenta' }] : []
@@ -24,12 +24,17 @@ function mountWith({ hasAccounts = false, hasCategories = false }) {
   ;(useCategoriesStore as any).mockReturnValue({
     activeCategories: hasCategories ? [{ id: '1', name: 'Cat' }] : []
   })
-  return mount(SetupChecklist)
+  return mount(SetupChecklist, {
+    global: {
+      stubs: { RouterLink: RouterLinkStub },
+    },
+  })
 }
 
 describe('SetupChecklist', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    vi.clearAllMocks()
   })
 
   it('shows both rows when nothing exists', () => {
@@ -52,17 +57,17 @@ describe('SetupChecklist', () => {
     expect(w.find('[data-testid="category-create-btn"]').exists()).toBe(false)
   })
 
-  it('account create button navigates to /accounts/new', async () => {
-    mockPush.mockClear()
+  it('account create button links to /accounts/new', () => {
     const w = mountWith({})
-    await w.find('[data-testid="account-create-btn"]').trigger('click')
-    expect(mockPush).toHaveBeenCalledWith('/accounts/new')
+    const link = w.find('[data-testid="account-create-btn"]')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('/accounts/new')
   })
 
-  it('category create button navigates to /categories/new', async () => {
-    mockPush.mockClear()
+  it('category create button links to /categories/new', () => {
     const w = mountWith({})
-    await w.find('[data-testid="category-create-btn"]').trigger('click')
-    expect(mockPush).toHaveBeenCalledWith('/categories/new')
+    const link = w.find('[data-testid="category-create-btn"]')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('/categories/new')
   })
 })
