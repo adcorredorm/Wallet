@@ -54,9 +54,9 @@ export interface UseMovementsReturn {
 // ---------------------------------------------------------------------------
 
 const byCreatedAtDesc = (a: { created_at?: string; date?: string }, b: { created_at?: string; date?: string }): number => {
-  const byCreated = (b.created_at ?? '').localeCompare(a.created_at ?? '')
-  if (byCreated !== 0) return byCreated
-  return (b.date ?? '').localeCompare(a.date ?? '')
+  const byDate = (b.date ?? '').localeCompare(a.date ?? '')
+  if (byDate !== 0) return byDate
+  return (b.created_at ?? '').localeCompare(a.created_at ?? '')
 }
 
 // ---------------------------------------------------------------------------
