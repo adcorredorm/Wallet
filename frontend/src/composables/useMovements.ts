@@ -100,6 +100,20 @@ export function useMovements(
       let txRows: LocalTransaction[]
       let trRows: LocalTransfer[]
 
+      // Fetch pending deletes for both entity types to filter them out of results.
+      // Records pending server deletion stay in Dexie with _sync_status: 'pending'
+      // until the sync manager confirms removal — exclude them immediately.
+      const [txPendingDeletes, trPendingDeletes] = await Promise.all([
+        db.pendingMutations.where('entity_type').equals('transaction')
+          .filter(m => m.operation === 'delete' || m.operation === 'delete_permanent')
+          .toArray(),
+        db.pendingMutations.where('entity_type').equals('transfer')
+          .filter(m => m.operation === 'delete' || m.operation === 'delete_permanent')
+          .toArray(),
+      ])
+      const txDeleteIds = new Set(txPendingDeletes.map(m => m.entity_id))
+      const trDeleteIds = new Set(trPendingDeletes.map(m => m.entity_id))
+
       if (accountId) {
         // Filtered path — use index on account_id for transactions
         const txQuery = db.transactions.where('account_id').equals(accountId)
@@ -108,7 +122,9 @@ export function useMovements(
           txQuery.count(),
           txQuery.toArray(),
         ])
-        txCount.value = txCountVal
+        txRows = txRows.filter(r => !txDeleteIds.has(r.id))
+        txCount.value = txRows.length
+        txCountVal = txRows.length
 
         // Transfers need two queries: source OR destination
         const [trSrc, trDst] = await Promise.all([
@@ -116,23 +132,23 @@ export function useMovements(
           db.transfers.where('destination_account_id').equals(accountId).toArray(),
         ])
 
-        // Dedup by id
+        // Dedup by id and filter pending deletes
         const trMap = new Map<string, LocalTransfer>()
         for (const t of [...trSrc, ...trDst]) trMap.set(t.id, t)
-        trRows = Array.from(trMap.values())
+        trRows = Array.from(trMap.values()).filter(r => !trDeleteIds.has(r.id))
         trCount.value = trRows.length
       } else {
         // Unfiltered path — full table counts and arrays
-        let txCountVal: number
-        let trCountVal: number
-        ;[txCountVal, trCountVal, txRows, trRows] = await Promise.all([
-          db.transactions.count(),
-          db.transfers.count(),
+        let txRaw: LocalTransaction[]
+        let trRaw: LocalTransfer[]
+        ;[txRaw, trRaw] = await Promise.all([
           db.transactions.toArray(),
           db.transfers.toArray(),
         ])
-        txCount.value = txCountVal
-        trCount.value = trCountVal
+        txRows = txRaw.filter(r => !txDeleteIds.has(r.id))
+        trRows = trRaw.filter(r => !trDeleteIds.has(r.id))
+        txCount.value = txRows.length
+        trCount.value = trRows.length
       }
 
       // Step 2 — totalItems is now a computed: txCount + trCount (already updated above)

@@ -58,9 +58,17 @@ export function usePaginatedList<T extends Row>(
   async function fetchAll() {
     loading.value = true
     try {
-      const rows = type === 'transactions'
+      const entityType = type === 'transactions' ? 'transaction' : 'transfer'
+      const pendingDeletes = await db.pendingMutations
+        .where('entity_type').equals(entityType)
+        .filter(m => m.operation === 'delete' || m.operation === 'delete_permanent')
+        .toArray()
+      const pendingDeleteIds = new Set(pendingDeletes.map(m => m.entity_id))
+
+      const rawRows = type === 'transactions'
         ? await db.transactions.toArray()
         : await db.transfers.toArray()
+      const rows = rawRows.filter(r => !pendingDeleteIds.has(r.id))
       rows.sort(byCreatedAtDesc)
       allRows.value = rows as T[]
       if (totalPages.value > 0 && currentPage.value > totalPages.value) {

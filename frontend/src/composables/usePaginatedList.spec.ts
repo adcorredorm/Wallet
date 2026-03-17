@@ -2,15 +2,23 @@ import { createPinia, setActivePinia } from 'pinia'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 
-const { mockTxToArray, mockTrToArray } = vi.hoisted(() => ({
+const { mockTxToArray, mockTrToArray, mockPendingMutationsToArray } = vi.hoisted(() => ({
   mockTxToArray: vi.fn().mockResolvedValue([]),
   mockTrToArray: vi.fn().mockResolvedValue([]),
+  mockPendingMutationsToArray: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('@/offline', () => ({
   db: {
     transactions: { toArray: mockTxToArray },
     transfers: { toArray: mockTrToArray },
+    pendingMutations: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          filter: vi.fn(() => ({ toArray: mockPendingMutationsToArray })),
+        })),
+      })),
+    },
   },
 }))
 

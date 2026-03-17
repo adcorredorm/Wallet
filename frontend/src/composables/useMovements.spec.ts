@@ -5,11 +5,13 @@ import { nextTick } from 'vue'
 const {
   mockTxToArray, mockTxCount, mockTxWhere,
   mockTrToArray, mockTrCount, mockTrWhere,
+  mockPendingMutationsToArray,
 } = vi.hoisted(() => {
   const txToArray = vi.fn().mockResolvedValue([])
   const txCount = vi.fn().mockResolvedValue(0)
   const trToArray = vi.fn().mockResolvedValue([])
   const trCount = vi.fn().mockResolvedValue(0)
+  const pendingToArray = vi.fn().mockResolvedValue([])
   return {
     mockTxToArray: txToArray,
     mockTxCount: txCount,
@@ -22,6 +24,7 @@ const {
       equals: vi.fn(() => ({ toArray: trToArray, count: trCount })),
       anyOf: vi.fn(() => ({ toArray: trToArray, count: trCount })),
     })),
+    mockPendingMutationsToArray: pendingToArray,
   }
 })
 
@@ -29,6 +32,13 @@ vi.mock('@/offline', () => ({
   db: {
     transactions: { toArray: mockTxToArray, count: mockTxCount, where: mockTxWhere },
     transfers: { toArray: mockTrToArray, count: mockTrCount, where: mockTrWhere },
+    pendingMutations: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          filter: vi.fn(() => ({ toArray: mockPendingMutationsToArray })),
+        })),
+      })),
+    },
   },
 }))
 
@@ -82,11 +92,13 @@ describe('useMovements — no accountId (all movements)', () => {
   })
 
   it('totalPages is ceil(totalItems / pageSize)', async () => {
-    mockTxCount.mockResolvedValue(30); mockTrCount.mockResolvedValue(15)
-    mockTxToArray.mockResolvedValue(Array.from({ length: 20 }, (_, i) =>
-      makeTxRow(`tx-${i}`, `2026-01-${String(20 - i).padStart(2, '0')}T00:00:00Z`)
+    // totalItems is derived from rows.length (not from count() queries)
+    mockTxToArray.mockResolvedValue(Array.from({ length: 30 }, (_, i) =>
+      makeTxRow(`tx-${i}`, `2026-01-${String(30 - i).padStart(2, '0')}T00:00:00Z`)
     ))
-    mockTrToArray.mockResolvedValue([])
+    mockTrToArray.mockResolvedValue(Array.from({ length: 15 }, (_, i) =>
+      makeTrRow(`tr-${i}`, `2025-12-${String(15 - i).padStart(2, '0')}T00:00:00Z`)
+    ))
     const { totalPages, totalItems } = useMovements(undefined, 20)
     await settle()
     expect(totalItems.value).toBe(45)
