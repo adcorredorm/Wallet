@@ -32,8 +32,10 @@ class Transfer(BaseModel):
         tags: List of tags for categorization
         destination_amount: Amount credited to the destination account in its
             own currency (NULL for same-currency transfers)
-        exchange_rate: Exchange rate applied at transfer time, expressed as
-            source_currency / destination_currency (NULL for same-currency transfers)
+        exchange_rate: Exchange rate applied at transfer time, expressed as units
+            of destination currency per 1 unit of source currency
+            (e.g., COP→USD: 0.000244; destination_amount = amount * exchange_rate).
+            NULL for same-currency transfers.
         destination_currency: ISO 4217 currency code of the destination account
             (NULL for same-currency transfers)
         base_rate: Units of primaryCurrency per 1 unit of the source account's
