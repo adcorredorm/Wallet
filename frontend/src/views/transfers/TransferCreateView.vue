@@ -24,7 +24,7 @@ async function handleSubmit(data: CreateTransferDto) {
     await transfersStore.createTransfer(data)
     // Balances are updated by adjustBalance() inside createTransfer — no API call needed.
     uiStore.showSuccess('Transferencia creada exitosamente')
-    router.push('/transfers')
+    router.push('/')
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al crear transferencia')
   }
