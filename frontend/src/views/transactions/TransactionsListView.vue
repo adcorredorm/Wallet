@@ -1,21 +1,32 @@
 <script setup lang="ts">
 /**
  * Transactions List View
- *
- * Shows all transactions with filters
+ * Data is read directly from Dexie via usePaginatedList — no backend call.
+ * transactionsStore.fetchTransactions() is kept to populate shared Pinia state.
  */
 
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTransactionsStore, useUiStore } from '@/stores'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import TransactionList from '@/components/transactions/TransactionList.vue'
+import PaginationControls from '@/components/ui/PaginationControls.vue'
 import SimpleFab from '@/components/ui/SimpleFab.vue'
+import type { LocalTransaction } from '@/offline/types'
 
 const router = useRouter()
 const transactionsStore = useTransactionsStore()
 const uiStore = useUiStore()
 
-const transactions = computed(() => transactionsStore.transactions)
+const PAGE_SIZE = 20
+
+const {
+  items: transactions,
+  currentPage,
+  totalPages,
+  loading,
+  goToPage,
+} = usePaginatedList<LocalTransaction>('transactions', PAGE_SIZE)
 
 onMounted(async () => {
   try {
@@ -36,22 +47,26 @@ function createTransaction() {
 
 <template>
   <div class="space-y-6">
-    <!-- Header -->
     <div>
       <h1 class="text-2xl font-bold">Transacciones</h1>
     </div>
 
-    <!-- Transaction list -->
     <TransactionList
       :transactions="transactions"
-      :loading="transactionsStore.loading"
+      :loading="loading"
       @transaction-click="goToTransaction"
       @create-click="createTransaction"
     />
 
-    <!-- Floating Action Button -->
+    <PaginationControls
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :page-size="PAGE_SIZE"
+      @page-change="goToPage"
+    />
+
     <SimpleFab
-      aria-label="Crear nueva transacción"
+      ariaLabel="Crear nueva transacción"
       @click="createTransaction"
     />
   </div>
