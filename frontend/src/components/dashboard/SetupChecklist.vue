@@ -23,6 +23,9 @@ const categoriesStore = useCategoriesStore()
 
 const hasAccounts = computed(() => accountsStore.activeAccounts.length > 0)
 const hasCategories = computed(() => categoriesStore.activeCategories.length > 0)
+// Note: bothDone is only true during the ~200ms fade-out transition before
+// DashboardView unmounts this component (showChecklist becomes false when both
+// prerequisites exist). The subtitle copy below is transitional.
 const bothDone = computed(() => hasAccounts.value && hasCategories.value)
 
 const title = computed(() =>

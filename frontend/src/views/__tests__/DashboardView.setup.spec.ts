@@ -13,6 +13,8 @@ vi.mock('@/stores', () => ({
 vi.mock('@/components/dashboard/NetWorthCard.vue', () => ({ default: { template: '<div data-testid="net-worth-card" />' } }))
 vi.mock('@/components/dashboard/NetWorthChart.vue', () => ({ default: { template: '<div data-testid="net-worth-chart" />' } }))
 vi.mock('@/components/dashboard/SetupChecklist.vue', () => ({ default: { template: '<div data-testid="setup-checklist" />' } }))
+// Stub uses native `disabled` to make prop-binding assertions simple.
+// The real FAB uses `aria-disabled` + a click guard (to preserve the warning toast).
 vi.mock('@/components/ui/FloatingActionButton.vue', () => ({ default: { props: ['disabled'], template: '<button data-testid="fab" :disabled="disabled" />' } }))
 vi.mock('@/composables/useMovements', () => ({ useMovements: () => ({ items: [], currentPage: 1, totalPages: 1, loading: false, goToPage: vi.fn() }) }))
 

@@ -39,6 +39,9 @@ function handleCancel() {
   <div class="space-y-6">
     <h1 class="text-2xl font-bold">Nueva Transferencia</h1>
 
+    <!-- Note: no setup safety net here — transfers require 2 accounts which
+         TransferForm validates inline. The FAB (the only entry point to this view)
+         is already disabled when accounts are missing (DashboardView showChecklist). -->
     <BaseCard>
       <TransferForm
         :accounts="accounts"
