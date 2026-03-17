@@ -44,7 +44,7 @@ export interface UseMovementsReturn {
   items: ComputedRef<Movement[]>
   currentPage: Ref<number>
   totalPages: ComputedRef<number>
-  totalItems: Ref<number>
+  totalItems: ComputedRef<number>
   loading: Ref<boolean>
   goToPage: (page: number) => void
 }
@@ -72,7 +72,9 @@ export function useMovements(
   // because the fetch itself is already bounded by fetchLimit = N * pageSize.
   const pageRows = ref<Movement[]>([])
   const currentPage = ref(1)
-  const totalItems = ref(0)
+  const txCount = ref(0)
+  const trCount = ref(0)
+  const totalItems = computed(() => txCount.value + trCount.value)
   const loading = ref(false)
 
   const totalPages = computed(() =>
@@ -92,19 +94,18 @@ export function useMovements(
       const fetchLimit = page * pageSize
 
       // Step 1 — count totals (cheap — no full table scan in Dexie)
-      let txCount: number
-      let trCount: number
-
       let txRows: LocalTransaction[]
       let trRows: LocalTransfer[]
 
       if (accountId) {
         // Filtered path — use index on account_id for transactions
         const txQuery = db.transactions.where('account_id').equals(accountId)
-        ;[txCount, txRows] = await Promise.all([
+        let txCountVal: number
+        ;[txCountVal, txRows] = await Promise.all([
           txQuery.count(),
           txQuery.toArray(),
         ])
+        txCount.value = txCountVal
 
         // Transfers need two queries: source OR destination
         const [trSrc, trDst] = await Promise.all([
@@ -116,19 +117,22 @@ export function useMovements(
         const trMap = new Map<string, LocalTransfer>()
         for (const t of [...trSrc, ...trDst]) trMap.set(t.id, t)
         trRows = Array.from(trMap.values())
-        trCount = trRows.length
+        trCount.value = trRows.length
       } else {
         // Unfiltered path — full table counts and arrays
-        ;[txCount, trCount, txRows, trRows] = await Promise.all([
+        let txCountVal: number
+        let trCountVal: number
+        ;[txCountVal, trCountVal, txRows, trRows] = await Promise.all([
           db.transactions.count(),
           db.transfers.count(),
           db.transactions.toArray(),
           db.transfers.toArray(),
         ])
+        txCount.value = txCountVal
+        trCount.value = trCountVal
       }
 
-      // Step 2 — update total (this is the REAL total, not the fetch limit)
-      totalItems.value = txCount + trCount
+      // Step 2 — totalItems is now a computed: txCount + trCount (already updated above)
 
       // Step 3 — sort each list desc, take only fetchLimit candidates
       txRows.sort(byCreatedAtDesc)
