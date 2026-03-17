@@ -151,6 +151,13 @@ function generateBoundaries(
     cursor = advance(cursor)
   }
 
+  // Ensure endDate is always the final boundary.
+  // Without this, events between the last period boundary and endDate
+  // (e.g. March 2–17 when granularity='month') are never accumulated.
+  if (boundaries.length === 0 || !isEqual(boundaries[boundaries.length - 1], endDate)) {
+    boundaries.push(new Date(endDate))
+  }
+
   return boundaries
 }
 

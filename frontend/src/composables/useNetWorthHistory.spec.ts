@@ -276,6 +276,103 @@ describe('useNetWorthHistory — granularity auto-selection', () => {
   })
 })
 
+describe('generateBoundaries — endDate always included', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    mockGetRate.mockReturnValue(1)
+    mockTr.mockResolvedValue([])
+    mockSyncStore.state.isSyncing = false
+    mockSyncStore.state.initialSyncComplete = true
+    mockTransactionsStore.state.transactions = []
+    mockTransfersStore.state.transfers = []
+  })
+
+  it('month granularity: includes a data point for endDate even when it falls mid-month', async () => {
+    // Arrange: one income transaction on 2026-03-17 (mid-month).
+    // rangeDays=365 → month granularity. The last generated monthly boundary is
+    // 2026-03-01. Without the fix, events from Mar 2–17 are never accumulated
+    // and the March data point shows 0 (or is absent).
+    mockAcc.mockResolvedValue([
+      { id: 'acc1', currency: 'USD', active: true, name: 'Test', type: 'debit', user_id: 'u1', offline_id: 'acc1', created_at: '', updated_at: '' },
+    ])
+    mockTx.mockResolvedValue([
+      {
+        id: 'tx1',
+        offline_id: 'tx1',
+        account_id: 'acc1',
+        type: 'income',
+        amount: '100000',
+        date: '2026-03-17',
+        created_at: '2026-03-17T10:00:00Z',
+        base_rate: 1,
+        category_id: 'cat1',
+        title: 'Test',
+        user_id: 'u1',
+        _sync_status: 'synced',
+        updated_at: '2026-03-17T10:00:00Z',
+      },
+    ])
+
+    const { dataPoints, loading } = useNetWorthHistory({
+      rangeDays: 365,
+      endDate: '2026-03-17',
+    })
+
+    await settle(400)
+
+    expect(loading.value).toBe(false)
+
+    // The last data point must be dated 2026-03-17 with value > 0
+    const lastPoint = dataPoints.value[dataPoints.value.length - 1]
+    expect(lastPoint?.date).toBe('2026-03-17')
+    expect(lastPoint?.value).toBeGreaterThan(0)
+  })
+
+  it('month granularity: rangeDays=1, startDate=endDate=mid-month emits one data point with correct value', async () => {
+    // When rangeDays=1 and endDate=2026-03-17, startDate also equals 2026-03-17.
+    // startOfMonth(2026-03-17) = 2026-03-01 which is BEFORE startDate.
+    // The while loop condition (cursor <= endDate) only produces 2026-03-01.
+    // But 2026-03-01 < startDateStr (2026-03-17), so it is filtered out by the
+    // "only emit within output range" guard — zero data points are emitted.
+    // The fix appends 2026-03-17 as the final boundary, producing one data point.
+    mockAcc.mockResolvedValue([
+      { id: 'acc1', currency: 'USD', active: true, name: 'Test', type: 'debit', user_id: 'u1', offline_id: 'acc1', created_at: '', updated_at: '' },
+    ])
+    mockTx.mockResolvedValue([
+      {
+        id: 'tx2',
+        offline_id: 'tx2',
+        account_id: 'acc1',
+        type: 'income',
+        amount: '50000',
+        date: '2026-03-17',
+        created_at: '2026-03-17T10:00:00Z',
+        base_rate: 1,
+        category_id: 'cat1',
+        title: 'Test 2',
+        user_id: 'u1',
+        _sync_status: 'synced',
+        updated_at: '2026-03-17T10:00:00Z',
+      },
+    ])
+
+    const { dataPoints, loading } = useNetWorthHistory({
+      rangeDays: 1,
+      endDate: '2026-03-17',
+    })
+
+    await settle(400)
+
+    expect(loading.value).toBe(false)
+    expect(dataPoints.value.length).toBeGreaterThan(0)
+
+    const lastPoint = dataPoints.value[dataPoints.value.length - 1]
+    expect(lastPoint?.date).toBe('2026-03-17')
+    expect(lastPoint?.value).toBeGreaterThan(0)
+  })
+})
+
 describe('useNetWorthHistory — Guard 2 sync blocking', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
