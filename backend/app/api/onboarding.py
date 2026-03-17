@@ -32,22 +32,37 @@ _SEED_ACCOUNTS = [
 ]
 
 _SEED_CATEGORIES = [
-    # INCOME
+    # ------------------------------------------------------------------ INCOME
     {"name": "Salario", "type": CategoryType.INCOME, "icon": "💰", "color": "#10B981"},
-    {"name": "Freelance", "type": CategoryType.INCOME, "icon": "💼", "color": "#3B82F6"},
-    {"name": "Inversiones", "type": CategoryType.INCOME, "icon": "📈", "color": "#8B5CF6"},
-    {"name": "Otros Ingresos", "type": CategoryType.INCOME, "icon": "🎁", "color": "#EC4899"},
-    # EXPENSE
+    {"name": "Otros Ingresos", "type": CategoryType.INCOME, "icon": "🪙", "color": "#3B82F6"},
+    # ----------------------------------------------------------------- EXPENSE
     {
         "name": "Alimentación",
         "type": CategoryType.EXPENSE,
-        "icon": "🛒",
+        "icon": "🍽️",
         "color": "#EF4444",
         "subcategories": [
-            {"name": "Supermercado", "icon": "🛍️"},
-            {"name": "Restaurantes", "icon": "🍽️"},
-            {"name": "Cafetería", "icon": "☕"},
+            {"name": "Mercado", "icon": "🛒"},
+            {"name": "Restaurantes", "icon": "🍴"},
+            {"name": "Domicilios", "icon": "🛵"},
         ],
+    },
+    {
+        "name": "Vivienda",
+        "type": CategoryType.EXPENSE,
+        "icon": "🏠",
+        "color": "#6366F1",
+        "subcategories": [
+            {"name": "Renta/Hipoteca", "icon": "🔑"},
+            {"name": "Servicios", "icon": "⚡"},
+            {"name": "Mantenimiento", "icon": "🔧"},
+        ],
+    },
+    {
+        "name": "Salud",
+        "type": CategoryType.EXPENSE,
+        "icon": "❤️",
+        "color": "#14B8A6",
     },
     {
         "name": "Transporte",
@@ -57,19 +72,14 @@ _SEED_CATEGORIES = [
         "subcategories": [
             {"name": "Gasolina", "icon": "⛽"},
             {"name": "Transporte Público", "icon": "🚌"},
-            {"name": "Taxi/Uber", "icon": "🚕"},
+            {"name": "Uber/Taxi", "icon": "🚕"},
         ],
     },
     {
-        "name": "Vivienda",
+        "name": "Facturas",
         "type": CategoryType.EXPENSE,
-        "icon": "🏠",
-        "color": "#6366F1",
-        "subcategories": [
-            {"name": "Renta", "icon": "🔑"},
-            {"name": "Servicios", "icon": "⚡"},
-            {"name": "Mantenimiento", "icon": "🔧"},
-        ],
+        "icon": "🧾",
+        "color": "#8B5CF6",
     },
     {
         "name": "Entretenimiento",
@@ -78,22 +88,32 @@ _SEED_CATEGORIES = [
         "color": "#EC4899",
         "subcategories": [
             {"name": "Streaming", "icon": "📺"},
-            {"name": "Cine", "icon": "🎟️"},
-            {"name": "Eventos", "icon": "📅"},
         ],
     },
     {
-        "name": "Salud",
+        "name": "Educación",
         "type": CategoryType.EXPENSE,
-        "icon": "❤️",
-        "color": "#14B8A6",
-        "subcategories": [
-            {"name": "Medicamentos", "icon": "💊"},
-            {"name": "Consultas", "icon": "🩺"},
-            {"name": "Gimnasio", "icon": "💪"},
-        ],
+        "icon": "🎓",
+        "color": "#3B82F6",
     },
-    {"name": "Otros Gastos", "type": CategoryType.EXPENSE, "icon": "📝", "color": "#6B7280"},
+    {
+        "name": "Mascotas",
+        "type": CategoryType.EXPENSE,
+        "icon": "🐾",
+        "color": "#F97316",
+    },
+    {
+        "name": "Compras",
+        "type": CategoryType.EXPENSE,
+        "icon": "🛍️",
+        "color": "#0EA5E9",
+    },
+    {
+        "name": "Otros",
+        "type": CategoryType.EXPENSE,
+        "icon": "📦",
+        "color": "#6B7280",
+    },
 ]
 
 
@@ -183,7 +203,7 @@ def seed_user():
         # --- Create default dashboard (3 columns) ---
         dashboard = Dashboard(
             user_id=user_id,
-            name="Mi Dashboard",
+            name="Seguimiento Mes",
             is_default=True,
             sort_order=0,
             display_currency="COP",
@@ -193,53 +213,69 @@ def seed_user():
         db.session.add(dashboard)
         db.session.flush()  # get dashboard.id for widget FKs
 
-        _time_this_month = {"type": "dynamic", "value": "this_month"}
+        _time_last_30 = {"type": "dynamic", "value": "last_30_days"}
         _filters_expense = {"type": "expense"}
-        _filters_income = {"type": "income"}
 
-        # Widget 1: Gastos de este mes por categoría — gráfico de línea (2 cols)
+        # Widget 1: Gastos del Mes — número (1 col)
+        db.session.add(DashboardWidget(
+            user_id=user_id,
+            dashboard_id=dashboard.id,
+            widget_type=WidgetType.NUMBER,
+            title="Gastos del Mes",
+            position_x=0, position_y=0, width=1, height=1,
+            config={
+                "time_range": _time_last_30,
+                "filters": _filters_expense,
+                "granularity": "month",
+                "group_by": "none",
+                "aggregation": "sum",
+            },
+            offline_id="seed-widget-expenses-number",
+        ))
+
+        # Widget 2: Línea de Tiempo — línea mixta (2 cols) — group_by type, no filter
         db.session.add(DashboardWidget(
             user_id=user_id,
             dashboard_id=dashboard.id,
             widget_type=WidgetType.LINE,
-            title="Gastos por Categoría",
-            position_x=0, position_y=0, width=2, height=2,
+            title="Línea de Tiempo",
+            position_x=1, position_y=0, width=2, height=1,
             config={
-                "time_range": _time_this_month,
+                "time_range": _time_last_30,
+                "filters": {},
+                "granularity": "day",
+                "group_by": "type",
+                "aggregation": "sum",
+            },
+            offline_id="seed-widget-timeline",
+        ))
+
+        # Widget 3: Gastos por Categoría — pastel (2 cols)
+        db.session.add(DashboardWidget(
+            user_id=user_id,
+            dashboard_id=dashboard.id,
+            widget_type=WidgetType.PIE,
+            title="Gastos por Categoría",
+            position_x=0, position_y=1, width=2, height=2,
+            config={
+                "time_range": _time_last_30,
                 "filters": _filters_expense,
-                "granularity": "week",
+                "granularity": "month",
                 "group_by": "category",
                 "aggregation": "sum",
             },
             offline_id="seed-widget-expenses-by-category",
         ))
 
-        # Widget 2: Ingresos de este mes — número (1 col)
-        db.session.add(DashboardWidget(
-            user_id=user_id,
-            dashboard_id=dashboard.id,
-            widget_type=WidgetType.NUMBER,
-            title="Ingresos del Mes",
-            position_x=2, position_y=0, width=1, height=1,
-            config={
-                "time_range": _time_this_month,
-                "filters": _filters_income,
-                "granularity": "month",
-                "group_by": "none",
-                "aggregation": "sum",
-            },
-            offline_id="seed-widget-income-number",
-        ))
-
-        # Widget 3: Gastos por día de la semana — barras (1 col)
+        # Widget 4: Gastos en la Semana — barras (1 col)
         db.session.add(DashboardWidget(
             user_id=user_id,
             dashboard_id=dashboard.id,
             widget_type=WidgetType.BAR,
-            title="Gastos por Día de la Semana",
+            title="Gastos en la Semana",
             position_x=2, position_y=1, width=1, height=1,
             config={
-                "time_range": _time_this_month,
+                "time_range": _time_last_30,
                 "filters": _filters_expense,
                 "granularity": "day",
                 "group_by": "day_of_week",

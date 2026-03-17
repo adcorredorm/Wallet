@@ -159,3 +159,157 @@ class TestOnboardingSeed:
         assert all(
             (cat.offline_id or "").startswith("seed-") for cat in categories
         )
+
+    def test_seed_creates_exact_account_count(self, client, app):
+        """Seed must create exactly 3 accounts."""
+        from app.extensions import db
+        from app.models.account import Account
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        headers = _auth_headers(user_id)
+
+        resp = client.post("/api/v1/onboarding/seed", headers=headers)
+        assert resp.status_code == 201
+
+        with app.app_context():
+            count = db.session.execute(
+                db.select(db.func.count()).select_from(Account).where(
+                    Account.user_id == user_id_uuid
+                )
+            ).scalar()
+
+        assert count == 3
+
+    def test_seed_creates_exact_category_count(self, client, app):
+        """Seed must create exactly 22 category rows: 2 income + 10 expense parents + 10 subcategories."""
+        from app.extensions import db
+        from app.models.category import Category
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        headers = _auth_headers(user_id)
+
+        resp = client.post("/api/v1/onboarding/seed", headers=headers)
+        assert resp.status_code == 201
+        assert resp.get_json()["data"]["categories_created"] == 22
+
+        with app.app_context():
+            count = db.session.execute(
+                db.select(db.func.count()).select_from(Category).where(
+                    Category.user_id == user_id_uuid
+                )
+            ).scalar()
+
+        assert count == 22
+
+    def test_seed_income_categories_are_exactly_two(self, client, app):
+        """Seed must produce exactly 2 income categories: Salario and Otros Ingresos."""
+        from app.extensions import db
+        from app.models.category import Category, CategoryType
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        resp = client.post("/api/v1/onboarding/seed", headers=_auth_headers(user_id))
+        assert resp.status_code == 201
+
+        with app.app_context():
+            income_cats = db.session.execute(
+                db.select(Category).where(
+                    Category.user_id == user_id_uuid,
+                    Category.type == CategoryType.INCOME,
+                    Category.parent_category_id.is_(None),
+                )
+            ).scalars().all()
+
+        names = {c.name for c in income_cats}
+        assert names == {"Salario", "Otros Ingresos"}
+
+    def test_seed_dashboard_name_and_widget_count(self, client, app):
+        """Dashboard must be named 'Seguimiento Mes' with exactly 4 widgets."""
+        from app.extensions import db
+        from app.models.dashboard import Dashboard
+        from app.models.dashboard_widget import DashboardWidget
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        resp = client.post("/api/v1/onboarding/seed", headers=_auth_headers(user_id))
+        assert resp.status_code == 201
+
+        with app.app_context():
+            dashboard = db.session.execute(
+                db.select(Dashboard).where(Dashboard.user_id == user_id_uuid)
+            ).scalar_one()
+            widget_count = db.session.execute(
+                db.select(db.func.count()).select_from(DashboardWidget).where(
+                    DashboardWidget.dashboard_id == dashboard.id
+                )
+            ).scalar()
+
+        assert dashboard.name == "Seguimiento Mes"
+        assert widget_count == 4
+
+    def test_seed_widgets_use_last_30_days_time_range(self, client, app):
+        """All 4 widgets must use time_range.value == 'last_30_days'."""
+        from app.extensions import db
+        from app.models.dashboard import Dashboard
+        from app.models.dashboard_widget import DashboardWidget
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        resp = client.post("/api/v1/onboarding/seed", headers=_auth_headers(user_id))
+        assert resp.status_code == 201
+
+        with app.app_context():
+            dashboard = db.session.execute(
+                db.select(Dashboard).where(Dashboard.user_id == user_id_uuid)
+            ).scalar_one()
+            widgets = db.session.execute(
+                db.select(DashboardWidget).where(
+                    DashboardWidget.dashboard_id == dashboard.id
+                )
+            ).scalars().all()
+
+        for widget in widgets:
+            assert widget.config["time_range"]["value"] == "last_30_days", (
+                f"Widget '{widget.title}' has time_range "
+                f"{widget.config['time_range']} instead of last_30_days"
+            )
+
+    def test_seed_widget_offline_ids_use_seed_prefix(self, client, app):
+        """All widget offline_ids must start with 'seed-'."""
+        from app.extensions import db
+        from app.models.dashboard import Dashboard
+        from app.models.dashboard_widget import DashboardWidget
+        from uuid import UUID
+
+        user_id = str(uuid4())
+        user_id_uuid = UUID(user_id)
+        _create_test_user(app, user_id)
+        resp = client.post("/api/v1/onboarding/seed", headers=_auth_headers(user_id))
+        assert resp.status_code == 201
+
+        with app.app_context():
+            dashboard = db.session.execute(
+                db.select(Dashboard).where(Dashboard.user_id == user_id_uuid)
+            ).scalar_one()
+            widgets = db.session.execute(
+                db.select(DashboardWidget).where(
+                    DashboardWidget.dashboard_id == dashboard.id
+                )
+            ).scalars().all()
+
+        for widget in widgets:
+            assert (widget.offline_id or "").startswith("seed-"), (
+                f"Widget '{widget.title}' has offline_id '{widget.offline_id}'"
+            )
