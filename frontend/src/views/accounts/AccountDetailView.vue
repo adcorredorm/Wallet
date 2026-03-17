@@ -308,6 +308,7 @@ function goToTransaction(transaction: any) {
             :amount="statsIncome"
             :currency="account.currency"
             size="sm"
+            compact
             class="text-green-400 font-semibold"
           />
         </div>
@@ -319,6 +320,7 @@ function goToTransaction(transaction: any) {
             :amount="statsExpense"
             :currency="account.currency"
             size="sm"
+            compact
             class="text-red-400 font-semibold"
           />
         </div>
