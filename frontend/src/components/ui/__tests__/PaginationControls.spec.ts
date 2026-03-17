@@ -10,21 +10,21 @@ describe('PaginationControls — visibility', () => {
     const wrapper = mount(PaginationControls, {
       props: { currentPage: 1, totalPages: 0, pageSize: 20 },
     })
-    expect(wrapper.html()).toBe('')
+    expect(wrapper.find('[role="navigation"]').exists()).toBe(false)
   })
 
   it('renders nothing when totalPages is 1', () => {
     const wrapper = mount(PaginationControls, {
       props: { currentPage: 1, totalPages: 1, pageSize: 20 },
     })
-    expect(wrapper.html()).toBe('')
+    expect(wrapper.find('[role="navigation"]').exists()).toBe(false)
   })
 
   it('renders when totalPages is 2', () => {
     const wrapper = mount(PaginationControls, {
       props: { currentPage: 1, totalPages: 2, pageSize: 20 },
     })
-    expect(wrapper.html()).not.toBe('')
+    expect(wrapper.find('[role="navigation"]').exists()).toBe(true)
   })
 })
 
@@ -35,8 +35,7 @@ describe('PaginationControls — page info display', () => {
     const wrapper = mount(PaginationControls, {
       props: { currentPage: 2, totalPages: 5, pageSize: 20 },
     })
-    expect(wrapper.text()).toContain('2')
-    expect(wrapper.text()).toContain('5')
+    expect(wrapper.text()).toMatch(/Página\s+2\s+de\s+5/)
   })
 })
 
