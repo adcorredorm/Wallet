@@ -13,7 +13,7 @@ export const ACCOUNT_TYPES = [
 export const CATEGORY_TYPES = [
   { value: 'income', label: 'Ingreso' },
   { value: 'expense', label: 'Gasto' },
-  { value: 'both', label: 'Ambos' }
+  { value: 'both', label: 'Mixto' }
 ] as const
 
 // Transaction types

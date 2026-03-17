@@ -279,8 +279,8 @@ describe('formatCategoryType', () => {
     expect(formatCategoryType('expense')).toBe('Gasto')
   })
 
-  it('maps "both" to "Ambos"', () => {
-    expect(formatCategoryType('both')).toBe('Ambos')
+  it('maps "both" to "Mixto"', () => {
+    expect(formatCategoryType('both')).toBe('Mixto')
   })
 
   it('returns the raw value for an unknown type', () => {

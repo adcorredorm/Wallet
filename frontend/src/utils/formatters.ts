@@ -220,7 +220,7 @@ export function formatCategoryType(type: string): string {
   const labels: Record<string, string> = {
     'income': 'Ingreso',
     'expense': 'Gasto',
-    'both': 'Ambos'
+    'both': 'Mixto'
   }
   return labels[type] || type
 }
