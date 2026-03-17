@@ -30,6 +30,7 @@ interface Props {
   accounts: Account[]
   categories: Category[]
   loading?: boolean
+  initialAccountId?: string
 }
 
 const props = defineProps<Props>()
@@ -49,7 +50,7 @@ const form = reactive({
   type: props.transaction?.type || 'expense' as TransactionType,
   amount: props.transaction?.amount || 0,
   date: props.transaction?.date || formatDateForInput(new Date()),
-  account_id: props.transaction?.account_id || '',
+  account_id: props.transaction?.account_id || props.initialAccountId || '',
   category_id: props.transaction?.category_id || '',
   title: props.transaction?.title || '',
   description: props.transaction?.description || '',

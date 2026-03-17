@@ -288,6 +288,8 @@ function goToTransaction(transaction: any) {
         title="Sin movimientos"
         message="No hay transacciones ni transferencias en esta cuenta"
         icon="📊"
+        action-text="Nueva transacción"
+        @action="router.push({ path: '/transactions/new', query: { account_id: accountId } })"
       />
 
       <div v-else class="space-y-2">

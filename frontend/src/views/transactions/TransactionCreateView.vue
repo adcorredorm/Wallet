@@ -6,13 +6,15 @@
  */
 
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useTransactionsStore, useAccountsStore, useCategoriesStore, useUiStore } from '@/stores'
 import TransactionForm from '@/components/transactions/TransactionForm.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import type { CreateTransactionDto } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
+const initialAccountId = route.query.account_id as string | undefined
 const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
@@ -46,6 +48,7 @@ function handleCancel() {
         :accounts="accounts"
         :categories="categories"
         :loading="transactionsStore.loading"
+        :initial-account-id="initialAccountId"
         @submit="handleSubmit"
         @cancel="handleCancel"
       />
