@@ -228,6 +228,7 @@ class DashboardCrudService:
 
         widget = self.repo.create_widget(
             dashboard_id=dashboard_id,
+            user_id=user_id,
             widget_type=widget_type_enum,
             title=data.title,
             position_x=data.position_x,
