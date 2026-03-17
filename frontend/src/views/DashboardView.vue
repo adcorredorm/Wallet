@@ -105,6 +105,8 @@ function goToTransaction(transaction: any) {
         title="Sin actividad"
         message="Tus transacciones y transferencias aparecerán aquí"
         icon="📊"
+        :action-text="showChecklist ? '' : 'Nueva transacción'"
+        @action="router.push('/transactions/new')"
       />
 
       <div v-else class="space-y-2">
