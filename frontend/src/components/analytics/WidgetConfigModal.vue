@@ -286,10 +286,14 @@ async function onSave() {
         config: builtConfig.value,
       })
     } else {
+      const existingCount = store.currentDashboard?.widgets.length ?? 0
+      const cols = store.currentDashboard?.layout_columns ?? 2
       await store.createWidget(props.dashboardId, {
         widget_type: form.widget_type,
         title: form.title.trim(),
-        config: builtConfig.value
+        config: builtConfig.value,
+        position_x: existingCount % cols,
+        position_y: Math.floor(existingCount / cols),
       })
     }
     emit('close')
