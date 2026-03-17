@@ -63,6 +63,8 @@ const {
 onMounted(async () => {
   loading.value = true
   try {
+    // Load from IndexedDB (Dexie-only, no network call).
+    // SyncManager handles background updates via wallet:sync-complete → refreshFromDB().
     await Promise.all([
       accountsStore.fetchAccounts(),
       transactionsStore.fetchTransactions(),
@@ -71,6 +73,7 @@ onMounted(async () => {
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar el dashboard')
   } finally {
+    // Unblock the UI as soon as IndexedDB has been read.
     loading.value = false
   }
 })
