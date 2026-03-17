@@ -51,7 +51,7 @@ function createTransfer() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 pb-24">
     <div>
       <h1 class="text-2xl font-bold">Transferencias</h1>
     </div>
