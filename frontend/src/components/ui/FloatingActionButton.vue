@@ -161,7 +161,8 @@ const icons: Record<string, string> = {
     <!-- Main FAB button -->
     <button
       class="fab-button"
-      :class="{ 'fab-button-open': isMenuOpen, 'fab-button-disabled': disabled }"
+      :class="{ 'fab-button-open': isMenuOpen, 'fab-button-disabled': props.disabled }"
+      :aria-disabled="props.disabled"
       @click.stop="toggleMenu"
       aria-label="Abrir menú de acciones rápidas"
     >
