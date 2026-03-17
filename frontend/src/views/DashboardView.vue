@@ -3,32 +3,27 @@
  * Dashboard View
  *
  * Main dashboard showing:
- * - Net worth
- * - Account balances
- * - Recent activity (paginated — transactions + transfers merged)
- * - FAB for quick actions (transaction/transfer creation)
+ * - Net worth (always visible, shows 0 when no transactions)
+ * - Setup checklist (replaces chart when user has no accounts OR no categories)
+ * - Net worth evolution chart (shown once both prerequisites are met)
+ * - Recent activity (transactions + transfers merged, paginated)
+ * - FAB for quick actions (disabled until setup is complete)
  *
  * Why this layout?
  * - Mobile-first: Cards stack vertically
- * - Desktop: Grid layout for better use of space
- * - Most important info (net worth) at top
- * - FAB provides quick access to primary actions without cluttering the layout
- *
- * Quick actions removed:
- * - Old button grid (4 buttons) replaced with FAB
- * - Account creation moved to accounts list view
- * - Category management accessed via drawer navigation
+ * - Most important info (net worth) always at top
+ * - Setup checklist guides first-time users before they can create transactions
+ * - Accounts list removed: accessible via dedicated /accounts tab
+ * - FAB disabled state prevents navigation to transaction form with no accounts/categories
  */
 
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
+import { useAccountsStore, useTransactionsStore, useCategoriesStore, useUiStore } from '@/stores'
 import { useMovements } from '@/composables/useMovements'
-// Note: NetWorthCard is now self-contained — it reads its own stores internally.
-// DashboardView only passes the `loading` flag it already controls.
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import NetWorthChart from '@/components/dashboard/NetWorthChart.vue'
-import AccountsOverview from '@/components/dashboard/AccountsOverview.vue'
+import SetupChecklist from '@/components/dashboard/SetupChecklist.vue'
 import FloatingActionButton from '@/components/ui/FloatingActionButton.vue'
 import TransactionItem from '@/components/transactions/TransactionItem.vue'
 import PaginationControls from '@/components/ui/PaginationControls.vue'
@@ -38,18 +33,22 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 import SyncBadge from '@/components/sync/SyncBadge.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
 import { formatDateRelative } from '@/utils/formatters'
-import type { Account } from '@/types'
 import type { LocalTransfer } from '@/offline/types'
 
 const router = useRouter()
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
+const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
 const loading = ref(true)
 
-const accountsWithBalances = computed(() =>
-  (accountsStore.accountsWithBalances as (Account & { balance: number })[]).filter(a => a.active !== false)
+/**
+ * True when the user is missing at least one account OR one category.
+ * Triggers the setup checklist and disables the FAB.
+ */
+const showChecklist = computed(
+  () => accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
 )
 
 const PAGE_SIZE = 20
@@ -64,27 +63,17 @@ const {
 onMounted(async () => {
   loading.value = true
   try {
-    // Load from IndexedDB (Dexie-only, no network call).
-    // SyncManager handles background updates via wallet:sync-complete → refreshFromDB().
     await Promise.all([
       accountsStore.fetchAccounts(),
-      transactionsStore.fetchTransactions()
+      transactionsStore.fetchTransactions(),
+      categoriesStore.fetchCategories(),
     ])
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al cargar el dashboard')
   } finally {
-    // Unblock the UI as soon as IndexedDB has been read.
     loading.value = false
   }
-
-  // Balance is kept accurate by adjustBalance() on every write (persisted to
-  // IndexedDB). After sync, recomputeBalancesFromTransactions() recomputes
-  // from the full local history. No backend balance endpoint is ever called.
 })
-
-function goToAccount(account: Account) {
-  router.push(`/accounts/${account.id}`)
-}
 
 function goToTransaction(transaction: any) {
   router.push(`/transactions/${transaction.id}/edit`)
@@ -93,84 +82,88 @@ function goToTransaction(transaction: any) {
 
 <template>
   <div class="space-y-6 pb-24">
-    <!-- Net Worth Card -->
+    <!-- Net Worth Card — always visible (shows 0 when no transactions) -->
     <NetWorthCard :loading="loading" />
 
-    <!-- Net Worth Evolution Chart -->
-    <NetWorthChart />
+    <!-- Chart area: setup checklist OR patrimony chart -->
+    <Transition name="fade" mode="out-in">
+      <SetupChecklist v-if="showChecklist" key="checklist" />
+      <NetWorthChart v-else key="chart" />
+    </Transition>
 
-    <!-- Main content grid -->
-    <div class="grid gap-6 md:grid-cols-2">
-      <!-- Accounts Overview -->
-      <AccountsOverview
-        :accounts="accountsWithBalances"
-        :loading="loading"
-        @account-click="goToAccount"
+    <!-- Recent activity (transactions + transfers merged) -->
+    <div>
+      <h2 class="text-lg font-semibold mb-4">Actividad Reciente</h2>
+
+      <BaseSpinner v-if="movementsLoading && movements.length === 0" centered />
+
+      <EmptyState
+        v-else-if="!movementsLoading && movements.length === 0"
+        title="Sin actividad"
+        message="Tus transacciones y transferencias aparecerán aquí"
+        icon="📊"
       />
 
-      <!-- Actividad Reciente (transacciones + transferencias paginadas) -->
-      <div>
-        <h2 class="text-lg font-semibold mb-4">Actividad Reciente</h2>
-
-        <BaseSpinner v-if="movementsLoading && movements.length === 0" centered />
-
-        <EmptyState
-          v-else-if="!movementsLoading && movements.length === 0"
-          title="Sin actividad"
-          message="Tus transacciones y transferencias aparecerán aquí"
-          icon="📊"
-        />
-
-        <div v-else class="space-y-2">
-          <template v-for="item in movements" :key="item.id">
-            <TransactionItem
-              v-if="item._type === 'transaction'"
-              :transaction="item"
-              @click="goToTransaction(item)"
-            />
-            <BaseCard
-              v-else
-              clickable
-              @click="router.push(`/transfers/${item.id}/edit`)"
-            >
-              <div class="flex items-center gap-3">
-                <div class="text-2xl flex-shrink-0">💸</div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <h4 class="font-medium truncate">
-                      {{ (item as LocalTransfer).title || 'Transferencia' }}
-                    </h4>
-                    <SyncBadge
-                      v-if="'_sync_status' in item"
-                      :status="(item as LocalTransfer)._sync_status"
-                    />
-                  </div>
-                  <div class="text-sm text-dark-text-secondary">
-                    <p>{{ (item as LocalTransfer).source_account?.name }} → {{ (item as LocalTransfer).destination_account?.name }}</p>
-                    <p>{{ formatDateRelative((item as LocalTransfer).date) }}</p>
-                  </div>
-                </div>
-                <div class="flex-shrink-0 text-right">
-                  <CurrencyDisplay
-                    :amount="(item as LocalTransfer).amount"
-                    :currency="(item as LocalTransfer).source_account?.currency || 'USD'"
-                    size="md"
+      <div v-else class="space-y-2">
+        <template v-for="item in movements" :key="item.id">
+          <TransactionItem
+            v-if="item._type === 'transaction'"
+            :transaction="item"
+            @click="goToTransaction(item)"
+          />
+          <BaseCard
+            v-else
+            clickable
+            @click="router.push(`/transfers/${item.id}/edit`)"
+          >
+            <div class="flex items-center gap-3">
+              <div class="text-2xl flex-shrink-0">💸</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-medium truncate">
+                    {{ (item as LocalTransfer).title || 'Transferencia' }}
+                  </h4>
+                  <SyncBadge
+                    v-if="'_sync_status' in item"
+                    :status="(item as LocalTransfer)._sync_status"
                   />
                 </div>
+                <div class="text-sm text-dark-text-secondary">
+                  <p>{{ (item as LocalTransfer).source_account?.name }} → {{ (item as LocalTransfer).destination_account?.name }}</p>
+                  <p>{{ formatDateRelative((item as LocalTransfer).date) }}</p>
+                </div>
               </div>
-            </BaseCard>
-          </template>
-        </div>
-
-        <PaginationControls
-          :current-page="currentPage"
-          :total-pages="totalPages"
-          @page-change="goToPage"
-        />
+              <div class="flex-shrink-0 text-right">
+                <CurrencyDisplay
+                  :amount="(item as LocalTransfer).amount"
+                  :currency="(item as LocalTransfer).source_account?.currency || 'USD'"
+                  size="md"
+                />
+              </div>
+            </div>
+          </BaseCard>
+        </template>
       </div>
+
+      <PaginationControls
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        @page-change="goToPage"
+      />
     </div>
 
-    <!-- Floating Action Button -->
-    <FloatingActionButton />
+    <!-- FAB: disabled when setup prerequisites are missing -->
+    <FloatingActionButton :disabled="showChecklist" />
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 200ms ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
