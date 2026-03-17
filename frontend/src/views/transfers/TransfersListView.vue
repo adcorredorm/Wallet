@@ -1,19 +1,19 @@
 <script setup lang="ts">
 /**
  * Transfers List View
- *
- * Shows all transfers between accounts
+ * Data is read from Dexie via usePaginatedList — no backend call.
  */
 
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTransfersStore, useUiStore } from '@/stores'
+import { usePaginatedList } from '@/composables/usePaginatedList'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import PaginationControls from '@/components/ui/PaginationControls.vue'
 import SimpleFab from '@/components/ui/SimpleFab.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
-// Phase 5: per-item sync state badge
 import SyncBadge from '@/components/sync/SyncBadge.vue'
 import { formatDateRelative } from '@/utils/formatters'
 import type { LocalTransfer } from '@/offline/types'
@@ -22,7 +22,15 @@ const router = useRouter()
 const transfersStore = useTransfersStore()
 const uiStore = useUiStore()
 
-const transfers = computed(() => transfersStore.transfers)
+const PAGE_SIZE = 20
+
+const {
+  items: transfers,
+  currentPage,
+  totalPages,
+  loading,
+  goToPage,
+} = usePaginatedList<LocalTransfer>('transfers', PAGE_SIZE)
 
 onMounted(async () => {
   try {
@@ -44,17 +52,14 @@ function createTransfer() {
 
 <template>
   <div class="space-y-6">
-    <!-- Header -->
     <div>
       <h1 class="text-2xl font-bold">Transferencias</h1>
     </div>
 
-    <!-- Loading -->
-    <BaseSpinner v-if="transfersStore.loading" centered />
+    <BaseSpinner v-if="loading && transfers.length === 0" centered />
 
-    <!-- Empty state -->
     <EmptyState
-      v-else-if="transfers.length === 0"
+      v-else-if="!loading && transfers.length === 0"
       title="No hay transferencias"
       message="Las transferencias permiten mover dinero entre tus cuentas"
       icon="💸"
@@ -62,7 +67,6 @@ function createTransfer() {
       @action="createTransfer"
     />
 
-    <!-- Transfer list -->
     <div v-else class="space-y-2">
       <BaseCard
         v-for="transfer in transfers"
@@ -71,23 +75,15 @@ function createTransfer() {
         @click="goToTransfer(transfer)"
       >
         <div class="flex items-center gap-3">
-          <!-- Icon -->
           <div class="text-2xl flex-shrink-0">💸</div>
-
-          <!-- Info -->
           <div class="flex-1 min-w-0">
-            <!--
-              Title row with SyncBadge
-              Same pattern as AccountCard / TransactionItem: flex row so
-              the badge sits inline with the title without breaking layout.
-            -->
             <div class="flex items-center gap-2">
               <h4 class="font-medium truncate">
                 {{ transfer.title || 'Transferencia' }}
               </h4>
               <SyncBadge
                 v-if="'_sync_status' in transfer"
-                :status="(transfer as LocalTransfer)._sync_status"
+                :status="transfer._sync_status"
               />
             </div>
             <div class="text-sm text-dark-text-secondary">
@@ -95,8 +91,6 @@ function createTransfer() {
               <p>{{ formatDateRelative(transfer.date) }}</p>
             </div>
           </div>
-
-          <!-- Amount -->
           <div class="flex-shrink-0 text-right">
             <CurrencyDisplay
               :amount="transfer.amount"
@@ -108,9 +102,15 @@ function createTransfer() {
       </BaseCard>
     </div>
 
-    <!-- Floating Action Button -->
+    <PaginationControls
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :page-size="PAGE_SIZE"
+      @page-change="goToPage"
+    />
+
     <SimpleFab
-      aria-label="Crear nueva transferencia"
+      ariaLabel="Crear nueva transferencia"
       @click="createTransfer"
     />
   </div>
