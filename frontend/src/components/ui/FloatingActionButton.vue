@@ -24,8 +24,16 @@
 
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUiStore } from '@/stores'
 
 const router = useRouter()
+
+interface Props {
+  disabled?: boolean
+}
+const props = withDefaults(defineProps<Props>(), { disabled: false })
+const uiStore = useUiStore()
+
 const isMenuOpen = ref(false)
 
 /**
@@ -58,6 +66,10 @@ const menuActions = [
  * When opening, adds click listener to close on outside click
  */
 function toggleMenu() {
+  if (props.disabled) {
+    uiStore.showWarning('Completa la configuración primero')
+    return
+  }
   isMenuOpen.value = !isMenuOpen.value
 }
 
@@ -149,7 +161,7 @@ const icons: Record<string, string> = {
     <!-- Main FAB button -->
     <button
       class="fab-button"
-      :class="{ 'fab-button-open': isMenuOpen }"
+      :class="{ 'fab-button-open': isMenuOpen, 'fab-button-disabled': disabled }"
       @click.stop="toggleMenu"
       aria-label="Abrir menú de acciones rápidas"
     >
@@ -236,6 +248,12 @@ const icons: Record<string, string> = {
  */
 .fab-button-open {
   @apply bg-accent-blue/90;
+}
+
+.fab-button-disabled {
+  @apply bg-dark-bg-tertiary text-dark-text-secondary;
+  @apply cursor-not-allowed;
+  @apply shadow-none hover:shadow-none hover:scale-100 active:scale-100;
 }
 
 /**
