@@ -30,9 +30,12 @@ export interface UsePaginatedListReturn<T extends Row> {
 }
 
 const byCreatedAtDesc = (a: Row, b: Row): number => {
-  const byDate = (b.date ?? '').localeCompare(a.date ?? '')
-  if (byDate !== 0) return byDate
-  return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  const aDate = a.date ? Date.parse(a.date) : 0
+  const bDate = b.date ? Date.parse(b.date) : 0
+  if (bDate !== aDate) return bDate - aDate
+  const aCreated = a.created_at ? Date.parse(a.created_at) : 0
+  const bCreated = b.created_at ? Date.parse(b.created_at) : 0
+  return bCreated - aCreated
 }
 
 export function usePaginatedList<T extends Row>(
