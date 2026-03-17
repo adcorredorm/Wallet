@@ -371,6 +371,31 @@ describe('generateBoundaries — endDate always included', () => {
     expect(lastPoint?.date).toBe('2026-03-17')
     expect(lastPoint?.value).toBeGreaterThan(0)
   })
+
+  it('month granularity: no duplicate data point when endDate exactly equals a period boundary (1st of month)', async () => {
+    // endDate = 2026-03-01 exactly matches a monthly boundary.
+    // The guard must NOT append a duplicate entry, so the last date appears only once.
+    mockTx.mockResolvedValue([
+      {
+        id: 'tx3', offline_id: 'tx3', account_id: 'acc1', type: 'income',
+        amount: '75000', date: '2026-03-01', created_at: '2026-03-01T10:00:00Z',
+        base_rate: 1, category_id: 'cat1', title: 'Boundary test',
+        user_id: 'u1', _sync_status: 'synced', updated_at: '2026-03-01T10:00:00Z',
+      } as any,
+    ])
+    mockTr.mockResolvedValue([])
+    mockAcc.mockResolvedValue([
+      { id: 'acc1', currency: 'COP', active: true, name: 'Test', type: 'debit', user_id: 'u1', offline_id: 'acc1', created_at: '', updated_at: '' } as any,
+    ])
+
+    const { dataPoints, loading } = useNetWorthHistory({ rangeDays: 365, endDate: '2026-03-01' })
+    await vi.waitUntil(() => !loading.value, { timeout: 3000 })
+
+    // No duplicate for 2026-03-01
+    const marchPoints = dataPoints.value.filter(p => p.date === '2026-03-01')
+    expect(marchPoints).toHaveLength(1)
+    expect(marchPoints[0].value).toBeGreaterThan(0)
+  })
 })
 
 describe('useNetWorthHistory — Guard 2 sync blocking', () => {

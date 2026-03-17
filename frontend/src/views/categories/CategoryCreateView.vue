@@ -2,7 +2,11 @@
 /**
  * Category Create View
  *
- * Form to create a new category
+ * Form to create a new category.
+ *
+ * Redirect: goes to /categories on success, except during onboarding
+ * (no accounts OR no categories yet) where it redirects to / so the
+ * setup checklist guides the user to the next prerequisite.
  */
 
 import { reactive, computed, watch } from 'vue'

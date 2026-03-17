@@ -2,7 +2,11 @@
 /**
  * Account Create View
  *
- * Form to create a new account
+ * Form to create a new account.
+ *
+ * Redirect: goes to /accounts on success, except during onboarding
+ * (no accounts OR no categories yet) where it redirects to / so the
+ * setup checklist guides the user to the next prerequisite.
  */
 
 import { useRouter } from 'vue-router'
