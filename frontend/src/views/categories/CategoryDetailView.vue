@@ -165,7 +165,7 @@ function goToTransaction(transaction: any) {
 <template>
   <div v-if="category" class="space-y-6 pb-24">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-3xl flex-shrink-0">{{ category.icon || '📁' }}</span>
         <div class="min-w-0">
@@ -188,7 +188,7 @@ function goToTransaction(transaction: any) {
         </div>
       </div>
 
-      <div class="flex gap-2 shrink-0">
+      <div class="flex gap-2 flex-wrap shrink-0">
         <!-- Edit button — always visible -->
         <BaseButton variant="secondary" size="sm" @click="editCategory">
           Editar
