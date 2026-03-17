@@ -89,6 +89,8 @@ After the agent responds:
 2. **Wait for user approval of the ADD before continuing** — if the user requests changes, re-launch the architect with the feedback
 3. Once approved, write the ADD into the body of the main Notion page
 
+> **Note:** Do NOT commit the spec file to git. `docs/superpowers/` is in `.gitignore` intentionally — specs and plans live locally only. Never use `git add -f` to bypass this.
+
 ### Phase 1 — MCP Health Check
 
 Before proceeding to Phase 2, verify all MCPs are operational:
@@ -127,6 +129,8 @@ Each agent must save its plan to a **unique file path** to avoid overwriting oth
 Where:
 - `<feature-slug>` is a short kebab-case name derived from the feature title (e.g. `archive-delete-accounts`)
 - `<agent-name>` is the agent identifier (e.g. `backend-architect`, `nico-front`, `docker-manager`)
+
+> **Note:** Do NOT commit plan files to git. `docs/superpowers/` is in `.gitignore` intentionally — plans live locally only. Never use `git add -f` to bypass this.
 
 For each sub-task that has an agent (not `User` tagged), launch the corresponding agent with:
 
@@ -233,7 +237,14 @@ If any check fails:
 
 ### 5.1 Consolidate worktrees
 
-Use `superpowers:finishing-a-development-branch` to merge all feature worktrees into `main` and clean up the worktree directories. If there are merge conflicts, report them to the user before continuing — do not attempt to auto-resolve conflicts.
+Merge all feature worktrees into `main` locally and clean up worktree directories. **Do not ask the user — always choose Option 1 (merge locally).** This is the standard flow for this project.
+
+Steps:
+1. `git checkout main && git pull`
+2. `git merge <feature-branch>`
+3. If merge conflicts arise: resolve by keeping the feature branch version (`git checkout --theirs <file>`), then commit the merge. Do not stop to ask — only pause if a conflict cannot be automatically resolved with `--theirs` (e.g., both branches modified the same lines).
+4. Run tests on the merged result
+5. `git worktree remove <path> && git branch -d <feature-branch>`
 
 ### 5.2 Boot Docker dev environment
 
