@@ -12,12 +12,22 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import { db } from '@/offline'
 import type { LocalTransaction } from '@/offline/types'
 import type { LocalTransfer } from '@/offline/types'
 
 type EntityType = 'transactions' | 'transfers'
 type Row = LocalTransaction | LocalTransfer
+
+export interface UsePaginatedListReturn<T extends Row> {
+  items: ComputedRef<T[]>
+  currentPage: Ref<number>
+  totalPages: ComputedRef<number>
+  totalItems: ComputedRef<number>
+  loading: Ref<boolean>
+  goToPage: (page: number) => void
+}
 
 const byCreatedAtDesc = (a: Row, b: Row): number => {
   const byCreated = (b.created_at ?? '').localeCompare(a.created_at ?? '')
@@ -45,9 +55,10 @@ export function usePaginatedList<T extends Row>(
   async function fetchAll() {
     loading.value = true
     try {
-      const table = type === 'transactions' ? db.transactions : db.transfers
-      const rows = await (table as typeof db.transactions).toArray()
-      rows.sort(byCreatedAtDesc as (a: LocalTransaction, b: LocalTransaction) => number)
+      const rows = type === 'transactions'
+        ? await db.transactions.toArray()
+        : await db.transfers.toArray()
+      rows.sort(byCreatedAtDesc)
       allRows.value = rows as T[]
       if (totalPages.value > 0 && currentPage.value > totalPages.value) {
         currentPage.value = totalPages.value
