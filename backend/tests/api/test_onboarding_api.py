@@ -184,7 +184,9 @@ class TestOnboardingSeed:
         assert count == 3
 
     def test_seed_creates_exact_category_count(self, client, app):
-        """Seed must create exactly 22 category rows: 2 income + 10 expense parents + 10 subcategories."""
+        """Seed must create exactly 22 category rows: 2 income + 10 expense parents +
+        10 subcategories across 4 parent categories (Alimentación×3, Vivienda×3,
+        Transporte×3, Entretenimiento×1)."""
         from app.extensions import db
         from app.models.category import Category
         from uuid import UUID

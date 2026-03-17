@@ -6,6 +6,9 @@ a newly authenticated user.  The endpoint is idempotent-guarded: if the user
 already has at least one account, it returns 409 and takes no further action.
 """
 
+import re
+import unicodedata
+
 from flask import Blueprint, g
 
 from app.extensions import db
@@ -20,6 +23,21 @@ from app.utils.responses import error_response, success_response
 onboarding_bp = Blueprint("onboarding", __name__, url_prefix="/api/v1/onboarding")
 
 _account_repo = AccountRepository()
+
+# ---------------------------------------------------------------------------
+# Helpers
+
+
+def _seed_slug(name: str) -> str:
+    """Return a URL-safe ASCII slug for use in seed offline_ids.
+
+    Strips accents (e.g. 'ó' → 'o'), lowercases, and replaces any run of
+    non-alphanumeric characters (spaces, slashes, etc.) with a single hyphen.
+    """
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+
 
 # ---------------------------------------------------------------------------
 # Seed data definitions
@@ -154,7 +172,7 @@ def seed_user():
     try:
         # --- Create accounts ---
         for acc_def in _SEED_ACCOUNTS:
-            offline_id = f"seed-{acc_def['name'].lower().replace(' ', '-')}"
+            offline_id = f"seed-{_seed_slug(acc_def['name'])}"
             account = Account(
                 user_id=user_id,
                 name=acc_def["name"],
@@ -170,7 +188,7 @@ def seed_user():
 
         # --- Create categories (with subcategories) ---
         for cat_def in _SEED_CATEGORIES:
-            parent_offline_id = f"seed-{cat_def['name'].lower().replace(' ', '-')}"
+            parent_offline_id = f"seed-{_seed_slug(cat_def['name'])}"
             parent = Category(
                 user_id=user_id,
                 name=cat_def["name"],
@@ -185,8 +203,8 @@ def seed_user():
 
             for sub_def in cat_def.get("subcategories", []):
                 sub_offline_id = (
-                    f"seed-{cat_def['name'].lower().replace(' ', '-')}"
-                    f"-{sub_def['name'].lower().replace(' ', '-')}"
+                    f"seed-{_seed_slug(cat_def['name'])}"
+                    f"-{_seed_slug(sub_def['name'])}"
                 )
                 subcategory = Category(
                     user_id=user_id,
