@@ -7,7 +7,7 @@
 
 import { reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useCategoriesStore, useUiStore } from '@/stores'
+import { useAccountsStore, useCategoriesStore, useUiStore } from '@/stores'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -19,6 +19,7 @@ import type { CreateCategoryDto, CategoryType } from '@/types'
 
 const router = useRouter()
 const categoriesStore = useCategoriesStore()
+const accountsStore = useAccountsStore()
 const uiStore = useUiStore()
 
 const form = reactive({
@@ -82,9 +83,10 @@ async function handleSubmit() {
       parent_category_id: form.parent_category_id || undefined
     }
 
+    const isOnboarding = accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
     await categoriesStore.createCategory(data)
     uiStore.showSuccess('Categoría creada exitosamente')
-    router.push('/categories')
+    router.push(isOnboarding ? '/' : '/categories')
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al crear categoría')
   }
