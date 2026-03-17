@@ -15,7 +15,8 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
-import { CATEGORY_TYPES, CATEGORY_ICONS, CATEGORY_COLORS } from '@/utils/constants'
+import { CATEGORY_TYPES, CATEGORY_COLORS } from '@/utils/constants'
+import EmojiPicker from '@/components/ui/EmojiPicker.vue'
 import { required, minLength, maxLength } from '@/utils/validators'
 import type { UpdateCategoryDto, CategoryType } from '@/types'
 import { db } from '@/offline'
@@ -375,22 +376,7 @@ async function restoreCategory() {
         <!-- Icono -->
         <div>
           <label class="label">Icono (opcional)</label>
-          <div class="grid grid-cols-8 gap-2">
-            <button
-              v-for="icon in CATEGORY_ICONS"
-              :key="icon"
-              type="button"
-              :disabled="isArchived"
-              :class="[
-                'p-2 rounded-lg text-2xl transition-colors',
-                isArchived ? 'opacity-40 cursor-not-allowed' : 'hover:bg-dark-bg-tertiary',
-                form.icon === icon ? 'bg-dark-bg-tertiary ring-2 ring-accent-blue' : ''
-              ]"
-              @click="!isArchived && (form.icon = icon)"
-            >
-              {{ icon }}
-            </button>
-          </div>
+          <EmojiPicker v-model="form.icon" :disabled="isArchived" />
         </div>
 
         <!-- Color -->
