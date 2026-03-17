@@ -104,6 +104,32 @@ describe('useMovements — with accountId', () => {
     await settle()
     expect(mockTxWhere).toHaveBeenCalledWith('account_id')
   })
+
+  it('queries transfers by source_account_id when accountId is provided', async () => {
+    mockTxToArray.mockResolvedValue([]); mockTxCount.mockResolvedValue(0)
+    mockTrToArray.mockResolvedValue([]); mockTrCount.mockResolvedValue(0)
+    useMovements('acc-123', 20)
+    await settle()
+    // Should have called where on transfers (for source or destination)
+    expect(mockTrWhere).toHaveBeenCalled()
+  })
+
+  it('deduplicates transfers that appear as both source and destination', async () => {
+    // A self-transfer (source === destination === accountId) would appear in both queries
+    // It should only be included once in the result
+    const selfTransfer = makeTrRow('tr-self', '2026-01-05T00:00:00Z')
+    mockTxToArray.mockResolvedValue([]); mockTxCount.mockResolvedValue(0)
+    // Both source and destination queries return the same transfer
+    mockTrWhere.mockImplementation(() => ({
+      equals: vi.fn(() => ({ toArray: vi.fn().mockResolvedValue([selfTransfer]), count: vi.fn().mockResolvedValue(1) })),
+    }))
+    mockTrCount.mockResolvedValue(1)
+    const { items } = useMovements('acc-123', 20)
+    await settle()
+    // Despite appearing in two queries, the transfer appears only once
+    const selfTransfers = items.value.filter(i => i.id === 'tr-self')
+    expect(selfTransfers).toHaveLength(1)
+  })
 })
 
 describe('useMovements — goToPage', () => {
