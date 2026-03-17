@@ -289,6 +289,7 @@ export const useTransfersStore = defineStore('transfers', () => {
         operation: 'delete',
         payload: { id }
       })
+      window.dispatchEvent(new Event('wallet:local-delete'))
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar transferencia'
       throw err

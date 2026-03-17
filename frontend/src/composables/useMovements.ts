@@ -205,10 +205,12 @@ export function useMovements(
 
   onMounted(() => {
     window.addEventListener('wallet:sync-complete', onSyncComplete)
+    window.addEventListener('wallet:local-delete', onSyncComplete)
   })
 
   onUnmounted(() => {
     window.removeEventListener('wallet:sync-complete', onSyncComplete)
+    window.removeEventListener('wallet:local-delete', onSyncComplete)
   })
 
   return { items, currentPage, totalPages, totalItems, loading, goToPage }
