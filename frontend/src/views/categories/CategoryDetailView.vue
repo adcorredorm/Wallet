@@ -42,9 +42,18 @@ const showDeleteDialog = ref(false)
 const archiving = ref(false)
 const deleting = ref(false)
 
-// Guard: hard-delete is disabled when there are transactions.
+// Guards for hard-delete — same composite check as CategoryEditView.
 // Default true keeps button disabled until resolved (safe default).
 const hasMovements = ref(true)
+const activeSubcategoryCount = computed(() =>
+  categoriesStore.getSubcategories(categoryId).length
+)
+const hardDeleteDisabled = computed(() => hasMovements.value || activeSubcategoryCount.value > 0)
+const hardDeleteTooltip = computed(() => {
+  if (hasMovements.value) return 'No se puede borrar una categoría con transacciones. Usa Archivar.'
+  if (activeSubcategoryCount.value > 0) return 'No se puede borrar una categoría con subcategorías activas. Usa Archivar.'
+  return ''
+})
 
 // Stats panel — full aggregate over ALL transactions for this category
 // Converted to primary currency (transactions may span multiple account currencies)
@@ -113,8 +122,14 @@ onMounted(async () => {
 })
 
 const onStatsSync = () => void fetchStats()
-onMounted(() => window.addEventListener('wallet:sync-complete', onStatsSync))
-onUnmounted(() => window.removeEventListener('wallet:sync-complete', onStatsSync))
+onMounted(() => {
+  window.addEventListener('wallet:sync-complete', onStatsSync)
+  window.addEventListener('wallet:local-delete', onStatsSync)
+})
+onUnmounted(() => {
+  window.removeEventListener('wallet:sync-complete', onStatsSync)
+  window.removeEventListener('wallet:local-delete', onStatsSync)
+})
 
 function editCategory() {
   router.push(`/categories/${categoryId}/edit`)
@@ -205,7 +220,7 @@ function goToTransaction(transaction: any) {
             Archivar
           </BaseButton>
 
-          <span v-if="hasMovements" class="relative inline-flex group">
+          <span v-if="hardDeleteDisabled" class="relative inline-flex group">
             <BaseButton
               variant="danger"
               size="sm"
@@ -215,7 +230,7 @@ function goToTransaction(transaction: any) {
               Borrar permanentemente
             </BaseButton>
             <span class="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-md bg-yellow-900/90 border border-yellow-600/50 px-3 py-2 text-xs text-yellow-200 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-center z-10">
-              ⚠ No se puede borrar una categoría con transacciones. Usa Archivar.
+              ⚠ {{ hardDeleteTooltip }}
             </span>
           </span>
           <BaseButton
