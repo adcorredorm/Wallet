@@ -4,7 +4,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import PaginationControls from '../PaginationControls.vue'
 
 describe('PaginationControls — visibility', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => { setActivePinia(createPinia()) })
 
   it('renders nothing when totalPages is 0', () => {
     const wrapper = mount(PaginationControls, {
@@ -29,7 +29,7 @@ describe('PaginationControls — visibility', () => {
 })
 
 describe('PaginationControls — page info display', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => { setActivePinia(createPinia()) })
 
   it('shows "Página 2 de 5" when currentPage=2 and totalPages=5', () => {
     const wrapper = mount(PaginationControls, {
@@ -40,7 +40,7 @@ describe('PaginationControls — page info display', () => {
 })
 
 describe('PaginationControls — button states', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => { setActivePinia(createPinia()) })
 
   it('previous button is disabled on page 1', () => {
     const wrapper = mount(PaginationControls, {
@@ -70,7 +70,7 @@ describe('PaginationControls — button states', () => {
 })
 
 describe('PaginationControls — emit events', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => { setActivePinia(createPinia()) })
 
   it('emits page-change with currentPage-1 when previous is clicked', async () => {
     const wrapper = mount(PaginationControls, {
