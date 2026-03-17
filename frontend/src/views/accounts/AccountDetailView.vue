@@ -11,14 +11,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore, useTransactionsStore, useUiStore } from '@/stores'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
+import { useMovements } from '@/composables/useMovements'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
-import TransactionList from '@/components/transactions/TransactionList.vue'
+import TransactionItem from '@/components/transactions/TransactionItem.vue'
+import EmptyState from '@/components/shared/EmptyState.vue'
+import SyncBadge from '@/components/sync/SyncBadge.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
-import { formatAccountType } from '@/utils/formatters'
+import PaginationControls from '@/components/ui/PaginationControls.vue'
+import { formatAccountType, formatDateRelative } from '@/utils/formatters'
 import { db } from '@/offline'
+import type { LocalTransfer } from '@/offline/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,9 +58,14 @@ const balance = computed(() =>
   accountsStore.getAccountBalance(accountId)
 )
 
-const transactions = computed(() =>
-  transactionsStore.getTransactionsByAccount(accountId)
-)
+const PAGE_SIZE = 20
+const {
+  items: movements,
+  currentPage,
+  totalPages,
+  loading: movementsLoading,
+  goToPage,
+} = useMovements(accountId, PAGE_SIZE)
 
 onMounted(async () => {
   try {
@@ -267,14 +277,66 @@ function goToTransaction(transaction: any) {
       </div>
     </BaseCard>
 
-    <!-- Transactions -->
+    <!-- Movimientos (transacciones + transferencias) -->
     <div>
-      <h2 class="text-lg font-semibold mb-4">Transacciones</h2>
-      <TransactionList
-        :transactions="transactions"
-        :loading="transactionsStore.loading"
-        :show-account="false"
-        @transaction-click="goToTransaction"
+      <h2 class="text-lg font-semibold mb-4">Movimientos</h2>
+
+      <BaseSpinner v-if="movementsLoading && movements.length === 0" centered />
+
+      <EmptyState
+        v-else-if="!movementsLoading && movements.length === 0"
+        title="Sin movimientos"
+        message="No hay transacciones ni transferencias en esta cuenta"
+        icon="📊"
+      />
+
+      <div v-else class="space-y-2">
+        <template v-for="item in movements" :key="item.id">
+          <TransactionItem
+            v-if="item._type === 'transaction'"
+            :transaction="item"
+            :show-account="false"
+            @click="goToTransaction(item)"
+          />
+          <BaseCard
+            v-else
+            clickable
+            @click="router.push(`/transfers/${item.id}/edit`)"
+          >
+            <div class="flex items-center gap-3">
+              <div class="text-2xl flex-shrink-0">💸</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-medium truncate">
+                    {{ (item as LocalTransfer).title || 'Transferencia' }}
+                  </h4>
+                  <SyncBadge
+                    v-if="'_sync_status' in item"
+                    :status="(item as LocalTransfer)._sync_status"
+                  />
+                </div>
+                <div class="text-sm text-dark-text-secondary">
+                  <p>{{ (item as LocalTransfer).source_account?.name }} → {{ (item as LocalTransfer).destination_account?.name }}</p>
+                  <p>{{ formatDateRelative((item as LocalTransfer).date) }}</p>
+                </div>
+              </div>
+              <div class="flex-shrink-0 text-right">
+                <CurrencyDisplay
+                  :amount="(item as LocalTransfer).amount"
+                  :currency="(item as LocalTransfer).source_account?.currency || 'USD'"
+                  size="md"
+                />
+              </div>
+            </div>
+          </BaseCard>
+        </template>
+      </div>
+
+      <PaginationControls
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        :page-size="PAGE_SIZE"
+        @page-change="goToPage"
       />
     </div>
 
