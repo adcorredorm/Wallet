@@ -81,7 +81,7 @@ async function fetchStats() {
     for (const tx of txs) {
       const acct = accountsStore.accounts.find(a => a.id === tx.account_id)
       const currency = acct?.currency ?? settingsStore.primaryCurrency
-      const inPrimary = exchangeRatesStore.convert(tx.amount, currency, settingsStore.primaryCurrency)
+      const inPrimary = exchangeRatesStore.convert(Number(tx.amount), currency, settingsStore.primaryCurrency)
       if (tx.type === 'income') income += inPrimary
       else expense += inPrimary
     }

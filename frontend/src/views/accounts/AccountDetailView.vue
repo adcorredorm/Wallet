@@ -56,8 +56,8 @@ const statsTxCount = ref(0)
 async function fetchStats() {
   try {
     const txs = await db.transactions.where('account_id').equals(accountId).toArray()
-    statsIncome.value = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    statsExpense.value = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+    statsIncome.value = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+    statsExpense.value = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
     statsTxCount.value = txs.length
   } catch {
     // Non-critical — stats panel shows 0 on error
