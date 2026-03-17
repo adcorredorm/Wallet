@@ -165,7 +165,6 @@ function goToTransaction(transaction: any) {
         <PaginationControls
           :current-page="currentPage"
           :total-pages="totalPages"
-          :page-size="PAGE_SIZE"
           @page-change="goToPage"
         />
       </div>

@@ -117,14 +117,9 @@ export function useMovements(
       if (accountId) {
         // Filtered path — use index on account_id for transactions
         const txQuery = db.transactions.where('account_id').equals(accountId)
-        let txCountVal: number
-        ;[txCountVal, txRows] = await Promise.all([
-          txQuery.count(),
-          txQuery.toArray(),
-        ])
+        txRows = await txQuery.toArray()
         txRows = txRows.filter(r => !txDeleteIds.has(r.id))
         txCount.value = txRows.length
-        txCountVal = txRows.length
 
         // Transfers need two queries: source OR destination
         const [trSrc, trDst] = await Promise.all([

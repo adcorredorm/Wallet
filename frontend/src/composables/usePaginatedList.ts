@@ -85,7 +85,8 @@ export function usePaginatedList<T extends Row>(
   }
 
   function onSyncComplete() {
-    void fetchAll().then(() => { currentPage.value = 1 })
+    currentPage.value = 1
+    void fetchAll()
   }
 
   // Trigger the initial fetch immediately (not only in onMounted) so the

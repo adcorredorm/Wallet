@@ -141,7 +141,7 @@ function goToTransaction(transaction: any) {
 </script>
 
 <template>
-  <div v-if="account" class="space-y-6">
+  <div v-if="account" class="space-y-6 pb-24">
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2 min-w-0">
@@ -337,7 +337,6 @@ function goToTransaction(transaction: any) {
       <PaginationControls
         :current-page="currentPage"
         :total-pages="totalPages"
-        :page-size="PAGE_SIZE"
         @page-change="goToPage"
       />
     </div>

@@ -2,7 +2,6 @@
 interface Props {
   currentPage: number
   totalPages: number
-  pageSize: number
 }
 
 const props = defineProps<Props>()
