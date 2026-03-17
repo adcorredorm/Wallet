@@ -46,7 +46,7 @@ onMounted(async () => {
 })
 
 function goToCategory(id: string) {
-  router.push(`/categories/${id}/edit`)
+  router.push(`/categories/${id}`)
 }
 
 function createCategory() {

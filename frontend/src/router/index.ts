@@ -150,6 +150,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/categories/:id',
+      name: 'category-detail',
+      component: () => import('@/views/categories/CategoryDetailView.vue'),
+      meta: {
+        title: 'Detalle de Categoría',
+        showBackButton: true
+      }
+    },
+    {
       path: '/categories/:id/edit',
       name: 'category-edit',
       component: () => import('@/views/categories/CategoryEditView.vue'),
