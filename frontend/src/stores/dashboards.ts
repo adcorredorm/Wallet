@@ -218,6 +218,7 @@ export const useDashboardsStore = defineStore('dashboards', () => {
       const now = new Date().toISOString()
       const optimistic: LocalDashboard = {
         id: tempId,
+        offline_id: tempId,
         name: payload.name,
         description: payload.description ?? null,
         display_currency: payload.display_currency,
@@ -357,6 +358,7 @@ export const useDashboardsStore = defineStore('dashboards', () => {
       const now = new Date().toISOString()
       const optimistic: LocalDashboardWidget = {
         id: tempId,
+        offline_id: tempId,
         dashboard_id: dashboardId,
         widget_type: dto.widget_type,
         title: dto.title,

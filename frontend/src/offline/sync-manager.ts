@@ -1131,7 +1131,15 @@ export class SyncManager {
       case 'dashboard': {
         const old = await db.dashboards.get(tempId)
         if (old) {
-          const updated: LocalDashboard = { ...old, id: realId, server_id: realId }
+          // Preserve offline_id as the original temp ID so findServerId()'s
+          // fallback scan (filter by offline_id) can resolve the real UUID
+          // from widget mutation payloads that still carry the old temp ID.
+          const updated: LocalDashboard = {
+            ...old,
+            id: realId,
+            server_id: realId,
+            offline_id: old.offline_id ?? tempId,
+          }
           await db.dashboards.delete(tempId)
           await db.dashboards.put(updated)
         }
@@ -1141,7 +1149,12 @@ export class SyncManager {
       case 'dashboard_widget': {
         const old = await db.dashboardWidgets.get(tempId)
         if (old) {
-          const updated: LocalDashboardWidget = { ...old, id: realId, server_id: realId }
+          const updated: LocalDashboardWidget = {
+            ...old,
+            id: realId,
+            server_id: realId,
+            offline_id: old.offline_id ?? tempId,
+          }
           await db.dashboardWidgets.delete(tempId)
           await db.dashboardWidgets.put(updated)
         }
