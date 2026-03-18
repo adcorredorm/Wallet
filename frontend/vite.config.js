@@ -21,9 +21,7 @@ export default defineConfig({
       },
 
       // Static assets that Workbox should precache during build.
-      // favicon.svg is the existing icon; icons/* covers our PWA icons.
-      // TODO: change 'icons/*.svg' to 'icons/*.png' once real icons are generated.
-      includeAssets: ['favicon.svg', 'icons/*.svg'],
+      includeAssets: ['icons/*.png'],
 
       // Web App Manifest — tells the browser how to install and display the app.
       manifest: {
@@ -37,28 +35,24 @@ export default defineConfig({
         // confirmed from tailwind.config.js dark.bg.primary value.
         background_color: '#0f172a',
         theme_color: '#0f172a',
-        // TODO (Phase 1 placeholder): These are SVG placeholder icons.
-        // Before production, generate real PNGs with a tool such as
-        // `npx pwa-asset-generator logo.svg public/icons` and restore
-        // the `.png` extensions and `type: 'image/png'` entries below.
         icons: [
           {
-            src: '/icons/icon-192.svg',
+            src: '/icons/icon-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png'
           },
           {
-            src: '/icons/icon-512.svg',
+            src: '/icons/icon-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml'
+            type: 'image/png'
           },
           {
             // maskable purpose: allows the OS to apply its own shape mask (circle,
             // squircle, etc.) to the icon. Required for a good install experience
             // on Android home screens.
-            src: '/icons/icon-maskable-512.svg',
+            src: '/icons/icon-maskable-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'maskable'
           }
         ]
