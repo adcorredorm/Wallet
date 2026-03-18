@@ -1,27 +1,76 @@
 version: '3.8'
 
-# Development Compose Configuration
-# This file overlays the base docker-compose.yml with development-specific settings
+# Development Overlay for Docker Compose
+# This file converts the production-ready base configuration into a development environment
+# with hot reload, debug mode, and dev tools.
 #
 # Usage:
-#   - Development (with hot reload): docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-#   - Production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Development with hot reload: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   Production (no overlay needed):  docker compose up -d
 #
 # The compose file merges, so base services are inherited and overridden by these settings
 
 services:
-  # Database service - same as production but with exposed ports for development tools
+  # Database service - expose port for development tools (psql, pgAdmin)
   db:
-    # Development environment: expose port and enable more verbose logging
-    environment:
-      # Enable PostgreSQL statement logging for debugging (optional)
-      # Uncomment to see all SQL queries: POSTGRES_INITDB_ARGS: "-c log_statement=all"
-      POSTGRES_INITDB_ARGS: ""
+    ports:
+      # Expose PostgreSQL port for local development connections
+      - "${DB_PORT:-5432}:5432"
+    # Development doesn't need production resource limits
+    deploy:
+      resources: {}
+    healthcheck:
+      # More relaxed checks for development (faster startup)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Backend Flask API Service with hot reload
   backend:
-    # Use Flask development server with auto-reload enabled
-    # This watches source files and restarts the server when changes are detected
+    # Override production image/build to use local source code
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # Don't use pre-built image; build from local source
+    image: null
+
+    # Expose Flask development server port for external debugging
+    ports:
+      # Flask development server
+      # Map to 5001 because 5000 is used by macOS AirPlay
+      - "5001:5000"
+
+    # Mount application code for hot reload
+    volumes:
+      # Mount backend source code for auto-reload
+      - ./backend:/app
+      # Exclude these directories to avoid volume sync issues
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/venv
+      - /app/.pip_cache
+
+    environment:
+      # Development Flask settings
+      FLASK_ENV: development
+      DEBUG: "True"
+      # CORS accepts multiple URLs in development
+      FLASK_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173,http://frontend:80"
+
+    # Relaxed health checks for development (dev server slower)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    # No production resource limits in dev
+    deploy:
+      resources: {}
+
+    # Override production command: flask run with auto-reload
     command: >
       sh -c "
         echo 'Starting backend in development mode...' &&
@@ -32,61 +81,30 @@ services:
         flask run --host=0.0.0.0 --reload
       "
 
-    # Mount entire backend directory for hot reload
-    # Python source changes trigger automatic server restart
-    volumes:
-      - ./backend:/app
-      # Exclude these directories from sync to avoid issues
-      - /app/__pycache__
-      - /app/.pytest_cache
-      - /app/venv
-      # Exclude pip cache for faster volume operations
-      - /app/.pip_cache
-
-    # Development environment: enable debug mode
-    environment:
-      # Flask debug mode for detailed error pages and auto-reload
-      DEBUG: "True"
-      # Flask env for development features
-      FLASK_ENV: development
-      # API URL accessible from frontend in dev
-      FLASK_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173,http://frontend:80"
-
-    # Healthcheck with longer timeout for development
-    # API may be slower under development with auto-reload
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   # Frontend Vue.js Application with Vite Dev Server (HMR)
   frontend:
     # Build using development Dockerfile with Vite dev server
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-      # Dockerfile.dev runs `npm ci` during build to populate node_modules with Linux binaries
+      # Dockerfile.dev runs `npm ci` during build for Linux-compatible binaries
+    # Don't use pre-built image; rebuild for dev
+    image: null
 
-    # Start Vite dev server with HMR enabled
-    # node_modules and dependencies come from the built Docker image, not from host volume
-    # This avoids the macOS arm64 binary incompatibility issue on Linux containers
-    command: npm run dev -- --host 0.0.0.0 --port 5173
-
-    # Port mappings for development access
+    # Override production Nginx with Vite dev server
+    # Port mapping for development access
     ports:
-      # Vite dev server (HMR enabled)
+      # Vite dev server with Hot Module Replacement (HMR)
       - "5173:5173"
-      # Secondary port for compatibility/fallback
+      # Secondary fallback port
       - "5174:5174"
-      # Legacy port — maps host :3000 to Vite :5173 for backwards compatibility
+      # Legacy port mapping for backwards compatibility
       - "3000:5173"
 
-    # Mount only source files needed for hot reload and HMR
-    # ⚠️  IMPORTANT: Changes to package.json or package-lock.json require rebuilding the image:
-    #    docker-compose build frontend
-    # This is necessary because node_modules comes from the Docker image, not a host volume.
+    # Mount only source files needed for hot reload
+    # IMPORTANT: package.json changes require rebuilding the image:
+    #   docker compose build frontend
+    # This is necessary because node_modules comes from the Docker image, not a host volume
     volumes:
       # Source code for live reload (Vue components, utilities, stores)
       - ./frontend/src:/app/src
@@ -104,35 +122,29 @@ services:
       - ./frontend/tailwind.config.js:/app/tailwind.config.js
       - ./frontend/postcss.config.js:/app/postcss.config.js
 
-    # Development environment variables
     environment:
-      # Configure Vite HMR (Hot Module Replacement) for proper WebSocket connection
-      # VITE_HMR_HOST: Tells Vite client where to connect for HMR
-      # Use 'localhost' when accessing from host machine (browser)
+      # Vite HMR configuration for WebSocket connection from browser
       VITE_HMR_HOST: localhost
       VITE_HMR_PORT: 5173
-      # VITE_HMR_PROTOCOL: ws for development
       VITE_HMR_PROTOCOL: ws
 
-      # API base URL for frontend to communicate with backend.
-      # Use a relative path so all requests go through the Vite proxy (/api/* →
-      # backend:5000). An absolute URL (http://localhost:5001) would bypass the
-      # proxy and trigger CORS errors in the browser.
+      # API base URL for frontend to reach backend
+      # Use relative path so requests go through Vite proxy (/api/* → backend:5000)
+      # An absolute URL would bypass proxy and cause CORS errors
       VITE_API_BASE_URL: /api/v1
 
-      # Vite proxy target: backend service via Docker internal DNS.
-      # Vite's proxy runs inside the container, so it must use the Docker
-      # service name (backend:5000), not the host port mapping (localhost:5001).
+      # Vite proxy target: backend service via Docker internal DNS
+      # Vite proxy runs inside container, so use service name (backend:5000)
+      # not host port mapping (localhost:5001)
       BACKEND_URL: http://backend:5000
 
-      # Google OAuth Client ID — passed from root .env so credentials stay out of git
+      # Google OAuth Client ID for frontend
       VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
 
       # Frontend-specific environment
       NODE_ENV: development
 
-    # Healthcheck adapted for Vite dev server
-    # Vite responds on root path with HTML
+    # Adapted health check for Vite dev server
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:5173/"]
       interval: 10s
@@ -140,16 +152,22 @@ services:
       retries: 5
       start_period: 15s
 
+    # No production resource limits in dev
+    deploy:
+      resources: {}
+
+    # Override production Nginx with Vite dev server
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
   # pgAdmin Database Management UI - enabled by default in development
-  # Web UI accessible at http://localhost:5050
-  # Credentials: admin@wallet.local / admin (override in .env)
   pgadmin:
-    # Enable by default in development (empty profiles list)
-    # Disable with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml --profile disabled up
+    ports:
+      # pgAdmin web UI accessible at http://localhost:5050
+      - "5050:80"
+    # Enable by default in development (empty profiles list overrides base)
     profiles: []
 
-# Development-specific network (inherited from base but can be customized)
+# Development networks (inherited from base, can be customized)
 networks:
   wallet_network:
     driver: bridge
-

@@ -2,54 +2,63 @@ services:
   # PostgreSQL Database Service
   # Version: PostgreSQL 15 (Alpine for minimal size)
   # Provides persistent data storage for the Wallet application
+  # Production configuration: DB port not exposed externally
   db:
     image: postgres:15-alpine
     container_name: wallet_postgres
     environment:
-      # Database configuration - change these in production
+      # Database configuration
       POSTGRES_DB: ${DB_NAME:-wallet_db}
       POSTGRES_USER: ${DB_USER:-wallet_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-wallet_password}
       # PostgreSQL timezone
       PGTZ: UTC
-    ports:
-      # Port mapping: host:container
-      # Only expose in development; remove for production
-      - "${DB_PORT:-5432}:5432"
+      # Production-grade persistence settings
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c effective_cache_size=1GB"
+    ports: []
     volumes:
       # Persistent volume for database data
       - postgres_data:/var/lib/postgresql/data
-      # Optional: Mount initialization scripts if needed
+      # Alembic migrations for initialization
       - ./backend/alembic:/docker-entrypoint-initdb.d
     networks:
       - wallet_network
     healthcheck:
       # Check if PostgreSQL is ready to accept connections
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wallet_user} -d ${DB_NAME:-wallet_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: always
     # Security: Use read-only tmpfs for /tmp
     tmpfs:
       - /tmp
       - /run
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # Flask Backend API Service
-  # Handles all business logic, database operations, and API endpoints
+  # Production configuration: gunicorn WSGI server, no source code mounts
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: wallet-backend:latest
     container_name: wallet_backend
     environment:
       # Flask configuration
       FLASK_APP: run.py
-      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_ENV: ${FLASK_ENV:-production}
 
       # Database connection
-      # Update these to match db service credentials
       DATABASE_URL: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
       SQLALCHEMY_DATABASE_URI: postgresql://${DB_USER:-wallet_user}:${DB_PASSWORD:-wallet_password}@db:5432/${DB_NAME:-wallet_db}
 
@@ -61,20 +70,10 @@ services:
       FLASK_CORS_ORIGINS: ${FLASK_CORS_ORIGINS:-http://localhost:3000,http://frontend:80}
 
       # Authentication & Authorization
-      # Google OAuth Client ID for backend authentication
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      # JWT secret for token signing and verification
-      # DO NOT expose this to the frontend
       JWT_SECRET: ${JWT_SECRET:-}
-    ports:
-      # Flask development server port
-      # Map to 5001 for external access (5000 is used by macOS AirPlay)
-      - "5001:5000"
-    volumes:
-      # Mount application code for development (enables hot reload)
-      - ./backend:/app
-      # Exclude virtual environment from volume
-      - /app/venv
+    ports: []
+    volumes: []
     depends_on:
       # Wait for database to be healthy before starting
       db:
@@ -82,57 +81,79 @@ services:
     networks:
       - wallet_network
     healthcheck:
-      # Check Flask app health endpoint using Python
+      # Check app health using Python urllib (no external tool dependency)
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    restart: unless-stopped
+      start_period: 20s
+    restart: always
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    # Production command: gunicorn WSGI server
     command: >
-      sh -c "
-        echo 'Waiting for database to be ready...' &&
-        sleep 5 &&
-        flask db upgrade &&
-        flask run --host=0.0.0.0
-      "
+      gunicorn
+      --bind 0.0.0.0:5000
+      --workers 4
+      --worker-class sync
+      --timeout 60
+      --access-logfile -
+      --error-logfile -
+      run:app
 
   # Vue.js Frontend Service
-  # Serves the compiled SPA application via Nginx
-  # Port mapping: 3000 for development compatibility, can be changed to 80
+  # Production configuration: compiled SPA served via Nginx, static files baked in
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: wallet-frontend:latest
     container_name: wallet_frontend
-    ports: []
+    ports:
+      # Expose Nginx on port 3000 (host accessible, compatible with dev)
+      - "3000:80"
     depends_on:
-      # Frontend doesn't strictly need backend to start, but good practice to wait
-      - backend
+      # Wait for backend to be ready
+      backend:
+        condition: service_healthy
     networks:
       - wallet_network
     environment:
       # Frontend environment variables
-      # Can be used in nginx.conf or during build
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
 
       # Google OAuth Client ID for frontend authentication
-      # Safe to expose - this is a public value
       VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     healthcheck:
-      # Check if Nginx is serving the application
+      # Check if Nginx is serving the application (no external tools)
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
-      retries: 3
+      retries: 2
       start_period: 10s
-    restart: unless-stopped
-    # Read-only root filesystem for security in production
-    # Uncomment for production deployment
-    # read_only: true
+    restart: always
+    # Security: Read-only filesystem for production hardening
+    read_only: true
     tmpfs:
       - /var/cache/nginx
       - /var/run
+      - /tmp
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # Daily Exchange Rates Cron Sidecar
   # Lightweight container that updates exchange rates once per day
@@ -151,7 +172,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    restart: unless-stopped
+    restart: always
     command: >
       sh -c "
         echo 'Starting exchange rates cron service (daily updates)' &&
@@ -163,10 +184,8 @@ services:
         done
       "
 
-  # Optional: pgAdmin for database management
-  # Web UI for managing PostgreSQL at http://localhost:5050
-  # Credentials: admin@wallet.local / admin
-  # Remove this service if not needed in production
+  # Optional: pgAdmin for database management (disabled by default in production)
+  # Only runs when explicitly enabled with: docker compose --profile dev up
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: wallet_pgadmin
@@ -174,8 +193,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@wallet.local}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_LISTEN_PORT: 80
-    ports:
-      - "5050:80"
+    ports: []
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
@@ -184,7 +202,7 @@ services:
     networks:
       - wallet_network
     restart: unless-stopped
-    # Not suitable for production; set profiles: [dev] to disable by default
+    # Disabled by default in production; enable with: docker compose --profile dev up
     profiles: [dev]
 
 # Docker networks for service communication
@@ -194,7 +212,7 @@ networks:
 
 # Docker volumes for data persistence
 volumes:
-  # PostgreSQL data persistence
+  # PostgreSQL data persistence - named volume for easy management
   # Data survives container restarts and removes
   postgres_data:
     driver: local
