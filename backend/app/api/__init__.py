@@ -16,6 +16,7 @@ from app.api.exchange_rates import exchange_rates_bp
 from app.api.onboarding import onboarding_bp
 from app.api.settings import settings_bp
 from app.api.dashboards import dashboards_bp
+from app.api.internal import internal_bp
 
 
 def register_blueprints(app: Flask) -> None:
@@ -35,3 +36,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(dashboards_bp)
+    app.register_blueprint(internal_bp)

@@ -21,6 +21,12 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
+    # pool_pre_ping validates connections before use — required for Neon serverless
+    # which closes idle connections when the compute node scales to zero.
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+
+    # Internal cron auth
+    CRON_SECRET_TOKEN = os.getenv("CRON_SECRET_TOKEN", "")
 
     # CORS
     # Docker compose sets FLASK_CORS_ORIGINS; local dev falls back to localhost defaults.

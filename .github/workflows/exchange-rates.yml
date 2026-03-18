@@ -1,0 +1,27 @@
+name: Update Exchange Rates
+
+on:
+  schedule:
+    # 06:00 UTC = 01:00 America/Bogota (UTC-5)
+    - cron: "0 6 * * *"
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  update-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up backend
+        # Koyeb may be in deep sleep — ping health first and retry until alive.
+        run: |
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.BACKEND_URL }}/health")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then break; fi
+            sleep 6
+          done
+
+      - name: Trigger rates update
+        run: |
+          curl -s -f -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET_TOKEN }}" \
+            "${{ secrets.BACKEND_URL }}/internal/rates/update"

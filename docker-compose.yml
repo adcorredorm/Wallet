@@ -101,7 +101,7 @@ services:
     command: >
       gunicorn
       --bind 0.0.0.0:5000
-      --workers 4
+      --workers 2
       --worker-class sync
       --timeout 60
       --access-logfile -
