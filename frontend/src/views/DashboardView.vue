@@ -41,6 +41,22 @@ const transactionsStore = useTransactionsStore()
 const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
+/**
+ * Resolves an account name from its ID using the in-memory accounts store.
+ * Returns a fallback string so the UI never shows undefined.
+ */
+function getAccountName(id: string): string {
+  return accountsStore.accounts.find(a => a.id === id)?.name ?? 'Cuenta desconocida'
+}
+
+/**
+ * Resolves an account currency from its ID using the in-memory accounts store.
+ * Falls back to 'USD' to avoid breaking CurrencyDisplay.
+ */
+function getAccountCurrency(id: string): string {
+  return accountsStore.accounts.find(a => a.id === id)?.currency ?? 'USD'
+}
+
 const loading = ref(true)
 
 /**
@@ -134,14 +150,14 @@ function goToTransaction(transaction: any) {
                   />
                 </div>
                 <div class="text-sm text-dark-text-secondary">
-                  <p>{{ (item as LocalTransfer).source_account?.name }} → {{ (item as LocalTransfer).destination_account?.name }}</p>
+                  <p>{{ getAccountName((item as LocalTransfer).source_account_id) }} → {{ getAccountName((item as LocalTransfer).destination_account_id) }}</p>
                   <p>{{ formatDateRelative((item as LocalTransfer).date) }}</p>
                 </div>
               </div>
               <div class="flex-shrink-0 text-right">
                 <CurrencyDisplay
                   :amount="(item as LocalTransfer).amount"
-                  :currency="(item as LocalTransfer).source_account?.currency || 'USD'"
+                  :currency="getAccountCurrency((item as LocalTransfer).source_account_id)"
                   size="md"
                 />
               </div>

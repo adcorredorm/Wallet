@@ -57,9 +57,8 @@ CONTRIBUTING.md
 .editorconfig
 Makefile
 
-# Alembic
-alembic/versions/
-migrations/versions/
+# Alembic - versions must be included so flask db upgrade/current works in prod
+alembic/
 
 # Tests and CI
 tests/

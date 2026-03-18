@@ -6,7 +6,7 @@
 
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTransfersStore, useUiStore } from '@/stores'
+import { useTransfersStore, useUiStore, useAccountsStore } from '@/stores'
 import { usePaginatedList } from '@/composables/usePaginatedList'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseSpinner from '@/components/ui/BaseSpinner.vue'
@@ -20,7 +20,24 @@ import type { LocalTransfer } from '@/offline/types'
 
 const router = useRouter()
 const transfersStore = useTransfersStore()
+const accountsStore = useAccountsStore()
 const uiStore = useUiStore()
+
+/**
+ * Resolves an account name from its ID using the in-memory accounts store.
+ * Returns a fallback string so the UI never shows undefined.
+ */
+function getAccountName(id: string): string {
+  return accountsStore.accounts.find(a => a.id === id)?.name ?? 'Cuenta desconocida'
+}
+
+/**
+ * Resolves an account currency from its ID using the in-memory accounts store.
+ * Falls back to 'USD' to avoid breaking CurrencyDisplay.
+ */
+function getAccountCurrency(id: string): string {
+  return accountsStore.accounts.find(a => a.id === id)?.currency ?? 'USD'
+}
 
 const PAGE_SIZE = 20
 
@@ -87,14 +104,14 @@ function createTransfer() {
               />
             </div>
             <div class="text-sm text-dark-text-secondary">
-              <p>{{ transfer.source_account?.name }} → {{ transfer.destination_account?.name }}</p>
+              <p>{{ getAccountName(transfer.source_account_id) }} → {{ getAccountName(transfer.destination_account_id) }}</p>
               <p>{{ formatDateRelative(transfer.date) }}</p>
             </div>
           </div>
           <div class="flex-shrink-0 text-right">
             <CurrencyDisplay
               :amount="transfer.amount"
-              :currency="transfer.source_account?.currency || 'USD'"
+              :currency="getAccountCurrency(transfer.source_account_id)"
               size="md"
             />
           </div>
