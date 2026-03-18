@@ -19,7 +19,7 @@ from app.schemas.account import (
 from app.services import AccountService
 from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, ValidationError, BusinessRuleError
-from app.utils.responses import success_response, error_response
+from app.utils.responses import success_response, error_response, serialize_pydantic_errors
 from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 accounts_bp = Blueprint("accounts", __name__, url_prefix="/api/v1/accounts")
@@ -184,7 +184,7 @@ def create_account():
         return success_response(data=data, message="Cuenta creada exitosamente", status_code=201)
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except ValueError as e:
         return error_response(str(e), status_code=400)
     except BusinessRuleError as e:
@@ -263,7 +263,7 @@ def update_account(account_id: UUID):
         return success_response(data=data, message="Cuenta actualizada exitosamente")
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except Exception as e:

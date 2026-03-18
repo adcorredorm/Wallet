@@ -18,7 +18,7 @@ from app.schemas.user_setting import SettingResponse, SettingUpdateRequest, Sett
 from app.services.user_setting import SettingsService
 from app.utils.auth import require_auth
 from app.utils.exceptions import ValidationError
-from app.utils.responses import error_response, success_response
+from app.utils.responses import error_response, success_response, serialize_pydantic_errors
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api/v1")
 settings_service = SettingsService()
@@ -79,7 +79,7 @@ def update_setting(key: str):
         return error_response(
             "Error de validación en el cuerpo de la solicitud",
             status_code=422,
-            errors=e.errors(),
+            errors=serialize_pydantic_errors(e.errors()),
         )
     except ValidationError as e:
         return error_response(e.message, status_code=422)

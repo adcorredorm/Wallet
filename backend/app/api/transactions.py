@@ -23,7 +23,7 @@ from app.schemas.category import CategoryResponse
 from app.services import TransactionService
 from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, BusinessRuleError
-from app.utils.responses import success_response, error_response, paginated_response
+from app.utils.responses import success_response, error_response, serialize_pydantic_errors, paginated_response
 from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 transactions_bp = Blueprint("transactions", __name__, url_prefix="/api/v1/transactions")
@@ -158,7 +158,7 @@ def list_transactions():
         return resp
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except Exception as e:
         return error_response(f"Error al listar transacciones: {str(e)}", status_code=500)
 
@@ -237,7 +237,7 @@ def create_transaction():
         )
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:
@@ -322,7 +322,7 @@ def update_transaction(transaction_id: UUID):
         return success_response(data=data, message="Transaccion actualizada exitosamente")
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:

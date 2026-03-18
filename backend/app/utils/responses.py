@@ -7,6 +7,27 @@ from flask import jsonify
 import math
 
 
+def serialize_pydantic_errors(errors: list) -> list:
+    """Convert Pydantic v2 ValidationError.errors() to JSON-serializable format.
+
+    Pydantic v2 stores the original Exception in ctx['error'], which is not
+    JSON serializable. This converts those Exception instances to strings.
+    """
+    result = []
+    for error in errors:
+        serialized = {}
+        for k, v in error.items():
+            if k == "ctx" and isinstance(v, dict):
+                serialized[k] = {
+                    ck: str(cv) if isinstance(cv, Exception) else cv
+                    for ck, cv in v.items()
+                }
+            else:
+                serialized[k] = v
+        result.append(serialized)
+    return result
+
+
 def success_response(
     data: Any = None, message: Optional[str] = None, status_code: int = 200
 ) -> tuple[dict, int]:

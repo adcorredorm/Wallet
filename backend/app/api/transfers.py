@@ -22,7 +22,7 @@ from app.schemas.account import AccountResponse
 from app.services import TransferService
 from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, BusinessRuleError, ValidationError
-from app.utils.responses import success_response, error_response, paginated_response
+from app.utils.responses import success_response, error_response, serialize_pydantic_errors, paginated_response
 from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 transfers_bp = Blueprint("transfers", __name__, url_prefix="/api/v1/transfers")
@@ -151,7 +151,7 @@ def list_transfers():
         return resp
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except Exception as e:
         return error_response(f"Error al listar transferencias: {str(e)}", status_code=500)
 
@@ -232,7 +232,7 @@ def create_transfer():
         )
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except ValidationError as e:
@@ -313,7 +313,7 @@ def update_transfer(transfer_id: UUID):
         return success_response(data=data, message="Transferencia actualizada exitosamente")
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except ValidationError as e:

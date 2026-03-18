@@ -20,7 +20,7 @@ from app.schemas.category import (
 from app.services import CategoryService
 from app.utils.auth import require_auth
 from app.utils.exceptions import NotFoundError, BusinessRuleError
-from app.utils.responses import success_response, error_response
+from app.utils.responses import success_response, error_response, serialize_pydantic_errors
 from app.utils.sync_cursor import encode_cursor, decode_cursor
 
 categories_bp = Blueprint("categories", __name__, url_prefix="/api/v1/categories")
@@ -196,7 +196,7 @@ def create_category():
         )
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:
@@ -275,7 +275,7 @@ def update_category(category_id: UUID):
         return success_response(data=data, message="Categoria actualizada exitosamente")
 
     except PydanticValidationError as e:
-        return error_response("Error de validación", status_code=400, errors=e.errors())
+        return error_response("Error de validación", status_code=400, errors=serialize_pydantic_errors(e.errors()))
     except NotFoundError as e:
         return error_response(e.message, status_code=404)
     except BusinessRuleError as e:
