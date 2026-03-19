@@ -8,9 +8,9 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      // 'prompt' strategy: show a UI prompt when a new SW version is available.
-      // For a finance app this is safer than 'autoUpdate', which would force a
-      // page reload mid-session and could discard unsaved form state.
+      // 'autoUpdate' strategy: the new SW activates automatically without user
+      // interaction. Workbox includes skipWaiting + clientsClaim by default,
+      // so updated bundles are served quickly after a new deployment.
       registerType: 'autoUpdate',
 
       // Disable the Service Worker in development so code changes are always

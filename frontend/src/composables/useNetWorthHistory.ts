@@ -11,9 +11,9 @@
  * 3. Walk ALL events from the beginning of time, maintaining a running balance
  *    Map<account_id, number> in each account's native currency.
  * 4. At each boundary date (by the selected granularity) that falls within the
- *    output range, convert each account balance to primaryCurrency using the
- *    most recent base_rate seen for that account (falling back to
- *    exchangeRatesStore.getRate(), then to 1 as a last resort).
+ *    output range, convert each account balance to primaryCurrency using
+ *    exchangeRatesStore.getRate(account.currency, primaryCurrency), falling
+ *    back to 1 if no rate is cached (offline cold-start).
  * 5. Emit { date, value }[] data points.
  *
  * Why process ALL events (not just in-range ones)?
@@ -21,11 +21,12 @@
  * opening balances at the start of the selected range. A balance-only view
  * of the selected period would start from 0, which is misleading.
  *
- * base_rate semantics:
- * base_rate = units of primaryCurrency per 1 unit of account.currency at the
- * moment the event was recorded. Stored on the event at write time.
- * When null (created offline with no rate cache), falls back to
- * exchangeRatesStore.getRate(currency, primaryCurrency) at chart-render time.
+ * Currency conversion:
+ * Always uses exchangeRatesStore.getRate(account.currency, primaryCurrency) so
+ * the chart respects the user's current primary currency. Falls back to 1 if
+ * no rate is cached (offline cold-start). Historical base_rate from events is
+ * not used — it was denominated in the primaryCurrency at the time of creation,
+ * making it incorrect when the user changes their primary currency.
  *
  * Debounce strategy:
  * The watchEffect wrapper reads all reactive deps synchronously (so Vue tracks
@@ -242,13 +243,12 @@ export function useNetWorthHistory(
 
       // ── Build unified event stream ───────────────────────────────────────
       // Each event carries: date, created_at (for tiebreaking), account_id,
-      // delta (signed native-currency amount), and optional base_rate.
+      // and delta (signed native-currency amount).
       interface Event {
         date: string
         created_at: string
         account_id: string
         delta: number
-        base_rate?: number | null  // undefined = no rate on this event type
       }
 
       const events: Event[] = []
@@ -259,30 +259,24 @@ export function useNetWorthHistory(
           created_at: tx.created_at ?? tx.date + 'T00:00:00Z',
           account_id: tx.account_id,
           delta: tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount),
-          base_rate: tx.base_rate,
         })
       }
 
       for (const tr of transfers as LocalTransfer[]) {
         const trCreatedAt = tr.created_at ?? tr.date + 'T00:00:00Z'
-        // Source side: debit — carries the source account's base_rate
+        // Source side: debit
         events.push({
           date: tr.date,
           created_at: trCreatedAt,
           account_id: tr.source_account_id,
           delta: -Number(tr.amount),
-          base_rate: tr.base_rate,
         })
         // Destination side: credit at destination_amount (same-currency → amount)
-        // base_rate is undefined here — the destination account's rate comes from
-        // its own transaction events. undefined means "don't update lastRates for
-        // this account on the destination event".
         events.push({
           date: tr.date,
           created_at: trCreatedAt,
           account_id: tr.destination_account_id,
           delta: Number(tr.destination_amount ?? tr.amount),
-          base_rate: undefined,
         })
       }
 
@@ -308,10 +302,7 @@ export function useNetWorthHistory(
 
       // ── Walking pass ─────────────────────────────────────────────────────
       // balances: native-currency running balance per account
-      // lastRates: most recent base_rate seen per account (updated when the
-      //            event has a defined base_rate field, even if null)
       const balances = new Map<string, number>()
-      const lastRates = new Map<string, number | null>()
 
       const result: DataPoint[] = []
       let eventIdx = 0
@@ -327,13 +318,6 @@ export function useNetWorthHistory(
           // Update running balance
           balances.set(ev.account_id, (balances.get(ev.account_id) ?? 0) + ev.delta)
 
-          // Update lastRates only when the event carries a base_rate field
-          // (undefined = destination side of transfer, don't update)
-          if ('base_rate' in ev && ev.base_rate !== undefined) {
-            // ev.base_rate can be a number (captured rate) or null (offline)
-            lastRates.set(ev.account_id, ev.base_rate as number | null)
-          }
-
           eventIdx++
         }
 
@@ -345,20 +329,15 @@ export function useNetWorthHistory(
             const account = accounts.find(a => a.id === accountId)
             if (!account) continue
 
-            // Effective rate priority:
-            // 1. Captured base_rate from the most recent event for this account
-            // 2. Live rate from exchangeRatesStore.getRate() (current rates)
-            // 3. 1 as absolute last resort (treats currency as equal to primary)
-            let effectiveRate: number | null = lastRates.has(accountId)
-              ? lastRates.get(accountId)!
-              : null
-
-            if (effectiveRate === null) {
-              effectiveRate = exchangeRatesStore.getRate(
-                account.currency,
-                primaryCurrency
-              )
-            }
+            // Always use current rates for the active primaryCurrency.
+            // Historical base_rate is denominated in the primaryCurrency at the
+            // time the transaction was created — using it when primaryCurrency
+            // changes would apply rates from the wrong currency.
+            // Fallback to 1 if no rate is cached (offline cold-start).
+            const effectiveRate = exchangeRatesStore.getRate(
+              account.currency,
+              primaryCurrency
+            )
 
             netWorth += balance * (effectiveRate ?? 1)
           }
