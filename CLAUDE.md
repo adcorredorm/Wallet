@@ -33,6 +33,22 @@ cd frontend && npm run type-check
 cd frontend && npm run lint
 ```
 
+## Hooks Setup
+
+Run once per clone to activate the pre-push migration hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs `flask db upgrade` against production (Neon) before every push to `main`. If migrations fail, the push is aborted. Uses `backend/migrations/` (Flask-Migrate), which matches the production DB revision history.
+
+**Escape hatch** (emergencies only — manual rollback, hotfix bypass):
+
+```bash
+git push --no-verify
+```
+
 ## Dev-Only Utilities
 
 > DEV ONLY — never run against production.
