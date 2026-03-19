@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Read push refs from stdin — format: <local-ref> <local-sha> <remote-ref> <remote-sha>
+while read local_ref local_sha remote_ref remote_sha; do
+    branch="${remote_ref#refs/heads/}"
+
+    if [ "$branch" != "main" ]; then
+        continue
+    fi
+
+    echo "🔄 Pre-push: corriendo migraciones contra producción..."
+
+    # Verify flask is available
+    if ! command -v flask &>/dev/null; then
+        echo "❌ Error: flask no está en PATH. Activá el virtualenv o instalalo con: pip install flask flask-migrate"
+        exit 1
+    fi
+
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+    cd "$REPO_ROOT/backend"
+
+    # Run migrations via Flask-Migrate (uses backend/migrations/, matches production DB history)
+    # DATABASE_URL is loaded from .env by run.py via load_dotenv()
+    set +e
+    migration_output=$(FLASK_APP=run:app flask db upgrade 2>&1)
+    exit_code=$?
+    set -e
+
+    if [ $exit_code -ne 0 ]; then
+        echo "❌ Migraciones fallaron. Push abortado."
+        echo "$migration_output"
+        exit 1
+    fi
+
+    # Count applied migrations (Flask-Migrate logs: "Running upgrade <rev> -> <rev>, <msg>")
+    applied=$(echo "$migration_output" | grep -c "Running upgrade" || true)
+
+    if [ "$applied" -eq 0 ]; then
+        echo "✓ Migraciones: sin cambios (ya en head)"
+    else
+        echo "✓ Migraciones: $applied aplicadas correctamente"
+    fi
+done
+
+exit 0
