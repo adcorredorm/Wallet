@@ -45,10 +45,31 @@ app.use(router)
  */
 const authStore = useAuthStore()
 
+// Initialized here so the .then() callback below can reference them.
+// API calls are deferred until after initializeFromStorage() completes —
+// see comment inside the .then() for why.
+const settingsStore = useSettingsStore()
+const exchangeRatesStore = useExchangeRatesStore()
+
 // Silent session restore before mount — using .then() instead of top-level
 // await for compatibility with the es2020 build target.
 authStore.initializeFromStorage().then(() => {
   app.mount('#app')
+
+  // Load settings and exchange rates AFTER auth is initialized.
+  // These calls make API requests that require a valid access token.
+  // Running them before initializeFromStorage() completes causes two
+  // concurrent authStore.refresh() calls with the same refresh token —
+  // one succeeds and rotates the token, the other fails and clears auth state.
+  // Both still read from IndexedDB first (< 1ms) so UI data is available
+  // immediately; only the background API revalidation is delayed.
+  settingsStore.loadSettings().catch((err) => {
+    console.warn('[boot] Settings failed to load:', err)
+  })
+  exchangeRatesStore.fetchRates().catch((err) => {
+    console.warn('[boot] Exchange rates failed to load:', err)
+  })
+
   // Check backend reachability at boot.
   // onOnline() only fires on transitions — if the device is already online,
   // no transition fires. This call handles the cold-start case.
@@ -172,30 +193,6 @@ async function checkAndSetOnline(): Promise<boolean> {
   return reachable
 }
 
-/**
- * Phase 3.3 — Load user settings at boot.
- *
- * Why here and not inside a component?
- * Settings (e.g. primary_currency) are needed by multiple components and
- * stores as soon as the app renders. Bootstrapping them here ensures they
- * are available before any component mounts, without requiring each
- * component to call loadSettings() defensively.
- *
- * Why fire-and-forget (no await)?
- * loadSettings() reads IndexedDB first, which is synchronous from the
- * caller's perspective (< 1 ms). The background API revalidation is
- * explicitly non-blocking. There is no reason to delay the app mount
- * for a settings fetch.
- */
-const settingsStore = useSettingsStore()
-settingsStore.loadSettings().catch((err) => {
-  console.warn('[boot] Settings failed to load:', err)
-})
-
-const exchangeRatesStore = useExchangeRatesStore()
-exchangeRatesStore.fetchRates().catch((err) => {
-  console.warn('[boot] Exchange rates failed to load:', err)
-})
 
 // On device regaining network — check backend and sync if reachable.
 onOnline(() => {

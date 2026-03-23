@@ -398,22 +398,15 @@ export class SyncManager {
       // the queue is also empty, so mutation processing is a no-op and the
       // post-check is equivalent to a pre-check.
       //
-      // ── Task 11: 401 interceptor on read-sync ─────────────────────────
-      // We wrap the read-sync in a try/catch that specifically handles 401.
-      // If the token expired mid-session, we attempt a silent refresh and
-      // retry once. If refresh fails, we enter guest mode and abort.
+      // ── 401 handling on read-sync ─────────────────────────────────────
+      // The Axios interceptor in auth-interceptor.ts handles 401s transparently:
+      // it attempts a silent token refresh and retries the original request.
+      // If the refresh fails (expired or revoked refresh token), the interceptor
+      // propagates the 401 up to the caller.
       //
-      // Why only handle 401 here and not inside fullReadSync/incrementalSync?
-      // The read-sync is a single logical unit: if the first request in a
-      // fullReadSync fails with 401, all subsequent ones will too. Catching
-      // 401 at this level lets us refresh once and retry the entire read-sync
-      // rather than implementing refresh logic in every per-entity call.
-      //
-      // Why only retry once?
-      // If the refresh was successful and we still get 401 on retry, something
-      // is wrong with the server (revoked session, backend bug). Retrying more
-      // than once would be an infinite loop in the worst case. A single retry
-      // covers the normal "token expired mid-sync" case.
+      // This try/catch handles that propagated 401 — it means the interceptor
+      // already exhausted the refresh attempt. Our job here is simply to enter
+      // guest mode and abort, without touching IndexedDB.
       //
       // INVARIANT: IndexedDB is NEVER touched if we end up in guest mode —
       // we exit the try block without calling any write operation on db.
@@ -432,20 +425,11 @@ export class SyncManager {
         await runReadSync()
       } catch (readError: unknown) {
         if (isApiError(readError) && readError.status === 401) {
-          console.warn('[SyncManager] 401 during read-sync — attempting silent token refresh.')
-          const refreshed = await authStore.refresh()
-          if (refreshed) {
-            console.log('[SyncManager] Token refreshed — retrying read-sync.')
-            await runReadSync()
-          } else {
-            console.warn('[SyncManager] Token refresh failed — entering guest mode.')
-            syncStore.setGuest(true)
-            // Exit processQueue without touching IndexedDB — the finally block
-            // will still run to reset the processing flag and sync status.
-            return
-          }
+          console.warn('[SyncManager] 401 during read-sync after interceptor fallback — entering guest mode.')
+          syncStore.setGuest(true)
+          // Exit processQueue without touching IndexedDB
+          return
         } else {
-          // Re-throw non-401 errors so the outer try/finally handles them.
           throw readError
         }
       }

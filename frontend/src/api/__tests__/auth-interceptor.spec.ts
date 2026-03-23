@@ -198,3 +198,27 @@ describe('syncClient — Authorization header interceptor', () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// handle401Error (Response Interceptor Queue Logic)
+// ---------------------------------------------------------------------------
+import { handle401Error } from '../auth-interceptor'
+import type { AxiosInstance } from 'axios'
+
+describe('handle401Error (Response Interceptor)', () => {
+  it('passes non-401 errors to fallback formatter directly', async () => {
+    const error = { response: { status: 500 }, config: {} } as any
+    const fallback = vi.fn().mockRejectedValue('fallback error')
+    
+    await expect(handle401Error(error, {} as AxiosInstance, fallback)).rejects.toEqual('fallback error')
+    expect(fallback).toHaveBeenCalledWith(error)
+  })
+
+  it('does not retry if originalRequest._retry is already true', async () => {
+    const error = { response: { status: 401 }, config: { _retry: true } } as any
+    const fallback = vi.fn().mockRejectedValue('already retried error')
+
+    await expect(handle401Error(error, {} as AxiosInstance, fallback)).rejects.toEqual('already retried error')
+    expect(fallback).toHaveBeenCalledWith(error)
+  })
+})

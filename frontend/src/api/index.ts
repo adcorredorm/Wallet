@@ -10,6 +10,7 @@
 
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import type { ApiResponse, ApiError } from '@/types'
+import { handle401Error } from './auth-interceptor'
 
 // Get API base URL from environment variables
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1'
@@ -78,28 +79,31 @@ apiClient.interceptors.response.use(
     }
     return response.data
   },
-  (error: AxiosError) => {
-    // Transform axios error into our ApiError format
-    const apiError: ApiError = {
-      message: 'Ha ocurrido un error',
-      status: error.response?.status || 500,
-      errors: {}
-    }
+  async (error: AxiosError) => {
+    // Handle 401 transparent token refresh
+    return handle401Error(error, apiClient, (err: AxiosError) => {
+      // Transform axios error into our ApiError format
+      const apiError: ApiError = {
+        message: 'Ha ocurrido un error',
+        status: err.response?.status || 500,
+        errors: {}
+      }
 
-    if (error.response) {
-      // Server responded with error status
-      const data = error.response.data as any
-      apiError.message = data.message || error.message
-      apiError.errors = data.errors || {}
-    } else if (error.request) {
-      // Request made but no response received
-      apiError.message = 'No se pudo conectar con el servidor'
-    } else {
-      // Something else happened
-      apiError.message = error.message
-    }
+      if (err.response) {
+        // Server responded with error status
+        const data = err.response.data as any
+        apiError.message = data.message || err.message
+        apiError.errors = data.errors || {}
+      } else if (err.request) {
+        // Request made but no response received
+        apiError.message = 'No se pudo conectar con el servidor'
+      } else {
+        // Something else happened
+        apiError.message = err.message
+      }
 
-    return Promise.reject(apiError)
+      return Promise.reject(apiError)
+    })
   }
 )
 

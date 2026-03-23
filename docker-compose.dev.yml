@@ -88,8 +88,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
       # Dockerfile.dev runs `npm ci` during build for Linux-compatible binaries
-    # Don't use pre-built image; rebuild for dev
-    image: null
+    # Use dev-specific image (Node.js + Vite) instead of production Nginx image
+    image: wallet-frontend-dev:latest
+
+    # Disable read-only filesystem (production hardening) — Vite needs to write temp files
+    read_only: false
 
     # Override production Nginx with Vite dev server
     # Port mapping for development access
@@ -99,7 +102,7 @@ services:
       # Secondary fallback port
       - "5174:5174"
       # Legacy port mapping for backwards compatibility
-      - "3000:5173"
+      # - "3000:5173"
 
     # Mount only source files needed for hot reload
     # IMPORTANT: package.json changes require rebuilding the image:

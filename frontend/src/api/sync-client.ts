@@ -10,6 +10,7 @@
  */
 import axios from 'axios'
 import { API_BASE_URL } from './index'
+import { handle401Error } from './auth-interceptor'
 
 export const syncClient = axios.create({
   baseURL: API_BASE_URL,
@@ -48,5 +49,12 @@ syncClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error)
+  }
+)
+
+syncClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    return handle401Error(error, syncClient)
   }
 )
