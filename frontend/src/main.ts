@@ -16,6 +16,8 @@ import App from './App.vue'
 import router from './router'
 import './assets/css/main.css'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
+import { useExchangeRatesStore } from '@/stores/exchangeRates'
 
 const app = createApp(App)
 
@@ -146,8 +148,6 @@ import { useAccountsStore } from '@/stores/accounts'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useTransfersStore } from '@/stores/transfers'
 import { useCategoriesStore } from '@/stores/categories'
-import { useSettingsStore } from '@/stores/settings'
-import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useDashboardsStore } from '@/stores/dashboards'
 
 const { onOnline, onOffline } = useNetworkStatus()

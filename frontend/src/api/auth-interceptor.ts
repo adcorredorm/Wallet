@@ -22,6 +22,9 @@ export async function handle401Error(
 ) {
   const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
+  // Guard: postAuthRefresh uses a separate publicClient (no interceptors), so a
+  // refresh call never goes through apiClient/syncClient. This check is a safety
+  // net in case that invariant ever breaks — prevents infinite refresh loops.
   if (error.response?.status === 401 && originalRequest && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
     if (isRefreshing) {
       return new Promise<string>((resolve, reject) => {
