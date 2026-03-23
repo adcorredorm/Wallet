@@ -192,13 +192,20 @@ export const useAuthStore = defineStore('auth', () => {
       await setRefreshToken(response.refresh_token)
 
       return true
-    } catch {
-      // Refresh falló — limpiar estado (modo invitado)
-      // No tocamos WalletDB — invariante: datos en IndexedDB nunca se pierden
-      // por problemas de autenticación.
+    } catch (err) {
+      // Siempre limpiamos el estado en memoria — no hay sesión activa.
       accessToken.value = null
       user.value = null
-      await deleteRefreshToken()
+
+      // Solo borramos el refresh_token si el servidor lo rechazó explícitamente
+      // con 401 (token expirado o revocado). Para errores transitorios (sin
+      // respuesta del servidor: wifi cortado, timeout, DNS) conservamos el token
+      // para que el próximo intento pueda usarlo sin forzar un nuevo login.
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 401) {
+        await deleteRefreshToken()
+      }
+
       return false
     }
   }

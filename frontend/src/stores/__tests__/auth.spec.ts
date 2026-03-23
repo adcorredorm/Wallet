@@ -301,14 +301,47 @@ describe('refresh', () => {
     expect(store.user).toBeNull()
   })
 
-  it('deletes refresh_token from AuthDB when refresh fails', async () => {
+  it('deletes refresh_token from AuthDB when server rejects with 401', async () => {
     mockGetRefreshToken.mockResolvedValueOnce('expired-token')
-    mockPostAuthRefresh.mockRejectedValueOnce(new Error('401'))
+    mockPostAuthRefresh.mockRejectedValueOnce(
+      Object.assign(new Error('Unauthorized'), { response: { status: 401 } })
+    )
 
     const store = useAuthStore()
     await store.refresh()
 
     expect(mockDeleteRefreshToken).toHaveBeenCalledOnce()
+  })
+
+  it('keeps refresh_token when refresh fails with a network error (no server response)', async () => {
+    // Simulates wifi dropout, timeout, DNS failure — no response from server.
+    // The refresh token is still valid; we should not delete it.
+    mockGetRefreshToken.mockResolvedValueOnce('valid-refresh-token')
+    mockPostAuthRefresh.mockRejectedValueOnce(
+      Object.assign(new Error('Network Error'), { response: undefined })
+    )
+
+    const store = useAuthStore()
+    const result = await store.refresh()
+
+    expect(result).toBe(false)
+    expect(store.accessToken).toBeNull()   // state cleared (no valid session in memory)
+    expect(store.user).toBeNull()
+    expect(mockDeleteRefreshToken).not.toHaveBeenCalled()  // token preserved for retry
+  })
+
+  it('keeps refresh_token when refresh fails with a 500 server error', async () => {
+    // 5xx = transient server problem, token is still valid.
+    mockGetRefreshToken.mockResolvedValueOnce('valid-refresh-token')
+    mockPostAuthRefresh.mockRejectedValueOnce(
+      Object.assign(new Error('Internal Server Error'), { response: { status: 500 } })
+    )
+
+    const store = useAuthStore()
+    const result = await store.refresh()
+
+    expect(result).toBe(false)
+    expect(mockDeleteRefreshToken).not.toHaveBeenCalled()
   })
 })
 
