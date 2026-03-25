@@ -95,7 +95,7 @@ function createAccount() {
 
     <!-- Floating Action Button -->
     <SimpleFab
-      aria-label="Crear nueva cuenta"
+      ariaLabel="Crear nueva cuenta"
       @click="createAccount"
     />
   </div>

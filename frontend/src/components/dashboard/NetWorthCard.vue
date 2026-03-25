@@ -33,7 +33,6 @@ import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
-import { formatCurrency } from '@/utils/formatters'
 
 // ── Props ──────────────────────────────────────────────────────────────────
 // Why keep loading as a prop?
@@ -86,29 +85,6 @@ const convertedNetWorth = computed<number | null>(() => {
   return total
 })
 
-// ── Computed: currencies for which no rate is available ───────────────────
-// Used to show the ⚠ icon next to those currencies in the breakdown.
-// The primary currency itself is always skippable — convert(x, A, A) === x.
-const currenciesWithMissingRates = computed(() =>
-  [...balancesByCurrency.value.keys()].filter(
-    c =>
-      c !== settingsStore.primaryCurrency &&
-      exchangeRatesStore.getRate(c, settingsStore.primaryCurrency) === null
-  )
-)
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-// Sorted currency codes so the breakdown always renders in a predictable order
-// (primary currency first, then alphabetical).
-const sortedCurrencies = computed(() => {
-  const primary = settingsStore.primaryCurrency
-  return [...balancesByCurrency.value.keys()].filter(Boolean).sort((a, b) => {
-    if (a === primary) return -1
-    if (b === primary) return 1
-    return a.localeCompare(b)
-  })
-})
 </script>
 
 <template>

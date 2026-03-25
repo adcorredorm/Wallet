@@ -5,7 +5,6 @@
  * Shows all accounts with their balances in dashboard
  */
 
-import { computed } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
 import { formatAccountType } from '@/utils/formatters'
@@ -25,7 +24,7 @@ interface Props {
   loading?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   loading: false
 })
 

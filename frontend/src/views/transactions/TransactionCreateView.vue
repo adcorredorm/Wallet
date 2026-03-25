@@ -19,7 +19,7 @@ import { useTransactionsStore, useAccountsStore, useCategoriesStore, useUiStore 
 import TransactionForm from '@/components/transactions/TransactionForm.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import type { CreateTransactionDto } from '@/types'
+import type { CreateTransactionDto, UpdateTransactionDto } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -37,9 +37,9 @@ const needsSetup = computed(
   () => accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
 )
 
-async function handleSubmit(data: CreateTransactionDto) {
+async function handleSubmit(data: CreateTransactionDto | UpdateTransactionDto) {
   try {
-    await transactionsStore.createTransaction(data)
+    await transactionsStore.createTransaction(data as CreateTransactionDto)
     uiStore.showSuccess('Transacción creada exitosamente')
     router.push('/')
   } catch (error: any) {

@@ -6,7 +6,7 @@
  * Mobile-optimized with validation
  */
 
-import { ref, reactive, computed } from 'vue'
+import { reactive, computed } from 'vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'

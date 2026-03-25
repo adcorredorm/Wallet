@@ -20,13 +20,13 @@ interface Option {
 
 interface OptionGroup {
   label: string
-  options: Option[]
+  options: readonly Option[]
 }
 
 interface Props {
   modelValue: string | number
   label?: string
-  options?: Option[]
+  options?: readonly Option[]
   optionGroups?: OptionGroup[]
   placeholder?: string
   error?: string
@@ -34,7 +34,7 @@ interface Props {
   disabled?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   required: false,
   disabled: false
 })

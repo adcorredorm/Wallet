@@ -12,7 +12,6 @@
  */
 
 import { computed } from 'vue'
-import { formatDateForInput } from '@/utils/formatters'
 
 interface Props {
   modelValue: string // ISO date string YYYY-MM-DD

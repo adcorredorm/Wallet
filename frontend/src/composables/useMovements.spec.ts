@@ -134,6 +134,7 @@ describe('useMovements — with accountId', () => {
     // Both source and destination queries return the same transfer
     mockTrWhere.mockImplementation(() => ({
       equals: vi.fn(() => ({ toArray: vi.fn().mockResolvedValue([selfTransfer]), count: vi.fn().mockResolvedValue(1) })),
+      anyOf: vi.fn(() => ({ toArray: vi.fn().mockResolvedValue([selfTransfer]), count: vi.fn().mockResolvedValue(1) })),
     }))
     mockTrCount.mockResolvedValue(1)
     const { items } = useMovements('acc-123', 20)

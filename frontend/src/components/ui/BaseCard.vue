@@ -19,7 +19,7 @@ interface Props {
   padding?: 'none' | 'sm' | 'md' | 'lg'
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   clickable: false,
   bordered: false,
   padding: 'md'

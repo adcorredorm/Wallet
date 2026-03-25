@@ -8,6 +8,7 @@
  * - Mobile-friendly button layout
  */
 
+import { computed } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
@@ -25,7 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: 'Confirmar acción',
   confirmText: 'Confirmar',
   cancelText: 'Cancelar',
-  variant: 'danger',
+  variant: 'danger' as 'danger' | 'warning' | 'info',
   loading: false
 })
 
@@ -39,6 +40,12 @@ const variantIcons = {
   warning: '⚡',
   info: 'ℹ️'
 }
+
+// Map ConfirmDialog variant to BaseButton variant (BaseButton does not have 'warning' or 'info')
+const buttonVariant = computed(() => {
+  if (props.variant === 'danger') return 'danger' as const
+  return 'primary' as const
+})
 </script>
 
 <template>
@@ -62,7 +69,7 @@ const variantIcons = {
     <template #footer>
       <div class="flex gap-3 flex-col md:flex-row-reverse">
         <BaseButton
-          :variant="variant"
+          :variant="buttonVariant"
           :loading="loading"
           full-width
           @click="emit('confirm')"

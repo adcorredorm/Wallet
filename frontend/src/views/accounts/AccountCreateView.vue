@@ -13,17 +13,17 @@ import { useRouter } from 'vue-router'
 import { useAccountsStore, useCategoriesStore, useUiStore } from '@/stores'
 import AccountForm from '@/components/accounts/AccountForm.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import type { CreateAccountDto } from '@/types'
+import type { CreateAccountDto, UpdateAccountDto } from '@/types'
 
 const router = useRouter()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
-async function handleSubmit(data: CreateAccountDto) {
+async function handleSubmit(data: CreateAccountDto | UpdateAccountDto) {
   try {
     const isOnboarding = accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
-    await accountsStore.createAccount(data)
+    await accountsStore.createAccount(data as CreateAccountDto)
     uiStore.showSuccess('Cuenta creada exitosamente')
     router.push(isOnboarding ? '/' : '/accounts')
   } catch (error: any) {

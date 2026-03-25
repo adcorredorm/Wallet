@@ -75,11 +75,6 @@ const canMoveDown  = computed(() => props.widgetIndex < props.totalWidgets - pro
 const canMoveLeft  = computed(() => props.widgetIndex % props.cols !== 0)
 const canMoveRight = computed(() => props.widgetIndex % props.cols !== props.cols - 1 && props.widgetIndex < props.totalWidgets - 1)
 
-function toggleVisible(e: Event) {
-  e.stopPropagation()
-  visible.value = !visible.value
-}
-
 function hideOverlay() {
   visible.value = false
 }
