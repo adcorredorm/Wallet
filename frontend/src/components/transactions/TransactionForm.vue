@@ -257,18 +257,6 @@ function handleRateInput(event: Event) {
   exchangeRate.value = isNaN(parsed) ? null : parsed
 }
 
-function handleOriginalAmountInput(event: Event) {
-  const raw = (event.target as HTMLInputElement).value
-  const parsed = parseFloat(raw)
-  originalAmount.value = isNaN(parsed) ? null : parsed
-}
-
-function handleAccountAmountInput(event: Event) {
-  const raw = (event.target as HTMLInputElement).value
-  const parsed = parseFloat(raw)
-  accountAmount.value = isNaN(parsed) ? null : parsed
-}
-
 // Currency options for the foreign currency dropdown —
 // filtered to exclude the account's own currency (same-currency FX is meaningless)
 const foreignCurrencyOptions = computed(() => [
@@ -526,23 +514,14 @@ function handleSubmit() {
                 <div v-else class="pt-3" />
 
                 <!-- Original amount (in foreign currency) -->
-                <div class="w-full">
-                  <label class="label">
-                    Monto original
-                    <span class="ml-1 text-dark-text-tertiary text-xs font-normal">({{ foreignCurrency }})</span>
-                    <span class="text-accent-red ml-1">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    :value="originalAmount ?? ''"
-                    inputmode="decimal"
-                    placeholder="0.00"
-                    class="input"
-                    @input="handleOriginalAmountInput"
-                  />
-                </div>
+                <AmountInput
+                  :model-value="originalAmount ?? 0"
+                  label="Monto original"
+                  :currency="foreignCurrency"
+                  placeholder="0.00"
+                  required
+                  @update:model-value="originalAmount = $event || null"
+                />
 
                 <!-- Exchange rate -->
                 <div class="w-full">
@@ -572,19 +551,13 @@ function handleSubmit() {
 
                 <!-- Amount in account currency (calculated or user-entered) -->
                 <div class="w-full">
-                  <label class="label">
-                    Monto en {{ selectedAccountCurrency }}
-                    <span class="text-accent-red ml-1">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    :value="accountAmount ?? ''"
-                    inputmode="decimal"
+                  <AmountInput
+                    :model-value="accountAmount ?? 0"
+                    :label="`Monto en ${selectedAccountCurrency}`"
+                    :currency="selectedAccountCurrency"
                     placeholder="0.00"
-                    class="input"
-                    @input="handleAccountAmountInput"
+                    required
+                    @update:model-value="accountAmount = $event || null"
                   />
                   <p class="mt-1 text-xs text-dark-text-tertiary">
                     Este valor se guarda como el monto de la transacción.
