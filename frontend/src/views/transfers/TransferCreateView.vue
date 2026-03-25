@@ -10,7 +10,7 @@ import { useRouter } from 'vue-router'
 import { useTransfersStore, useAccountsStore, useUiStore } from '@/stores'
 import TransferForm from '@/components/transfers/TransferForm.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import type { CreateTransferDto } from '@/types'
+import type { CreateTransferDto, UpdateTransferDto } from '@/types'
 
 const router = useRouter()
 const transfersStore = useTransfersStore()
@@ -19,9 +19,9 @@ const uiStore = useUiStore()
 
 const accounts = computed(() => accountsStore.activeAccounts)
 
-async function handleSubmit(data: CreateTransferDto) {
+async function handleSubmit(data: CreateTransferDto | UpdateTransferDto) {
   try {
-    await transfersStore.createTransfer(data)
+    await transfersStore.createTransfer(data as CreateTransferDto)
     // Balances are updated by adjustBalance() inside createTransfer — no API call needed.
     uiStore.showSuccess('Transferencia creada exitosamente')
     router.push('/')

@@ -57,6 +57,6 @@ const options = computed(() => {
     :error="error"
     :required="required"
     :disabled="disabled"
-    @update:model-value="emit('update:modelValue', $event)"
+    @update:model-value="emit('update:modelValue', String($event))"
   />
 </template>

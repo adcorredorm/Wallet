@@ -15,7 +15,7 @@ interface Props {
   icon?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   title: 'No hay datos',
   message: 'Comienza creando tu primer elemento',
   actionText: 'Crear',

@@ -63,7 +63,6 @@ onMounted(() => {
       })
       if (googleButtonContainer.value) {
         window.google.accounts.id.renderButton(googleButtonContainer.value, {
-          type: 'standard',
           theme: 'filled_blue',
           size: 'large',
           text: 'continue_with',
@@ -86,7 +85,6 @@ onMounted(() => {
         })
         if (googleButtonContainer.value) {
           window.google.accounts.id.renderButton(googleButtonContainer.value, {
-            type: 'standard',
             theme: 'filled_blue',
             size: 'large',
             text: 'continue_with',

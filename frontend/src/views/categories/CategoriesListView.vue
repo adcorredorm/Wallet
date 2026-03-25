@@ -281,7 +281,7 @@ const archivedCategoriesWithParent = computed(() =>
 
     <!-- Floating Action Button -->
     <SimpleFab
-      aria-label="Crear nueva categoría"
+      ariaLabel="Crear nueva categoría"
       @click="createCategory"
     />
   </div>

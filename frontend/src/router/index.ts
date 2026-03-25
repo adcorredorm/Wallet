@@ -195,7 +195,7 @@ const router = createRouter({
       }
     }
   ],
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior(_to, _from, savedPosition) {
     // Scroll to top on route change (mobile-friendly)
     if (savedPosition) {
       return savedPosition
@@ -206,7 +206,7 @@ const router = createRouter({
 })
 
 // Navigation guard for setting page title
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   document.title = `${to.meta.title || 'Wallet'} - Wallet`
   next()
 })

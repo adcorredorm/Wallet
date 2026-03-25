@@ -28,6 +28,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import AmountInput from '@/components/shared/AmountInput.vue'
 import DatePicker from '@/components/shared/DatePicker.vue'
 import AccountSelect from '@/components/accounts/AccountSelect.vue'
+import ExchangeRateInput from '@/components/shared/ExchangeRateInput.vue'
 import { positiveNumber } from '@/utils/validators'
 import { formatDateForInput } from '@/utils/formatters'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
@@ -183,31 +184,6 @@ const showRateAlert = computed<boolean>(() => {
   if (!suggestedRate.value || !exchangeRate.value || !isCrossCurrency.value) return false
   const deviation = Math.abs(exchangeRate.value - suggestedRate.value) / suggestedRate.value
   return deviation > 0.10
-})
-
-/**
- * Bidirectional rate display strings (e.g. "1 USD = 4,200.00 COP").
- *
- * Why use the store's getRateDisplay() when the user may have manually
- * edited the rate?
- * getRateDisplay() always reads from the store cache, so it shows the
- * market rate — not the user's custom rate. The user's custom rate is
- * separately shown in the exchangeRateStr input field.
- * The live display below the inputs reflects the user's current input
- * to give them instant feedback. So we compute those strings ourselves.
- */
-const rateDisplayForward = computed<string>(() => {
-  if (!isCrossCurrency.value || exchangeRate.value <= 0) return ''
-  const rateNum = parseFloat(exchangeRate.value.toFixed(10))
-  const rateStr = parseFloat(rateNum.toFixed(10)).toString()
-  return `1 ${originAccountCurrency.value} = ${rateStr} ${destAccountCurrency.value}`
-})
-
-const rateDisplayInverse = computed<string>(() => {
-  if (!isCrossCurrency.value || exchangeRate.value <= 0) return ''
-  const inverse = 1 / exchangeRate.value
-  const inverseStr = parseFloat(inverse.toFixed(10)).toString()
-  return `1 ${destAccountCurrency.value} = ${inverseStr} ${originAccountCurrency.value}`
 })
 
 // ---------------------------------------------------------------------------
@@ -456,44 +432,21 @@ function handleSubmit() {
           </div>
         </div>
 
-        <!-- Exchange rate field -->
-        <div class="w-full">
-          <label class="label">
-            Tasa de cambio
-            <span class="text-xs text-slate-400 font-normal ml-1">
-              (1 {{ originAccountCurrency }} = ? {{ destAccountCurrency }})
-            </span>
-          </label>
-          <input
-            v-model="exchangeRateStr"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            class="input"
-            autocomplete="off"
-          />
+        <!-- Exchange rate (bidirectional) -->
+        <ExchangeRateInput
+          :model-value="exchangeRate"
+          :base-currency="originAccountCurrency"
+          :quote-currency="destAccountCurrency"
+          @update:model-value="exchangeRateStr = String($event)"
+        />
 
-          <!-- Phase 5.2 — Rate deviation alert -->
-          <div
-            v-if="showRateAlert"
-            class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1"
-          >
-            <span>⚠️</span>
-            <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
-          </div>
-        </div>
-
-        <!--
-          Live bidirectional rate display.
-          Updates as the user types — gives instant feedback without needing
-          to blur the input field first.
-        -->
+        <!-- Phase 5.2 — Rate deviation alert -->
         <div
-          v-if="rateDisplayForward && rateDisplayInverse"
-          class="text-xs text-slate-400 space-y-0.5 pt-1 border-t border-slate-700"
+          v-if="showRateAlert"
+          class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1"
         >
-          <p>{{ rateDisplayForward }}</p>
-          <p>{{ rateDisplayInverse }}</p>
+          <span>⚠️</span>
+          <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
         </div>
       </div>
     </div>
