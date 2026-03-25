@@ -112,8 +112,20 @@ export function parseFormattedNumber(value: string): number {
   } else if (hasComma && !hasDot) {
     // Spanish decimal only: 0,001
     cleaned = value.replace(',', '.')
+  } else if (hasDot && !hasComma) {
+    // Either Spanish thousands-only (10.000, 1.000.000) or English decimal (10.5)
+    // Heuristic: if there are multiple dots, OR the last segment after a dot has
+    // exactly 3 digits, it's a Spanish thousands separator — strip all dots.
+    const dotCount = (value.match(/\./g) || []).length
+    const afterLastDot = value.split('.').pop() ?? ''
+    if (dotCount > 1 || afterLastDot.length === 3) {
+      cleaned = value.replace(/\./g, '')
+    } else {
+      // Single dot with ≠3 digits after → English decimal (10.5, 1.50)
+      cleaned = value
+    }
   } else {
-    // Standard: 0.001 or integer — use as-is
+    // No dots, no commas: plain integer
     cleaned = value
   }
   return parseFloat(cleaned) || 0
