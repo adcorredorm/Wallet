@@ -142,7 +142,12 @@ function handleInput(event: Event) {
   // will reflect `newDisplay` only after the reactive flush.
   const newPos = findPositionAfterNSignificant(newDisplay, rawOffset)
   nextTick(() => {
-    inputEl.value?.setSelectionRange(newPos, newPos)
+    // Only restore cursor if the input is still focused. Calling setSelectionRange
+    // on a blurred input can trigger side effects in some browsers (e.g. spurious
+    // input events or DOM value resets) that corrupt the display value.
+    if (document.activeElement === inputEl.value) {
+      inputEl.value?.setSelectionRange(newPos, newPos)
+    }
   })
 }
 
