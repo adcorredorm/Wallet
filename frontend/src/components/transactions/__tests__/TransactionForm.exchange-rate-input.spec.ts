@@ -1,29 +1,25 @@
 /**
- * TransactionForm.fx-amount-input.spec.ts
+ * TransactionForm.exchange-rate-input.spec.ts
  *
- * RED test: verifies that the FX section uses AmountInput for originalAmount
- * and accountAmount fields instead of plain <input type="number"> elements.
+ * RED tests: verifies that TransactionForm uses ExchangeRateInput for the
+ * exchange rate field inside the FX section instead of a plain <input type="number">.
  *
  * Scope:
- *   1. When fxActive is true (foreignCurrency differs from account currency),
- *      the FX section renders AmountInput for originalAmount — not input[type="number"]
- *   2. When fxActive is true, the FX section renders AmountInput for accountAmount
- *      — not input[type="number"]
- *   3. The unused handlers handleOriginalAmountInput and handleAccountAmountInput
- *      do not exist on the component instance after the refactor
+ *   1. When fxActive is true, ExchangeRateInput is rendered for the rate field
+ *   2. No input[type="number"] exists anywhere after integration (0 count)
+ *   3. handleRateInput function is NOT exposed on the component instance
+ *      (it was removed because ExchangeRateInput emits update:modelValue directly)
  *
- * Why we test via rendered DOM rather than vm methods?
- * The template is the public contract. Testing that the correct component is
- * rendered gives us confidence the refactor actually happened and that the
- * correct input mode (AmountInput) is being used by users.
+ * Why these tests complement TransactionForm.fx-amount-input.spec.ts?
+ * The existing spec checked that originalAmount and accountAmount use AmountInput
+ * and that exactly 1 input[type="number"] remains (the exchange rate field).
+ * This spec focuses on the second phase: removing that last input[type="number"]
+ * by replacing it with ExchangeRateInput.
  *
  * Mock strategy:
- * - All child components except AmountInput are stubbed to prevent deep
- *   dependency chains (Pinia stores, router, etc.) from breaking tests.
- * - AmountInput is NOT stubbed — we render it for real so we can verify
- *   AmountInput instances appear in the DOM via data-testid or component type.
- * - useExchangeRatesStore is mocked to return a static getRate function.
- * - SUPPORTED_CURRENCIES and CURRENCIES are mocked with minimal data.
+ * - Mirrors TransactionForm.fx-amount-input.spec.ts exactly so both test files
+ *   are consistent and can be understood as a pair.
+ * - ExchangeRateInput is NOT stubbed — rendered real so we can verify its presence.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -72,7 +68,7 @@ vi.mock('@/stores/exchangeRates', () => ({
 }))
 
 // ---------------------------------------------------------------------------
-// Stub heavy child components — only AmountInput is real
+// Stub heavy child components — keep ExchangeRateInput real
 // ---------------------------------------------------------------------------
 
 vi.mock('@/components/ui/BaseInput.vue', () => ({
@@ -105,18 +101,24 @@ vi.mock('@/components/categories/CategorySelect.vue', () => ({
     template: '<select />',
   },
 }))
+vi.mock('@/components/shared/AmountInput.vue', () => ({
+  default: {
+    props: ['modelValue', 'currency', 'label', 'placeholder', 'error', 'required'],
+    emits: ['update:modelValue'],
+    template: '<input type="text" inputmode="decimal" />',
+  },
+}))
 
 // ---------------------------------------------------------------------------
 // Import component AFTER mocks
 // ---------------------------------------------------------------------------
 import TransactionForm from '../TransactionForm.vue'
-import AmountInput from '@/components/shared/AmountInput.vue'
+import ExchangeRateInput from '@/components/shared/ExchangeRateInput.vue'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Minimal account data to satisfy AccountSelect and selectedAccountCurrency */
 const TEST_ACCOUNT: Account = {
   id: 'acc-1',
   name: 'Test Account',
@@ -137,15 +139,13 @@ const TEST_CATEGORY: Category = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
-/** Mounts TransactionForm with FX active:
- *  account currency = COP, foreignCurrency preset to USD → fxActive = true */
+/** Mounts TransactionForm with FX active (foreignCurrency = 'USD', account currency = 'COP') */
 function buildWrapper() {
   return mount(TransactionForm, {
     props: {
       accounts: [TEST_ACCOUNT],
       categories: [TEST_CATEGORY],
       loading: false,
-      // Pre-populate a transaction with FX data so the section is open
       transaction: {
         id: 'tx-1',
         type: 'expense',
@@ -178,59 +178,54 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-describe('TransactionForm — FX section uses AmountInput', () => {
-  it('renders AmountInput for originalAmount in FX section (not input[type="number"])', async () => {
+describe('TransactionForm — FX section uses ExchangeRateInput for the rate field', () => {
+  it('renders ExchangeRateInput for the exchange rate in the FX section', async () => {
     const wrapper = buildWrapper()
     await flushPromises()
     await nextTick()
 
-    // The FX section should be open (transaction has original_currency)
-    // AmountInput renders an <input type="text" inputmode="decimal">
-    // A plain input[type="number"] would indicate the refactor did NOT happen
+    // After integration, ExchangeRateInput must be present in the FX section
+    const exchangeRateInputComponents = wrapper.findAllComponents(ExchangeRateInput)
+    expect(exchangeRateInputComponents.length).toBe(1)
+  })
 
-    const amountInputComponents = wrapper.findAllComponents(AmountInput)
+  it('passes baseCurrency (foreignCurrency) to ExchangeRateInput', async () => {
+    const wrapper = buildWrapper()
+    await flushPromises()
+    await nextTick()
 
-    // There should be AmountInput instances: at least the main amount field
-    // plus originalAmount and accountAmount in the FX section = 3 total
-    expect(amountInputComponents.length).toBeGreaterThanOrEqual(3)
+    const exchangeRateInputComponent = wrapper.findComponent(ExchangeRateInput)
+    expect(exchangeRateInputComponent.props('baseCurrency')).toBe('USD')
+  })
 
-    // Confirm no input[type="number"] exists anywhere in the form.
-    // originalAmount and accountAmount use AmountInput (type="text" inputmode="decimal").
-    // The exchange_rate field was replaced by ExchangeRateInput (Task 4), which also
-    // uses type="text" inputmode="decimal". So the total count must be 0.
+  it('passes quoteCurrency (selectedAccountCurrency) to ExchangeRateInput', async () => {
+    const wrapper = buildWrapper()
+    await flushPromises()
+    await nextTick()
+
+    const exchangeRateInputComponent = wrapper.findComponent(ExchangeRateInput)
+    expect(exchangeRateInputComponent.props('quoteCurrency')).toBe('COP')
+  })
+
+  it('has zero input[type="number"] elements after ExchangeRateInput integration', async () => {
+    const wrapper = buildWrapper()
+    await flushPromises()
+    await nextTick()
+
+    // Before integration: 1 input[type="number"] (the rate field).
+    // After integration: 0 — ExchangeRateInput uses type="text" inputmode="decimal".
     const numberInputs = wrapper.findAll('input[type="number"]')
-    expect(numberInputs.length).toBe(0) // all rate/amount fields use text inputs
+    expect(numberInputs.length).toBe(0)
   })
 
-  it('renders AmountInput for accountAmount in FX section (not input[type="number"])', async () => {
-    const wrapper = buildWrapper()
-    await flushPromises()
-    await nextTick()
-
-    // Find all AmountInput instances — after refactor there should be:
-    // 1. Main amount field (top of form)
-    // 2. originalAmount in FX section
-    // 3. accountAmount in FX section
-    const amountInputComponents = wrapper.findAllComponents(AmountInput)
-    expect(amountInputComponents.length).toBeGreaterThanOrEqual(3)
-  })
-
-  it('does not expose handleOriginalAmountInput on the component instance', async () => {
+  it('does not expose handleRateInput on the component instance after integration', async () => {
     const wrapper = buildWrapper()
     await flushPromises()
 
-    // After refactor, the handler should be removed because AmountInput
-    // emits `update:modelValue` directly instead of relying on a raw input event.
+    // handleRateInput was the bridge between the old plain <input> @input event
+    // and the exchangeRate ref. After replacing with ExchangeRateInput, this
+    // handler is no longer needed and must be removed.
     const vm = wrapper.vm as any
-    expect(typeof vm.handleOriginalAmountInput).not.toBe('function')
-  })
-
-  it('does not expose handleAccountAmountInput on the component instance', async () => {
-    const wrapper = buildWrapper()
-    await flushPromises()
-
-    // Same reasoning as above — should be deleted from <script setup>
-    const vm = wrapper.vm as any
-    expect(typeof vm.handleAccountAmountInput).not.toBe('function')
+    expect(typeof vm.handleRateInput).not.toBe('function')
   })
 })

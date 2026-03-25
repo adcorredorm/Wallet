@@ -19,11 +19,13 @@ import AmountInput from '@/components/shared/AmountInput.vue'
 import DatePicker from '@/components/shared/DatePicker.vue'
 import AccountSelect from '@/components/accounts/AccountSelect.vue'
 import CategorySelect from '@/components/categories/CategorySelect.vue'
+import ExchangeRateInput from '@/components/shared/ExchangeRateInput.vue'
 import { TRANSACTION_TYPES, CURRENCIES } from '@/utils/constants'
-import { required, positiveNumber } from '@/utils/validators'
+import { positiveNumber } from '@/utils/validators'
 import { formatDateForInput } from '@/utils/formatters'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import type { Transaction, CreateTransactionDto, UpdateTransactionDto, TransactionType, Account, Category } from '@/types'
+import { CategoryType } from '@/types'
 
 interface Props {
   transaction?: Transaction
@@ -251,12 +253,6 @@ function formatRate(value: number | null): string {
   return parseFloat(value.toFixed(10)).toString()
 }
 
-function handleRateInput(event: Event) {
-  const raw = (event.target as HTMLInputElement).value
-  const parsed = parseFloat(raw)
-  exchangeRate.value = isNaN(parsed) ? null : parsed
-}
-
 // Currency options for the foreign currency dropdown —
 // filtered to exclude the account's own currency (same-currency FX is meaningless)
 const foreignCurrencyOptions = computed(() => [
@@ -389,7 +385,7 @@ function handleSubmit() {
     <CategorySelect
       v-model="form.category_id"
       :categories="categories"
-      :filter-type="form.type"
+      :filter-type="(form.type as unknown as CategoryType)"
       :error="errors.category_id"
       required
     />
@@ -523,30 +519,17 @@ function handleSubmit() {
                   @update:model-value="originalAmount = $event || null"
                 />
 
-                <!-- Exchange rate -->
-                <div class="w-full">
-                  <label class="label">
-                    Tasa de cambio
-                    <span class="ml-1 text-dark-text-tertiary text-xs font-normal">
-                      ({{ selectedAccountCurrency }} por 1 {{ foreignCurrency }})
-                    </span>
-                    <span class="text-accent-red ml-1">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    :value="formatRate(exchangeRate)"
-                    inputmode="decimal"
-                    placeholder="0.00"
-                    class="input"
-                    @input="handleRateInput"
-                  />
-                  <!-- Rate deviation alert (Phase 5.2 integrated) -->
-                  <div v-if="showRateAlert" class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1">
-                    <span>&#x26A0;&#xFE0F;</span>
-                    <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
-                  </div>
+                <!-- Exchange rate (bidirectional) -->
+                <ExchangeRateInput
+                  :model-value="exchangeRate ?? 0"
+                  :base-currency="foreignCurrency"
+                  :quote-currency="selectedAccountCurrency"
+                  @update:model-value="exchangeRate = $event || null"
+                />
+                <!-- Rate deviation alert (Phase 5.2 integrated) -->
+                <div v-if="showRateAlert" class="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400 mt-1">
+                  <span>&#x26A0;&#xFE0F;</span>
+                  <span>La tasa ingresada difiere más del 10% de la tasa de mercado sugerida</span>
                 </div>
 
                 <!-- Amount in account currency (calculated or user-entered) -->
