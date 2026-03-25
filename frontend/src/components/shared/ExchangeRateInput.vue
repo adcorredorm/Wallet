@@ -48,10 +48,15 @@ const emit = defineEmits<{
 const rate1Display = ref('')
 const rate2Display = ref('')
 
-// ─── External update guard ────────────────────────────────────────────────────
-// Plain boolean (not reactive): used only as a one-tick flag to stop the prop
-// watcher from re-running when *we* are the ones that emitted the new value.
-let isExternalUpdate = false
+// ─── Focus tracking ───────────────────────────────────────────────────────────
+// Tracks which field the user is actively editing. The prop watcher must not
+// overwrite the focused field — Vue's watchers run async (flush: 'pre') so the
+// isExternalUpdate flag is already reset by the time they execute, making a
+// simple boolean guard unreliable. Tracking focus instead gives us the correct
+// answer at watcher execution time.
+let focusedField: 'field1' | 'field2' | null = null
+function onFocus(field: 'field1' | 'field2') { focusedField = field }
+function onBlur() { focusedField = null }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 /**
@@ -69,16 +74,15 @@ function formatRateForDisplay(value: number): string {
 watch(
   () => props.modelValue,
   (newVal) => {
-    if (isExternalUpdate) return
-    isExternalUpdate = true
+    // Never overwrite the field the user is actively editing. The companion
+    // field (not focused) is always safe to update — it shows the inverse.
     if (newVal > 0) {
-      rate1Display.value = formatRateForDisplay(newVal)
-      rate2Display.value = formatRateForDisplay(1 / newVal)
+      if (focusedField !== 'field1') rate1Display.value = formatRateForDisplay(newVal)
+      if (focusedField !== 'field2') rate2Display.value = formatRateForDisplay(1 / newVal)
     } else {
-      rate1Display.value = ''
-      rate2Display.value = ''
+      if (focusedField !== 'field1') rate1Display.value = ''
+      if (focusedField !== 'field2') rate2Display.value = ''
     }
-    isExternalUpdate = false
   },
   { immediate: true }
 )
@@ -98,9 +102,7 @@ function handleRate1Input(event: Event) {
     return
   }
   rate2Display.value = formatRateForDisplay(1 / parsed)
-  isExternalUpdate = true
   emit('update:modelValue', parsed)
-  isExternalUpdate = false
 }
 
 /**
@@ -117,9 +119,7 @@ function handleRate2Input(event: Event) {
   }
   const canonical = 1 / parsed
   rate1Display.value = formatRateForDisplay(canonical)
-  isExternalUpdate = true
   emit('update:modelValue', canonical)
-  isExternalUpdate = false
 }
 </script>
 
@@ -136,6 +136,8 @@ function handleRate2Input(event: Event) {
           :readonly="disabled"
           :class="['input', { 'opacity-50 cursor-not-allowed': disabled }]"
           autocomplete="off"
+          @focus="onFocus('field1')"
+          @blur="onBlur"
           @input="handleRate1Input"
         />
       </div>
@@ -150,6 +152,8 @@ function handleRate2Input(event: Event) {
           :readonly="disabled"
           :class="['input', { 'opacity-50 cursor-not-allowed': disabled }]"
           autocomplete="off"
+          @focus="onFocus('field2')"
+          @blur="onBlur"
           @input="handleRate2Input"
         />
       </div>
