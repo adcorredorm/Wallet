@@ -1,327 +1,198 @@
 ---
-description: Full feature development lifecycle with Notion tracking
-argument-hint: [feature description or Notion page URL]
-model: sonnet
+description: Use when the user wants to build a new feature or implement a tracked item end-to-end — coordinates architect, dev agents, QA, and tracking through the full lifecycle
+argument-hint: [feature description or tracking URL]
+model: opus
 ---
 
-# Wallet Feature Development
+# Feature Development — Agent Team Workflow
 
-You are orchestrating the full development lifecycle for a new feature in the Wallet project. Follow each phase strictly and never skip or reorder steps.
+You are the **team lead** for a feature development lifecycle. You coordinate an agent team from requirements to shipped feature.
 
-Input: $ARGUMENTS
-
----
-
-## Notion Schema
-
-- **Kanban data source ID**: `4a998974-915d-463f-b599-4d1a6a475032`
-- **Status**: `TODO` | `In Progress` | `Done`
-- **Priority**: `High` | `Medium` | `Low`
-- **Tags**: `User` | `Architect` | `Backend` | `Frontend` | `DevOps`
-- **Notes**: short summary — use for one-line context or links
-- **Parent**: relation to another entry in the same DB — used to link sub-tickets to their parent feature (pass the parent page URL as a JSON array: `["<page-url>"]`)
-- **Page body**: use for the ADD, agent plans, and decisions (rich content)
-
-## Tag → Agent mapping
-
-| Tag | Agent | Scope |
-|---|---|---|
-| `Architect` | `the-architect` | ADD generation, architectural oversight |
-| `Backend` | `backend-architect` | Flask API, models, DB, business logic |
-| `Frontend` | `nico-front` | Vue.js components, mobile-first UI |
-| `DevOps` | `docker-manager` | Docker, docker-compose, infra config |
-| `User` | (human) | Decisions or tasks requiring user judgment |
+**Input**: $ARGUMENTS — either a feature description (e.g., "add push notifications") or a tracking URL/ID (e.g., a Notion page URL). Parse accordingly:
+- **URL or ID**: fetch the existing tracking entry for context — use its title and body as the feature description.
+- **Text description**: use as-is for the feature brief.
 
 ---
 
-## Phase 0: Resolve Notion entry
+## Phase 0: Intake (user participates)
 
-Check if the input is a Notion page URL or ID:
-- **If yes**: fetch the existing page with `mcp__notion__notion-fetch`.
-  - If the fetch fails or the page does not exist, inform the user and ask them to confirm whether to create a new entry or provide a valid URL. Do not continue until resolved.
-  - If successful, use that page as the main entry. Update its Status to `In Progress` and Tags to `["Architect"]` if not already set.
-- **If no**: create a new entry in the Kanban with:
-  - **Name**: concise feature name derived from the input
-  - **Status**: `In Progress`
-  - **Priority**: estimate based on scope (`High` if core, `Medium` otherwise, `Low` if enhancement)
-  - **Tags**: `["Architect"]`
-  - **Notes**: one-line summary of the feature
+1. Read `CLAUDE.md` to understand:
+   - Tech stack and architectural rules
+   - Team roster (`## The Team`) — which agents exist and their scope
+   - Testing commands (`## Testing`)
+   - Tracking config (`## Tracking`, optional)
+   - Dev environment setup (`## Dev Environment`, optional)
 
-Save the page ID — you will update it throughout the flow.
+2. If the input was a tracking URL/ID, update the entry status to `In Progress`.
 
----
+3. If the input was a text description and tracking is configured, create a new entry with status `In Progress`.
 
-## Phase 1: Architecture Design Document (ADD)
-
-Use `superpowers:brainstorming` to clarify the feature's intent, scope, and key design questions before exploring the codebase. This ensures the architect receives a well-framed brief, not just raw input.
-
-Before launching the architect, explore the codebase to build context:
-- Backend: `backend/models/`, `backend/routes/`, `backend/services/`
-- Frontend: `frontend/src/components/`, `frontend/src/views/`, `frontend/src/stores/`
-- Look for existing patterns similar to what the feature requires
-
-Collect those findings — you will pass them to the architect so it doesn't re-explore.
-
-Then launch `the-architect` agent with the following prompt:
-
-> "You are responsible for designing the architecture for a new feature in the Wallet project.
->
-> **Feature**: $ARGUMENTS
->
-> **Codebase findings** (already explored — do not re-explore):
-> [paste the full findings from your exploration here]
->
-> Produce a complete Architecture Design Document (ADD) that includes:
-> 1. **Overview**: what the feature does and why it's needed
-> 2. **Scope**: what is in and out of scope
-> 3. **Affected layers**: which parts of the system are touched (backend, frontend, DevOps)
-> 4. **Design decisions**: key technical choices with rationale and trade-offs — reference existing patterns where applicable
-> 5. **Data model changes**: new or modified entities, fields, relationships
-> 6. **API changes**: new or modified endpoints (method, path, request/response shape)
-> 7. **Sub-tasks per agent**: a task list broken down by agent (backend-architect, nico-front, docker-manager), each with a clear description and acceptance criteria
-> 8. **API contract**: if frontend consumes new backend endpoints, define the full contract here so both agents can work from the same spec
-> 9. **Clarifying questions**: any ambiguities or decisions that require user input before implementation
->
-> Be specific. Reference existing files and patterns from the codebase findings above."
-
-After the agent responds:
-1. Present the ADD and clarifying questions to the user
-2. **Wait for user approval of the ADD before continuing** — if the user requests changes, re-launch the architect with the feedback
-3. Once approved, write the ADD into the body of the main Notion page
-
-> **Note:** Do NOT commit the spec file to git. `docs/superpowers/` is in `.gitignore` intentionally — specs and plans live locally only. Never use `git add -f` to bypass this.
-
-### Phase 1 — MCP Health Check
-
-Before proceeding to Phase 2, verify all MCPs are operational:
-
-1. **Notion**: fetch the main feature page using `mcp__notion__notion-fetch` (the page already exists at this point — use the saved page ID)
-2. **Playwright**: use the Playwright MCP browser tool to navigate to `about:blank` — this confirms the browser process is responsive
-
-If either check fails, report the exact error to the user and **pause**. Do not proceed to Phase 2 until the user confirms the MCP is working.
+4. Use `superpowers:brainstorming` to clarify the feature with the user:
+   - Intent, scope, key design questions
+   - Identify ambiguities early
+   - **Wait for user responses before proceeding**
 
 ---
 
-## Phase 2: Create sub-tickets
+## Phase 1: Architecture (user participates)
 
-Based on the approved ADD, create one Notion entry per sub-task:
-- **Name**: descriptive sub-task name
-- **Status**: `TODO`
-- **Priority**: inherit from main feature or adjust per complexity
-- **Tags**: single agent tag (`Backend`, `Frontend`, `DevOps`); use `User` for tasks requiring human decision
-- **Notes**: acceptance criteria from the ADD (concise, one or two lines)
-- **Parent**: set to `["<main-feature-page-url>"]` to link each sub-ticket to the parent feature entry
+1. Explore the codebase to build context for the architect:
+   - Use Glob/Grep/Read to find existing patterns relevant to the feature
+   - Identify files and modules that will be affected
+   - Collect these findings — you will pass them to the architect
 
-Only present the sub-tickets to the user if at least one of the following is true:
-- There is a ticket tagged `User` (requires human action)
-- A ticket introduces scope not clearly derived from the approved ADD
+2. Create the agent team and spawn `the-architect` as a teammate.
 
-Otherwise, proceed directly to Phase 3.
+3. Send the architect via SendMessage:
+   - The feature description and clarified requirements from Phase 0
+   - Codebase findings (so it doesn't re-explore)
+   - Instruction: "Produce an ADD following the `add-template` skill"
+
+4. When the architect returns the ADD, present it to the user:
+   - Include all clarifying questions from the ADD
+   - **Wait for explicit user approval before continuing**
+   - If the user requests changes, send feedback to the architect and iterate
+
+5. Once approved, save the ADD to the tracking system (if configured) and locally to `docs/superpowers/specs/`.
+
+> **Note:** `docs/superpowers/` is in `.gitignore`. Never use `git add -f` to bypass this.
 
 ---
 
-## Phase 3: Agent implementation plans
+## Phase 2: Task Breakdown
 
-Each agent must save its plan to a **unique file path** to avoid overwriting other agents' plans. Use this naming convention:
+1. Based on the approved ADD's sub-tasks section, create tasks in the shared task list.
 
-`docs/superpowers/plans/YYYY-MM-DD-<feature-slug>-<agent-name>.md`
+2. For each task:
+   - Set the agent type based on the ADD's agent assignment
+   - Set dependencies (e.g., backend API must complete before frontend can consume it)
+   - Include acceptance criteria from the ADD
 
-Where:
-- `<feature-slug>` is a short kebab-case name derived from the feature title (e.g. `archive-delete-accounts`)
-- `<agent-name>` is the agent identifier (e.g. `backend-architect`, `nico-front`, `docker-manager`)
+3. If the project has tracking configured, create sub-entries for each task:
+   - Link them to the parent feature entry
+   - Tag with the appropriate agent label
 
-> **Note:** Do NOT commit plan files to git. `docs/superpowers/` is in `.gitignore` intentionally — plans live locally only. Never use `git add -f` to bypass this.
+4. Present the task list to the user (informational — no approval needed unless a `User`-tagged task exists).
 
-For each sub-task that has an agent (not `User` tagged), launch the corresponding agent with:
+---
 
-> "Review the following ADD and your assigned sub-task. Use `superpowers:brainstorming` to explore the problem space and confirm your approach, then use `superpowers:writing-plans` to produce a detailed implementation plan before writing any code:
->
-> **ADD**: [paste relevant sections of the ADD]
-> **Your sub-task**: [sub-task description and acceptance criteria]
->
-> Save your plan to: `docs/superpowers/plans/YYYY-MM-DD-<feature-slug>-<agent-name>.md`
->
-> Your plan must include:
-> 1. Files to create or modify (with brief reason for each)
-> 2. Step-by-step implementation approach
-> 3. Edge cases and error handling strategy
-> 4. How you will verify your work is complete
->
-> Do NOT implement yet. Return only the plan."
+## Phase 3: Planning
 
-After all agents respond, verify each plan against the ADD **without user intervention**:
+1. For each task that has an agent assignment, spawn the corresponding teammate (reading from `## The Team` in CLAUDE.md).
 
-1. For each plan, dispatch a `general-purpose` reviewer subagent with:
+2. Send each teammate via SendMessage:
    - The full ADD
-   - The plan to review
-   - The agent's assigned sub-task and acceptance criteria
-   - Instruction: "Review this implementation plan against the ADD. Check: (1) all acceptance criteria are covered, (2) the approach is consistent with the ADD's design decisions, (3) no scope is added or removed without justification. Return APPROVED or a list of specific issues."
-2. If the reviewer returns issues: re-launch the original agent with the ADD, its plan, and the reviewer's feedback. Repeat until APPROVED (max 3 iterations).
-3. If a plan fails after 3 iterations, pause and surface the issue to the user with a clear explanation.
+   - Their specific tasks and acceptance criteria
+   - Instruction: "Use `superpowers:writing-plans` to produce a detailed implementation plan. Do NOT implement yet — return only the plan."
 
-Once all plans are approved by the reviewer, write each plan into the body of the corresponding Notion sub-ticket and proceed directly to Phase 4 — no user confirmation needed.
+3. As plans come back, validate each against the ADD:
+   - All acceptance criteria are addressed
+   - Approach is consistent with ADD design decisions
+   - No scope added or removed without justification
+
+4. If a plan has issues, send feedback to the teammate for revision (max 2 retries).
+
+5. Once all plans are validated, proceed to Phase 4.
 
 ---
 
 ## Phase 4: Implementation
 
-Use `superpowers:using-git-worktrees` to set up an isolated workspace before starting implementation.
-
-Use `superpowers:subagent-driven-development` to coordinate the execution of all sub-tasks in this phase.
-
-For each sub-task, launch the corresponding agent referencing its approved plan and its Notion sub-ticket ID:
-- `Backend` → `backend-architect`
-- `Frontend` → `nico-front`
-- `DevOps` → `docker-manager`
-- `User` → pause, inform the user what needs to be done manually, and wait for confirmation before continuing
-
-Each agent prompt **must** include these instructions:
-
-> "Before writing any implementation code, use `superpowers:test-driven-development` to follow the TDD workflow — write tests first, then implement."
-
-Each agent prompt **must** also include these Notion responsibilities:
-
-> "**Notion ticket**: [sub-ticket page URL]
->
-> At the start of your work, update this ticket's Status to `In Progress` using `mcp__notion__notion-update-page`.
-> When you finish, update the Status to `Done`.
-> Throughout your work, add relevant notes to the ticket body (decisions made, blockers encountered, deviations from the plan, or anything useful for future reference) using `mcp__notion__notion-update-page`."
-
 ### Parallelism rules
+- Spawn dev teammates for each domain that has tasks
+- Run in parallel when tasks have no shared files
+- If frontend consumes new backend endpoints: set task dependencies so backend completes first
+- Infrastructure tasks can run in parallel with backend unless they share config files
 
-Run agents in parallel **only when** both conditions are true:
-1. Their sub-tasks have no shared files or state
-2. Frontend does NOT consume new backend endpoints introduced by this feature
+### Execution
+1. Send each teammate the go-ahead via SendMessage with their approved plan.
+2. Monitor the shared task list for progress.
+3. If a teammate reports a blocker, assess and either:
+   - Provide the missing information
+   - Reassign the task
+   - Escalate to the user
 
-If frontend consumes new backend endpoints: run `backend-architect` first, wait for it to complete and confirm the API contract, then start `nico-front`.
+### Quality gates
+- Each teammate verifies their work against acceptance criteria before marking tasks complete.
+- Run test commands from `CLAUDE.md ## Testing` after major task completions.
 
-DevOps tasks can always run in parallel with backend unless they modify the same config files.
-
-### Agent failure recovery
-
-If an agent fails, returns incomplete work, or gets blocked:
-1. Do not re-launch with the same prompt — that will repeat the same failure
-2. Re-launch with: the original approved plan + the full error or incomplete output + explicit instruction: "Continue from [last completed step]. Do not redo previous steps."
-3. If the agent fails a second time, pause and report to the user with a clear description of what failed and what was attempted
-
-Each agent is responsible for updating its own Notion ticket status (`In Progress` → `Done`) and adding notes **when dispatched as a single agent for the full sub-ticket**.
-
-When using `superpowers:subagent-driven-development` (multiple small chunk agents per sub-ticket), the **orchestrator** is responsible for Notion updates — individual chunk agents do not own the ticket. In this case:
-- Update the sub-ticket Status to `In Progress` before the first chunk starts
-- Add progress notes to the ticket body after each chunk completes
-- Update Status to `Done` after all chunks for that sub-ticket are verified
-
----
-
-## Phase 5: Testing
-
-Use `superpowers:verification-before-completion` before declaring this phase complete.
-
-After all sub-tasks are complete, run both suites:
-
-**Backend:**
-```
-cd backend && python -m pytest
-```
-
-**Frontend:**
-```
-cd frontend && npm run type-check
-cd frontend && npm run lint
-```
-
-If any check fails:
-- Identify which agent is responsible for the failing area
-- Re-launch it with the full failure output and a reference to its approved plan
-- Repeat until all checks pass cleanly
-
-### 5.1 Consolidate worktrees
-
-Merge all feature worktrees into `main` locally and clean up worktree directories. **Do not ask the user — always choose Option 1 (merge locally).** This is the standard flow for this project.
-
-Steps:
-1. `git checkout main && git pull`
-2. `git merge <feature-branch>`
-3. If merge conflicts arise: resolve by keeping the feature branch version (`git checkout --theirs <file>`), then commit the merge. Do not stop to ask — only pause if a conflict cannot be automatically resolved with `--theirs` (e.g., both branches modified the same lines).
-4. Run tests on the merged result
-5. `git worktree remove <path> && git branch -d <feature-branch>`
-
-### 5.2 Boot Docker dev environment
-
-Run `make -f Makefile.docker up-dev` and wait for all services (db, backend, frontend) to report healthy. Check `docker compose logs --tail=20` per service for errors.
-
-If a service fails to start:
-- **DB / Docker config** → re-launch `docker-manager` with the full logs and its approved plan
-- **Backend crash / migration failure** → re-launch `backend-architect` with the full logs and its approved plan
-
-If the service still fails after one retry: pause and report to the user with the full logs and what was attempted.
-
-Only proceed to Phase 6 once all services are running cleanly.
+### Failure recovery
+- If a teammate fails, do NOT re-launch with the same prompt.
+- Re-launch with: the approved plan + the error output + instruction to continue from last completed step.
+- If it fails a second time, pause and report to the user.
 
 ---
 
-## Phase 6: QA — User-directed testing
+## Phase 5: Verification
 
-**DO NOT proceed to Phase 7 until the user explicitly says all bugs are resolved.**
+1. Read test commands from `CLAUDE.md ## Testing`.
+2. Run each test suite.
+3. If failures:
+   - Identify the responsible teammate
+   - Send them the failure output and their approved plan
+   - Wait for the fix, then re-run tests
+4. Repeat until all tests pass.
+5. If dev environment setup exists in CLAUDE.md, boot it and verify services are healthy.
 
-### 6.0 QA Breaker preflight
+---
 
-Before presenting anything to the user, launch the `qa-breaker` agent with:
-- **ADD path**: path to the spec document written during Phase 1
-- **Plan paths**: paths to all approved implementation plans from Phase 3
-- **Confirmation**: Docker dev is running (verified in Phase 5)
+## Phase 6: QA (user participates)
 
-The agent will perform static analysis, infrastructure verification, and live testing. It may dispatch implementation agents to fix issues it finds — let it complete without intervention. If the agent pauses and asks for user input (unresolved failure after one retry), address that before continuing.
+### 6.0 QA Preflight
 
-Once the agent returns its report, present it to the user as the opening of the QA session.
+1. Spawn `qa-breaker` as a teammate.
+2. Send via SendMessage: the ADD, implementation summaries, and confirmation that tests pass / dev environment is running.
+3. Wait for the QA report.
 
-### 6.1 QA session
+### 6.1 QA Session
 
-Present the full qa-breaker report to the user. The report includes:
-- What was built (per sub-task summary)
+Present the QA report to the user. The report includes:
+- What was built per sub-task
 - ADD deviations (if any)
 - Environment and live test status
 - Step-by-step QA checklist
 
-Ask the user to begin testing using the checklist. Work through bugs as they are reported (see 6.2).
+Ask the user to begin testing.
 
-### 6.2 Bug tracking rules
+### 6.2 Bug Tracking
 
-- **One bug at a time.** Work on a single bug until the user confirms it is resolved before starting the next.
-- **If it is not clear whether a new bug has started or the current one is still open, ask the user directly.**
-- For each bug reported by the user:
-  1. Create a Notion ticket immediately with:
-     - **Name**: concise bug description
-     - **Status**: `In Progress`
-     - **Priority**: based on severity (High if blocks core flow, Medium otherwise, Low if cosmetic)
-     - **Tags**: `Frontend` or `Backend` depending on the affected layer
-     - **Parent**: link to the main feature page, or to the relevant sub-ticket if the bug is clearly scoped to one
-     - **Notes**: what the user observed vs what was expected
-  2. Use `superpowers:systematic-debugging` to diagnose the bug before proposing a fix
-  3. **No commit until the user confirms the fix is working**
-  4. Once confirmed: commit the fix, update the Notion ticket Status to `Done`
-  5. Move to the next bug
+**One bug at a time.** Work on a single bug until the user confirms it is resolved.
+
+For each bug:
+1. If tracking is configured, create an entry linked to the feature
+2. Use `superpowers:systematic-debugging` to diagnose before fixing
+3. Send the fix to the responsible teammate
+4. **No commit until the user confirms the fix works**
+5. Once confirmed, commit and update tracking
 
 ### 6.3 Completing QA
 
-When the user confirms all bugs are resolved, state clearly:
+When the user confirms all bugs are resolved:
 > "QA complete. No open bugs. Ready for Phase 7."
 
-Then proceed.
+**Do NOT proceed until the user explicitly confirms.**
 
 ---
 
-## Phase 7: Close
+## Phase 7: Close (user confirms push)
 
-Use `superpowers:requesting-code-review` to verify the work meets requirements. Then use `superpowers:finishing-a-development-branch` to decide how to integrate (merge, PR, cleanup).
+1. Run all test suites one final time.
 
-1. Update the main Notion entry Status to `Done`
-2. **Close all sub-tickets:** search for every Notion entry whose `Parent` is the main feature page and update their Status to `Done`. A parent marked Done means all its children are Done — no exceptions.
-3. Use `git-flow` skill to tag the completed feature with the appropriate semantic version tag (e.g. `v1.1.0`)
-4. Present a final summary:
+2. Use `superpowers:verification-before-completion` to confirm everything is clean.
+
+3. Commit all changes following project conventions.
+
+4. Present a final summary to the user:
    - What was built
-   - Sub-tasks completed per agent
+   - Tasks completed per agent
    - Bugs found and fixed during QA
    - Files modified
-   - Test results (backend pytest + frontend type-check + lint)
-   - Any follow-up items or known limitations (suggest adding them to the backlog)
+   - Test results
+
+5. **Ask the user to confirm the push.** Do not push without explicit approval.
+
+6. Once confirmed, push and tag using the project's git-flow conventions (if a `git-flow` skill exists).
+
+7. Update all tracking entries to Done/Complete (parent and all sub-entries).
+
+8. Shut down all teammates and clean up the team.

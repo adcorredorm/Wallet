@@ -61,11 +61,32 @@ docker compose exec backend python dev_seed_test_data.py --email <email>
 
 ## The Team (Agents)
 
-| Agent | Scope |
-|-------|-------|
-| `the-architect` | Architectural decisions, cross-cutting reviews, ADD generation |
-| `backend-architect` | Flask API, models, services, migrations, backend tests |
-| `nico-front` | Vue components, mobile-first UI, dark mode, frontend patterns |
-| `docker-manager` | Docker, docker-compose, infrastructure config |
+| Agent | Role | Scope |
+|-------|------|-------|
+| `the-architect` | Architecture, ADD generation | Read-only. No code. |
+| `backend-dev` | Flask API, models, services, migrations, tests | `backend/` only |
+| `frontend-dev` | Vue components, mobile-first UI, dark mode | `frontend/` only |
+| `infra-dev` | Docker, compose, Makefiles, CI/CD | Infrastructure files only |
+| `qa-breaker` | QA testing, bug reporting | Read-only. No fixes. |
 
 Agent definitions: `.claude/agents/`
+Workflow: `/feature` command
+
+## Tracking
+
+This project uses Notion for feature tracking.
+
+- **Kanban data source ID**: `4a998974-915d-463f-b599-4d1a6a475032`
+- **Status values**: `Backlog`, `TODO`, `In Progress`, `Done`
+- **Priority values**: `Low`, `Medium`, `High`, `Critical`, `Blocker`
+- **Tags**: `User`, `Architect`, `Backend`, `Frontend`, `DevOps`
+- **Parent relation**: link sub-tickets to parent feature via `["<page-url>"]`
+- **MCP tools**: use `mcp__notion__*` for all tracking operations
+
+## Dev Environment
+
+```bash
+make -f Makefile.docker up-dev
+```
+
+Verify health: `docker compose logs --tail=20 db backend frontend`

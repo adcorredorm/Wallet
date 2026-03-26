@@ -1,4 +1,3 @@
-version: '3.8'
 
 # Development Overlay for Docker Compose
 # This file converts the production-ready base configuration into a development environment
