@@ -268,8 +268,38 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function initializeFromStorage(): Promise<void> {
     const token = await getRefreshToken()
-    if (!token) return  // No hay sesión almacenada — modo invitado
-    await refresh()     // refresh() maneja sus propios errores; no lanza
+    if (!token) return  // No refresh token — guest mode from the start
+
+    // Attempt refresh. On transient failures (network timeout, Koyeb cold start)
+    // retry up to 3 times with increasing delays. On 401 (token deleted inside
+    // refresh()) do not retry — the session is irrecoverably expired.
+    const RETRY_DELAYS_MS = [5_000, 10_000, 15_000]
+
+    const attempt = async (): Promise<boolean> => {
+      const ok = await refresh()
+      if (ok) return true
+
+      // 401 path: refresh() deletes the token from AuthDB. If no token remains,
+      // there is nothing to retry with — bail out immediately.
+      const remaining = await getRefreshToken()
+      if (!remaining) return false
+
+      return false  // transient failure — let the retry loop handle it
+    }
+
+    // Initial attempt
+    if (await attempt()) return
+
+    // Retry loop
+    for (const delayMs of RETRY_DELAYS_MS) {
+      const tokenStillPresent = await getRefreshToken()
+      if (!tokenStillPresent) return  // 401 deleted the token — no retry
+
+      await new Promise<void>(resolve => setTimeout(resolve, delayMs))
+      if (await attempt()) return
+    }
+
+    // All retries exhausted — enter guest mode (refresh() already cleared accessToken)
   }
 
   /**
