@@ -40,6 +40,8 @@ import AppDrawer from './AppDrawer.vue'
 import NetworkBanner from '@/components/sync/NetworkBanner.vue'
 // Multiusuario: guest mode banner — shown when user is not authenticated
 import GuestBanner from '@/components/sync/GuestBanner.vue'
+// Ticket 5: sync error bottom sheet — global overlay for discarding errored mutations
+import SyncErrorSheet from '@/components/sync/SyncErrorSheet.vue'
 </script>
 
 <template>
@@ -94,5 +96,8 @@ import GuestBanner from '@/components/sync/GuestBanner.vue'
       3 items for optimal UX
     -->
     <AppNavigation class="flex-shrink-0" />
+
+    <!-- Sync error bottom sheet (Ticket 5) — global overlay, uses Teleport internally -->
+    <SyncErrorSheet />
   </div>
 </template>

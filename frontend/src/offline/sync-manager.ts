@@ -169,7 +169,7 @@ const MAX_DELAY_MS = 30_000
 // For example: if an account CREATE fails for tempId "temp-abc", we look for
 // any queued transaction whose payload.cuenta_id === "temp-abc" and block it.
 // ---------------------------------------------------------------------------
-const DEPENDENCY_FIELDS: Record<PendingMutation['entity_type'], string[]> = {
+export const DEPENDENCY_FIELDS: Record<PendingMutation['entity_type'], string[]> = {
   account: [],
   transaction: ['account_id', 'category_id'],
   transfer: ['source_account_id', 'destination_account_id'],

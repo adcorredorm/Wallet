@@ -107,6 +107,12 @@ export const useSyncStore = defineStore('sync', () => {
    */
   const isGuest = ref(false)
 
+  /**
+   * Controls the visibility of SyncErrorSheet.vue bottom sheet.
+   * Toggled by SyncIndicator (open) and SyncErrorSheet itself (close).
+   */
+  const syncErrorSheetOpen = ref(false)
+
   // ── Computed: collapsed status token ────────────────────────────────────
 
   /**
@@ -190,6 +196,10 @@ export const useSyncStore = defineStore('sync', () => {
     errorCount.value = 0
   }
 
+  function setSyncErrorSheetOpen(value: boolean): void {
+    syncErrorSheetOpen.value = value
+  }
+
   return {
     // State
     isOnline,
@@ -200,6 +210,7 @@ export const useSyncStore = defineStore('sync', () => {
     initialSyncComplete: readonly(initialSyncComplete),
     isGuest,
     errors,
+    syncErrorSheetOpen,
     // Computed
     syncStatus,
     // Actions
@@ -211,6 +222,7 @@ export const useSyncStore = defineStore('sync', () => {
     setInitialSyncComplete,
     setGuest,
     addError,
-    clearErrors
+    clearErrors,
+    setSyncErrorSheetOpen,
   }
 })
