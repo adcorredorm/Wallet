@@ -26,6 +26,30 @@ def test_grace_seconds_config(app):
         assert current_app.config["REFRESH_TOKEN_GRACE_SECONDS"] == 120
 
 
+def test_refresh_token_has_superseded_at_column(app):
+    """RefreshToken model must have a superseded_at attribute defaulting to None."""
+    with app.app_context():
+        from app.models.refresh_token import RefreshToken
+        from app.extensions import db
+        from app.models.user import User
+
+        user = User(google_id="sub_coltest", email="col@test.com", name="Col Test")
+        db.session.add(user)
+        db.session.commit()
+
+        token = RefreshToken(
+            user_id=user.id,
+            token_hash="a" * 64,
+            expires_at=datetime.utcnow() + timedelta(days=90),
+        )
+        db.session.add(token)
+        db.session.commit()
+        db.session.refresh(token)
+
+        assert hasattr(token, "superseded_at")
+        assert token.superseded_at is None
+
+
 @pytest.fixture
 def auth_service(app):
     return AuthService()
