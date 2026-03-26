@@ -45,6 +45,7 @@ class Config:
     JWT_SECRET = os.getenv("JWT_SECRET", "dev-jwt-secret-change-in-production")
     JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
     REFRESH_TOKEN_EXPIRY_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRY_DAYS", "90"))
+    REFRESH_TOKEN_GRACE_SECONDS = int(os.getenv("REFRESH_TOKEN_GRACE_SECONDS", "120"))
 
 
 class DevelopmentConfig(Config):

@@ -2,8 +2,28 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from uuid import uuid4
+from datetime import datetime, timedelta
 from app.services.auth import AuthService
 from app.models.user import User
+
+
+def auth_service_instance(app):
+    """Return an AuthService bound to the current app context."""
+    from app.services.auth import AuthService
+    return AuthService()
+
+
+def _hash_token_for_test(token_plain: str) -> str:
+    """Mirror of auth._hash_token for use in tests."""
+    import hashlib
+    return hashlib.sha256(token_plain.encode()).hexdigest()
+
+
+def test_grace_seconds_config(app):
+    """REFRESH_TOKEN_GRACE_SECONDS must be set to 120 in all config classes."""
+    with app.app_context():
+        from flask import current_app
+        assert current_app.config["REFRESH_TOKEN_GRACE_SECONDS"] == 120
 
 
 @pytest.fixture
