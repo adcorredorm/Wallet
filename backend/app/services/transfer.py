@@ -90,6 +90,7 @@ class TransferService:
         destination_account_id: UUID,
         amount: Decimal,
         date: date,
+        title: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
         offline_id: str | None = None,
@@ -170,6 +171,7 @@ class TransferService:
             destination_account_id=destination_account_id,
             amount=amount,
             date=date,
+            title=title,
             description=description,
             tags=tags or [],
             offline_id=offline_id,
@@ -185,6 +187,7 @@ class TransferService:
         user_id: UUID,
         amount: Decimal | None = None,
         date: date | None = None,
+        title: str | None = None,
         description: str | None = None,
         tags: list[str] | None = None,
         destination_amount: Decimal | None = None,
@@ -229,6 +232,8 @@ class TransferService:
             update_data["amount"] = amount
         if date is not None:
             update_data["date"] = date
+        if title is not None:
+            update_data["title"] = title
         if description is not None:
             update_data["description"] = description
         if tags is not None:

@@ -339,6 +339,98 @@ class TestDelete:
             transfer_service.delete(uuid4(), user_id=USER_ID)
 
 
+class TestCreateTitle:
+    """Tests that title is accepted and forwarded by TransferService.create."""
+
+    def test_create_passes_title_to_repo(
+        self,
+        transfer_service,
+        mock_transfer_repo,
+        mock_account_repo,
+    ):
+        """title passed to create() must be forwarded to repository.create()."""
+        mock_source = Mock()
+        mock_source.currency = "MXN"
+        mock_dest = Mock()
+        mock_dest.currency = "MXN"
+        mock_account_repo.get_by_id_or_fail.side_effect = [mock_source, mock_dest]
+        mock_transfer_repo.create.return_value = Mock()
+
+        transfer_service.create(
+            user_id=USER_ID,
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("500.00"),
+            date=date(2026, 3, 1),
+            title="Pago de renta",
+        )
+
+        call_kwargs = mock_transfer_repo.create.call_args.kwargs
+        assert "title" in call_kwargs, "title must be present in repository.create() call"
+        assert call_kwargs["title"] == "Pago de renta"
+
+    def test_create_title_none_by_default(
+        self,
+        transfer_service,
+        mock_transfer_repo,
+        mock_account_repo,
+    ):
+        """title defaults to None when not provided."""
+        mock_source = Mock()
+        mock_source.currency = "USD"
+        mock_dest = Mock()
+        mock_dest.currency = "USD"
+        mock_account_repo.get_by_id_or_fail.side_effect = [mock_source, mock_dest]
+        mock_transfer_repo.create.return_value = Mock()
+
+        transfer_service.create(
+            user_id=USER_ID,
+            source_account_id=uuid4(),
+            destination_account_id=uuid4(),
+            amount=Decimal("100.00"),
+            date=date(2026, 3, 1),
+        )
+
+        call_kwargs = mock_transfer_repo.create.call_args.kwargs
+        assert call_kwargs.get("title") is None
+
+
+class TestUpdateTitle:
+    """Tests that title is accepted and forwarded by TransferService.update."""
+
+    def test_update_passes_title_to_repo(
+        self, transfer_service, mock_transfer_repo, mock_transfer
+    ):
+        """title passed to update() must be included in the repository update payload."""
+        mock_transfer_repo.get_by_id_or_fail.return_value = mock_transfer
+        mock_transfer_repo.update.return_value = mock_transfer
+
+        transfer_service.update(
+            transfer_id=mock_transfer.id,
+            user_id=USER_ID,
+            title="Nuevo título",
+        )
+
+        call_kwargs = mock_transfer_repo.update.call_args[1]
+        assert call_kwargs["title"] == "Nuevo título"
+
+    def test_update_title_none_not_included(
+        self, transfer_service, mock_transfer_repo, mock_transfer
+    ):
+        """title=None must NOT be included in the update payload (no-op)."""
+        mock_transfer_repo.get_by_id_or_fail.return_value = mock_transfer
+        mock_transfer_repo.update.return_value = mock_transfer
+
+        transfer_service.update(
+            transfer_id=mock_transfer.id,
+            user_id=USER_ID,
+            description="Solo descripción",
+        )
+
+        call_kwargs = mock_transfer_repo.update.call_args[1]
+        assert "title" not in call_kwargs
+
+
 class TestCreateBaseRate:
     """Tests that base_rate is accepted and forwarded by TransferService.create."""
 

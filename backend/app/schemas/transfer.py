@@ -5,7 +5,7 @@ Transfer Pydantic schemas for validation and serialization.
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date as DateType
 from decimal import Decimal
 
 if TYPE_CHECKING:
@@ -43,12 +43,15 @@ class TransferCreate(BaseModel):
             destination_amount / exchange_rate are provided but not positive.
     """
 
+    model_config = {"extra": "ignore"}
+
     source_account_id: UUID
     destination_account_id: UUID
     amount: Decimal = Field(..., gt=0)
-    date: date
+    date: DateType
     description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
+    title: Optional[str] = Field(None, max_length=100)
     offline_id: Optional[str] = Field(None, max_length=100)
     destination_amount: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None
@@ -119,8 +122,11 @@ class TransferUpdate(BaseModel):
             native currency at the time of the transfer. Optional, nullable.
     """
 
+    model_config = {"extra": "ignore"}
+
     amount: Optional[Decimal] = Field(None, gt=0)
-    date: Optional[date] = None
+    date: Optional[DateType] = None
+    title: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
     destination_amount: Optional[Decimal] = None
@@ -177,7 +183,8 @@ class TransferResponse(BaseModel):
     source_account_id: UUID
     destination_account_id: UUID
     amount: Decimal
-    date: date
+    date: DateType
+    title: Optional[str] = None
     description: Optional[str]
     tags: list[str]
     created_at: datetime
@@ -215,8 +222,8 @@ class TransferFilters(BaseModel):
     """
 
     account_id: Optional[UUID] = None
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[DateType] = None
+    date_to: Optional[DateType] = None
     tags: Optional[list[str]] = None
     page: int = Field(default=1, ge=1)
     limit: int = Field(default=20, ge=1, le=10000)

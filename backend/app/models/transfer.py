@@ -59,6 +59,7 @@ class Transfer(BaseModel):
     )
     amount = Column(Numeric(15, 2), nullable=False)
     date = Column(Date, nullable=False)
+    title = Column(String(100), nullable=True)
     description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
     destination_amount = Column(Numeric(20, 8), nullable=True)
