@@ -51,8 +51,8 @@ vi.mock('@/offline/mutation-queue', () => ({
   },
 }))
 
-// Import the helper under test AFTER mocks are registered
-import { isNetworkError } from '@/offline/sync-manager'
+// Import the helpers under test AFTER mocks are registered
+import { isNetworkError, NetworkOfflineError } from '@/offline/sync-manager'
 
 describe('isNetworkError()', () => {
   it('returns true when error has no response property', () => {
@@ -75,8 +75,20 @@ describe('isNetworkError()', () => {
     expect(isNetworkError(err as any)).toBe(true)
   })
 
-  it('returns false for a 503 with a response and no matching code', () => {
-    const err = { response: { status: 503 } }
+  it('returns true for a 5xx with no backend JSON body (Vite proxy 500)', () => {
+    // Vite dev proxy returns a raw 500 with no body when backend is down
+    const err = { response: { status: 500, data: '' } }
+    expect(isNetworkError(err as any)).toBe(true)
+  })
+
+  it('returns true for a 503 with empty body (gateway error)', () => {
+    const err = { response: { status: 503, data: null } }
+    expect(isNetworkError(err as any)).toBe(true)
+  })
+
+  it('returns false for a 500 with a backend JSON body ({ success: false })', () => {
+    // A real backend 500 has a body with success field — treat as real error, not network
+    const err = { response: { status: 500, data: { success: false, message: 'Internal server error' } } }
     expect(isNetworkError(err as any)).toBe(false)
   })
 
@@ -88,5 +100,18 @@ describe('isNetworkError()', () => {
   it('returns true when error has no response and no code', () => {
     const err = new Error('fetch failed')
     expect(isNetworkError(err as any)).toBe(true)
+  })
+})
+
+describe('NetworkOfflineError', () => {
+  it('is an instance of Error', () => {
+    const err = new NetworkOfflineError()
+    expect(err).toBeInstanceOf(Error)
+    expect(err).toBeInstanceOf(NetworkOfflineError)
+  })
+
+  it('has name NetworkOfflineError', () => {
+    const err = new NetworkOfflineError()
+    expect(err.name).toBe('NetworkOfflineError')
   })
 })

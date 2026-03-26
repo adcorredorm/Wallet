@@ -219,16 +219,49 @@ function isApiError(error: unknown): error is ApiError {
 // ERR_NETWORK, ECONNABORTED, or ERR_CONNECTION_REFUSED in those cases.
 // We check both so the helper is robust regardless of which property the
 // environment populates.
+//
+// Why also check proxy/gateway 5xx responses?
+// In dev, Vite's proxy returns a raw HTTP 500 when the backend is down — the
+// response exists (so !error.response is false) but has no meaningful JSON
+// body. The real backend always returns { success: bool, data: ... }. A 5xx
+// with an empty or non-object body is a gateway/proxy error, not a real
+// backend error, and should be treated the same as a connectivity failure.
+// In production (Koyeb cold start) the same pattern applies.
 // ---------------------------------------------------------------------------
 interface AxiosLikeError {
-  response?: { status: number }
+  response?: { status: number; data?: unknown }
   code?: string
 }
 
 export function isNetworkError(error: AxiosLikeError): boolean {
   if (!error.response) return true
   const networkCodes = ['ERR_NETWORK', 'ECONNABORTED', 'ERR_CONNECTION_REFUSED']
-  return networkCodes.includes(error.code ?? '')
+  if (networkCodes.includes(error.code ?? '')) return true
+  // Treat 5xx responses with no backend JSON body as proxy/gateway errors.
+  // The backend always returns an object with a `success` field; an empty or
+  // non-object body means the response came from a proxy, not the backend.
+  if (error.response.status >= 500) {
+    const data = error.response.data
+    const isBackendJson = data !== null && typeof data === 'object' && 'success' in (data as object)
+    if (!isBackendJson) return true
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// NetworkOfflineError — thrown by handleError() when a network/connectivity
+// failure is detected. processQueue() catches this to abort the entire sync
+// cycle cleanly instead of retrying all remaining mutations.
+//
+// Why a named class instead of a string check?
+// instanceof is unambiguous and avoids false positives from error messages
+// that might coincidentally contain the same string.
+// ---------------------------------------------------------------------------
+export class NetworkOfflineError extends Error {
+  constructor(message = 'Network offline — aborting sync cycle') {
+    super(message)
+    this.name = 'NetworkOfflineError'
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +437,9 @@ export class SyncManager {
           syncStore.setPendingCount(remaining)
           // ───────────────────────────────────────────────────────────────
         } catch (error: unknown) {
+          // NetworkOfflineError bubbles up from handleError — re-throw to
+          // break the loop and skip the read-sync phase below.
+          if (error instanceof NetworkOfflineError) throw error
           await this.handleError(mutation, error, syncStore)
         }
       }
@@ -445,7 +481,12 @@ export class SyncManager {
       try {
         await runReadSync()
       } catch (readError: unknown) {
-        if (isApiError(readError) && readError.status === 401) {
+        if (readError instanceof NetworkOfflineError || isNetworkError(readError as AxiosLikeError)) {
+          // Backend unreachable during read-sync — abort cleanly.
+          // The next connectivity-restore event will trigger a new cycle.
+          console.warn('[SyncManager] Network offline during read-sync — aborting cycle.')
+          return
+        } else if (isApiError(readError) && readError.status === 401) {
           console.warn('[SyncManager] 401 during read-sync after interceptor fallback — entering guest mode.')
           syncStore.setGuest(true)
           // Exit processQueue without touching IndexedDB
@@ -1282,15 +1323,21 @@ export class SyncManager {
     }
 
     // ── Network / connectivity error ────────────────────────────────────────
-    // No response from the server — do NOT consume a retry attempt.
-    // The mutation stays in the queue for the next connectivity-restore cycle.
+    // No response from the server (or a proxy 500 with no backend body) —
+    // the backend is unreachable. Do NOT consume a retry attempt; the mutation
+    // stays in the queue for the next connectivity-restore cycle.
+    //
+    // We throw NetworkOfflineError (rather than returning) so processQueue()
+    // can catch it, break out of the mutation loop, and skip the read-sync
+    // phase — preventing an infinite cascade of failing requests.
     const axiosLike = error as AxiosLikeError
     if (isNetworkError(axiosLike)) {
-      const codeStr = (axiosLike as { code?: string }).code ? ` (code: ${(axiosLike as { code?: string }).code})` : ''
+      const codeStr = axiosLike.code ? ` (code: ${axiosLike.code})` : ''
+      const status = axiosLike.response?.status ? ` HTTP ${axiosLike.response.status}` : ''
       console.warn(
-        `[SyncManager] Network error for mutation id=${mutation.id}${codeStr} — keeping in queue, not incrementing retry.`
+        `[SyncManager] Network error for mutation id=${mutation.id}${codeStr}${status} — aborting sync cycle.`
       )
-      return
+      throw new NetworkOfflineError()
     }
 
     if (httpStatus !== null && httpStatus >= 400 && httpStatus < 500) {
