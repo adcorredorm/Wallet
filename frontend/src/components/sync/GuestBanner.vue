@@ -54,7 +54,7 @@ const authStore = useAuthStore()
   -->
   <Transition name="banner">
     <div
-      v-if="!authStore.isAuthenticated"
+      v-if="!authStore.hasSession"
       role="alert"
       aria-live="polite"
       class="w-full flex items-center justify-between gap-3 px-4 py-2 text-sm overflow-hidden"

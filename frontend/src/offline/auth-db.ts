@@ -20,7 +20,7 @@
 import Dexie, { type Table } from 'dexie'
 
 export interface AuthEntry {
-  key: string   // 'refresh_token' | 'last_user_id'
+  key: string   // 'refresh_token' | 'last_user_id' | 'last_user'
   value: string
 }
 
@@ -81,9 +81,41 @@ export async function deleteLastUserId(): Promise<void> {
   await authDb.auth.delete('last_user_id')
 }
 
+// ---------------------------------------------------------------------------
+// last_user — full user identity object ({ id, email, name })
+//
+// Stored as JSON so we can restore the user in memory on reload before the
+// refresh() call completes. This lets the app show the user's Dexie data
+// immediately (offline-capable) even while the access token is being fetched.
+// ---------------------------------------------------------------------------
+
+export interface StoredUser {
+  id: string
+  email: string
+  name: string
+}
+
+export async function getLastUser(): Promise<StoredUser | undefined> {
+  const entry = await authDb.auth.get('last_user')
+  if (!entry) return undefined
+  try {
+    return JSON.parse(entry.value) as StoredUser
+  } catch {
+    return undefined
+  }
+}
+
+export async function setLastUser(user: StoredUser): Promise<void> {
+  await authDb.auth.put({ key: 'last_user', value: JSON.stringify(user) })
+}
+
+export async function deleteLastUser(): Promise<void> {
+  await authDb.auth.delete('last_user')
+}
+
 /**
  * Limpiar completamente AuthDB — llamado en logout.
- * Elimina refresh_token y last_user_id.
+ * Elimina refresh_token, last_user_id, y last_user.
  */
 export async function clearAuthDb(): Promise<void> {
   await authDb.auth.clear()

@@ -315,14 +315,14 @@ function currentCurrencyLabel(): string {
     <!--
       Cerrar sesión section — only rendered when authenticated.
 
-      Why v-if="authStore.isAuthenticated" instead of v-show?
+      Why v-if="authStore.hasSession" instead of v-show?
       The button should not exist at all in guest mode — it's semantically
       meaningless to "log out" when you are not logged in. v-if is correct
       here: we want to remove the element from the DOM entirely, not just
       hide it, to avoid any possibility of focus or keyboard access.
     -->
     <div
-      v-if="authStore.isAuthenticated"
+      v-if="authStore.hasSession"
       class="rounded-xl bg-dark-bg-secondary border border-dark-bg-tertiary/50 p-4 space-y-4"
     >
       <div>

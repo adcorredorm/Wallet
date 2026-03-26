@@ -31,6 +31,9 @@ import {
   setLastUserId,
   getLastUserId,
   deleteLastUserId,
+  getLastUser,
+  setLastUser,
+  deleteLastUser,
 } from '@/offline/auth-db'
 import { db } from '@/offline/db'
 import {
@@ -126,7 +129,23 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Computed ──────────────────────────────────────────────────────────────
 
+  /**
+   * isAuthenticated — true when the user has a valid access token in memory.
+   * Required for API calls (sync). Becomes false on reload until refresh() completes.
+   */
   const isAuthenticated = computed(() => accessToken.value !== null && user.value !== null)
+
+  /**
+   * hasSession — true when user identity is known, even without an access token.
+   * Used by UI (GuestBanner, SettingsView) to avoid the "flash to guest" problem:
+   * on reload, user data is restored from AuthDB before refresh() completes, so
+   * the user sees their Dexie data immediately while the access token is fetched.
+   *
+   * Why keep isAuthenticated separate?
+   * SyncManager gates API calls on isAuthenticated (needs the access token).
+   * hasSession only says "we know who this user is" — not "we can make API calls".
+   */
+  const hasSession = computed(() => user.value !== null)
 
   // ── Acciones ──────────────────────────────────────────────────────────────
 
@@ -155,6 +174,9 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Persistir refresh_token en AuthDB
     await setRefreshToken(response.refresh_token)
+
+    // Persistir identidad del usuario para restauración offline en próximo reload
+    if (user.value) await setLastUser(user.value)
 
     // NOTA: last_user_id se actualiza en handlePostLogin (usePostLoginFlow),
     // DESPUÉS de detectar si hay cambio de usuario. No lo actualizamos aquí
@@ -191,20 +213,25 @@ export const useAuthStore = defineStore('auth', () => {
       // Rotar refresh_token en AuthDB — el token viejo ya es inválido
       await setRefreshToken(response.refresh_token)
 
+      // Actualizar identidad persistida en AuthDB
+      if (user.value) await setLastUser(user.value)
+
       return true
     } catch (err) {
-      // Siempre limpiamos el estado en memoria — no hay sesión activa.
+      // Siempre limpiamos el accessToken en memoria — no se puede hacer sync.
       accessToken.value = null
-      user.value = null
 
-      // Solo borramos el refresh_token si el servidor lo rechazó explícitamente
-      // con 401 (token expirado o revocado). Para errores transitorios (sin
-      // respuesta del servidor: wifi cortado, timeout, DNS) conservamos el token
-      // para que el próximo intento pueda usarlo sin forzar un nuevo login.
+      // Solo borramos el refresh_token y el user persistido si el servidor lo
+      // rechazó explícitamente con 401 (token expirado o revocado). Para errores
+      // transitorios conservamos ambos para que el próximo intento pueda usarlos.
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401) {
+        user.value = null
         await deleteRefreshToken()
+        await deleteLastUser()
       }
+      // For transient errors, leave user.value intact (hasSession stays true)
+      // so the UI continues showing the user's Dexie data during retry delays.
 
       return false
     }
@@ -236,6 +263,7 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = null
     user.value = null
     await deleteRefreshToken()
+    await deleteLastUser()
     // Mantenemos last_user_id para detectar cambio de usuario en el próximo login
 
     // Si se solicita limpiar datos locales (cambio de usuario), borrar WalletDB.
@@ -268,38 +296,53 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function initializeFromStorage(): Promise<void> {
     const token = await getRefreshToken()
-    if (!token) return  // No refresh token — guest mode from the start
+    if (!token) return  // Never logged in — guest mode from the start
 
-    // Attempt refresh. On transient failures (network timeout, Koyeb cold start)
-    // retry up to 3 times with increasing delays. On 401 (token deleted inside
-    // refresh()) do not retry — the session is irrecoverably expired.
+    // Restore user from AuthDB immediately so the UI shows the user's Dexie
+    // data before the refresh() call completes (offline-first: data in IndexedDB
+    // is visible even without a network round-trip).
+    // hasSession becomes true here; isAuthenticated remains false until refresh().
+    const savedUser = await getLastUser()
+    if (savedUser) {
+      user.value = savedUser
+    }
+
+    // First refresh attempt — fast path for normal online startup.
+    const ok = await refresh()
+    if (ok) return
+
+    // 401 path: refresh() clears user.value and deletes the token from AuthDB.
+    const remaining = await getRefreshToken()
+    if (!remaining) {
+      // Session truly expired — user was already cleared by refresh(). Done.
+      return
+    }
+
+    // Transient failure (network error, cold start): retries run in background
+    // so the app can mount immediately. user.value is already set (hasSession=true)
+    // so the user sees their Dexie data while retries are in progress.
     const RETRY_DELAYS_MS = [5_000, 10_000, 15_000]
 
-    const attempt = async (): Promise<boolean> => {
-      const ok = await refresh()
-      if (ok) return true
+    const retryInBackground = async (): Promise<void> => {
+      for (const delayMs of RETRY_DELAYS_MS) {
+        const tokenStillPresent = await getRefreshToken()
+        if (!tokenStillPresent) return  // 401 already deleted the token — stop
 
-      // 401 path: refresh() deletes the token from AuthDB. If no token remains,
-      // there is nothing to retry with — bail out immediately.
-      const remaining = await getRefreshToken()
-      if (!remaining) return false
+        await new Promise<void>(resolve => setTimeout(resolve, delayMs))
 
-      return false  // transient failure — let the retry loop handle it
+        const success = await refresh()
+        if (success) return
+
+        // Check again after refresh — 401 may have deleted the token mid-retry
+        const stillPresent = await getRefreshToken()
+        if (!stillPresent) return
+      }
+      // All retries exhausted — user.value stays set (offline data still visible)
+      // but accessToken is null so sync won't run.
     }
 
-    // Initial attempt
-    if (await attempt()) return
-
-    // Retry loop
-    for (const delayMs of RETRY_DELAYS_MS) {
-      const tokenStillPresent = await getRefreshToken()
-      if (!tokenStillPresent) return  // 401 deleted the token — no retry
-
-      await new Promise<void>(resolve => setTimeout(resolve, delayMs))
-      if (await attempt()) return
-    }
-
-    // All retries exhausted — enter guest mode (refresh() already cleared accessToken)
+    // Fire-and-forget: retries update accessToken/user reactively when they succeed
+    retryInBackground().catch(() => { /* offline mode — nothing to do */ })
   }
 
   /**
@@ -320,6 +363,7 @@ export const useAuthStore = defineStore('auth', () => {
     user: readonly(user),
     // Computed
     isAuthenticated,
+    hasSession,
     // Acciones
     loginWithGoogle,
     refresh,

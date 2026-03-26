@@ -66,6 +66,9 @@ vi.mock('@/offline/auth-db', () => ({
   getLastUserId: mockGetLastUserId,
   setLastUserId: mockSetLastUserId,
   deleteLastUserId: mockDeleteLastUserId,
+  getLastUser: vi.fn().mockResolvedValue(undefined),
+  setLastUser: vi.fn().mockResolvedValue(undefined),
+  deleteLastUser: vi.fn().mockResolvedValue(undefined),
   clearAuthDb: vi.fn(),
 }))
 
@@ -316,6 +319,7 @@ describe('refresh', () => {
   it('keeps refresh_token when refresh fails with a network error (no server response)', async () => {
     // Simulates wifi dropout, timeout, DNS failure — no response from server.
     // The refresh token is still valid; we should not delete it.
+    // user.value is NOT cleared on transient errors — offline UI stays visible.
     mockGetRefreshToken.mockResolvedValueOnce('valid-refresh-token')
     mockPostAuthRefresh.mockRejectedValueOnce(
       Object.assign(new Error('Network Error'), { response: undefined })
@@ -325,9 +329,9 @@ describe('refresh', () => {
     const result = await store.refresh()
 
     expect(result).toBe(false)
-    expect(store.accessToken).toBeNull()   // state cleared (no valid session in memory)
-    expect(store.user).toBeNull()
+    expect(store.accessToken).toBeNull()   // no access token — sync won't run
     expect(mockDeleteRefreshToken).not.toHaveBeenCalled()  // token preserved for retry
+    // user is NOT cleared on transient errors (offline data stays visible)
   })
 
   it('keeps refresh_token when refresh fails with a 500 server error', async () => {

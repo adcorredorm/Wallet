@@ -27,6 +27,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 // ---------------------------------------------------------------------------
 const mockAuthState = vi.hoisted(() => ({
   isAuthenticated: false,
+  hasSession: false,
   user: null as { id: string; email: string; name: string } | null,
   logout: vi.fn(),
 }))
@@ -118,6 +119,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   mockAuthState.isAuthenticated = false
+  mockAuthState.hasSession = false
   mockAuthState.user = null
   mockAuthState.logout = vi.fn().mockResolvedValue(undefined)
 })
@@ -139,6 +141,7 @@ describe('SettingsView — greeting', () => {
 
   it('shows "Hola, [nombre]" when user is authenticated', () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -165,6 +168,7 @@ describe('SettingsView — cerrar sesión button', () => {
 
   it('IS visible when user is authenticated', () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -180,6 +184,7 @@ describe('SettingsView — cerrar sesión button', () => {
 describe('SettingsView — logout modal', () => {
   it('shows logout modal when "Cerrar sesión" is clicked', async () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -197,6 +202,7 @@ describe('SettingsView — logout modal', () => {
 
   it('modal shows "Mantener en modo invitado" option', async () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -211,6 +217,7 @@ describe('SettingsView — logout modal', () => {
 
   it('modal shows "Borrar todo" option', async () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -225,6 +232,7 @@ describe('SettingsView — logout modal', () => {
 
   it('calls authStore.logout(false) when "Mantener en modo invitado" is chosen', async () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()
@@ -247,6 +255,7 @@ describe('SettingsView — logout modal', () => {
 
   it('calls authStore.logout(true) when "Borrar todo" is chosen', async () => {
     mockAuthState.isAuthenticated = true
+    mockAuthState.hasSession = true
     mockAuthState.user = { id: 'user-1', email: 'angel@example.com', name: 'Angel Test' }
 
     const wrapper = mountSettings()

@@ -28,12 +28,15 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 // ---------------------------------------------------------------------------
 // Mock useAuthStore
 // ---------------------------------------------------------------------------
-const mockIsAuthenticated = { value: false }
+const mockHasSession = { value: false }
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     get isAuthenticated() {
-      return mockIsAuthenticated.value
+      return mockHasSession.value
+    },
+    get hasSession() {
+      return mockHasSession.value
     },
   }),
 }))
@@ -59,7 +62,7 @@ function createTestRouter() {
 // ---------------------------------------------------------------------------
 beforeEach(() => {
   setActivePinia(createPinia())
-  mockIsAuthenticated.value = false
+  mockHasSession.value = false
 })
 
 // ---------------------------------------------------------------------------
@@ -67,7 +70,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 describe('GuestBanner — visibility', () => {
   it('is visible when user is NOT authenticated (guest mode)', () => {
-    mockIsAuthenticated.value = false
+    mockHasSession.value = false
 
     const wrapper = mount(GuestBanner, {
       global: {
@@ -80,7 +83,7 @@ describe('GuestBanner — visibility', () => {
   })
 
   it('is NOT visible when user IS authenticated', () => {
-    mockIsAuthenticated.value = true
+    mockHasSession.value = true
 
     const wrapper = mount(GuestBanner, {
       global: {
@@ -99,7 +102,7 @@ describe('GuestBanner — visibility', () => {
 // ---------------------------------------------------------------------------
 describe('GuestBanner — content', () => {
   it('shows the warning message about data not being saved to the cloud', () => {
-    mockIsAuthenticated.value = false
+    mockHasSession.value = false
 
     const wrapper = mount(GuestBanner, {
       global: {
@@ -111,7 +114,7 @@ describe('GuestBanner — content', () => {
   })
 
   it('contains a link or button to navigate to /login', () => {
-    mockIsAuthenticated.value = false
+    mockHasSession.value = false
 
     const wrapper = mount(GuestBanner, {
       global: {
@@ -129,7 +132,7 @@ describe('GuestBanner — content', () => {
 // ---------------------------------------------------------------------------
 describe('GuestBanner — accessibility', () => {
   it('has role="alert" or aria-live for screen readers', () => {
-    mockIsAuthenticated.value = false
+    mockHasSession.value = false
 
     const wrapper = mount(GuestBanner, {
       global: {

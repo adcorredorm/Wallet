@@ -20,11 +20,17 @@ const {
   mockGetRefreshToken,
   mockSetRefreshToken,
   mockDeleteRefreshToken,
+  mockGetLastUser,
+  mockSetLastUser,
+  mockDeleteLastUser,
   mockPostAuthRefresh,
 } = vi.hoisted(() => ({
   mockGetRefreshToken: vi.fn(),
   mockSetRefreshToken: vi.fn().mockResolvedValue(undefined),
   mockDeleteRefreshToken: vi.fn().mockResolvedValue(undefined),
+  mockGetLastUser: vi.fn().mockResolvedValue(undefined),
+  mockSetLastUser: vi.fn().mockResolvedValue(undefined),
+  mockDeleteLastUser: vi.fn().mockResolvedValue(undefined),
   mockPostAuthRefresh: vi.fn(),
 }))
 
@@ -35,6 +41,9 @@ vi.mock('@/offline/auth-db', () => ({
   setLastUserId: vi.fn(),
   getLastUserId: vi.fn(),
   deleteLastUserId: vi.fn(),
+  getLastUser: mockGetLastUser,
+  setLastUser: mockSetLastUser,
+  deleteLastUser: mockDeleteLastUser,
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -100,51 +109,60 @@ describe('initializeFromStorage — retry with backoff', () => {
       .mockResolvedValueOnce({ access_token: FAKE_JWT, refresh_token: 'new-tok' })
 
     const store = useAuthStore()
-    const promise = store.initializeFromStorage()
+    // initializeFromStorage() returns after first attempt; background retries run independently
+    await store.initializeFromStorage()
 
-    // Advance through delays: 5 s, 10 s, 15 s
+    // Drive background retries through their delays
     await vi.advanceTimersByTimeAsync(5_000)
     await vi.advanceTimersByTimeAsync(10_000)
     await vi.advanceTimersByTimeAsync(15_000)
-    await promise
+    // Flush any remaining microtasks so the last refresh() resolves
+    await vi.runAllTimersAsync()
 
     expect(mockPostAuthRefresh).toHaveBeenCalledTimes(4)
     expect(store.isAuthenticated).toBe(true)
   })
 
-  it('enters guest mode (not authenticated) after 3 retries all fail', async () => {
+  it('enters offline mode (no access token) after 3 retries all fail', async () => {
+    // With the new implementation, user.value stays set (from getLastUser) so
+    // hasSession can be true, but isAuthenticated requires the access token.
     mockGetRefreshToken.mockResolvedValue('valid-token')
     mockPostAuthRefresh.mockRejectedValue(new Error('server down'))
 
     const store = useAuthStore()
-    const promise = store.initializeFromStorage()
+    await store.initializeFromStorage()
 
     await vi.advanceTimersByTimeAsync(5_000)
     await vi.advanceTimersByTimeAsync(10_000)
     await vi.advanceTimersByTimeAsync(15_000)
-    await promise
+    await vi.runAllTimersAsync()
 
     // 1 initial + 3 retries = 4 total calls
     expect(mockPostAuthRefresh).toHaveBeenCalledTimes(4)
+    // No access token — sync won't run
     expect(store.isAuthenticated).toBe(false)
   })
 
   it('does NOT retry when refresh() returns false because token was deleted (401)', async () => {
-    // initializeFromStorage reads token (call 1), then refresh() reads it again (call 2).
-    // After the 401, refresh() deletes the token. The retry loop checks the token (call 3+) and finds null.
+    // Call sequence:
+    // 1. initializeFromStorage: getRefreshToken() → 'valid-token'
+    // 2. initializeFromStorage: getLastUser() → undefined (separate mock)
+    // 3. refresh(): getRefreshToken() → 'valid-token' → postAuthRefresh → 401
+    //    → 401 path: clears user, deleteRefreshToken, deleteLastUser
+    // 4. initializeFromStorage: getRefreshToken() → null → returns early
     mockGetRefreshToken
       .mockResolvedValueOnce('valid-token') // call 1: initializeFromStorage top-level check
-      .mockResolvedValueOnce('valid-token') // call 2: inside refresh() before calling postAuthRefresh
-      .mockResolvedValue(null)             // calls 3+: token deleted by 401 path inside refresh()
+      .mockResolvedValueOnce('valid-token') // call 2: inside refresh()
+      .mockResolvedValue(null)             // calls 3+: token deleted by 401 inside refresh()
     mockPostAuthRefresh.mockRejectedValueOnce({ response: { status: 401 } })
 
     const store = useAuthStore()
-    const promise = store.initializeFromStorage()
+    await store.initializeFromStorage()
     await vi.runAllTimersAsync()
-    await promise
 
     expect(mockPostAuthRefresh).toHaveBeenCalledTimes(1)
     expect(store.isAuthenticated).toBe(false)
+    expect(store.user).toBeNull()  // 401 clears user too
   })
 
   it('uses delays of 5 s, 10 s, 15 s (not longer)', async () => {
@@ -152,9 +170,11 @@ describe('initializeFromStorage — retry with backoff', () => {
     mockPostAuthRefresh.mockRejectedValue(new Error('fail'))
 
     const store = useAuthStore()
-    const promise = store.initializeFromStorage()
+    // initializeFromStorage fires the first attempt, then launches background retries
+    await store.initializeFromStorage()
+    expect(mockPostAuthRefresh).toHaveBeenCalledTimes(1)
 
-    // After initial failure, wait exactly 5 s — second attempt should fire
+    // After 5 s the first background retry fires
     await vi.advanceTimersByTimeAsync(5_000)
     expect(mockPostAuthRefresh).toHaveBeenCalledTimes(2)
 
@@ -163,7 +183,5 @@ describe('initializeFromStorage — retry with backoff', () => {
 
     await vi.advanceTimersByTimeAsync(15_000)
     expect(mockPostAuthRefresh).toHaveBeenCalledTimes(4)
-
-    await promise
   })
 })
