@@ -79,10 +79,15 @@ export const useDashboardsStore = defineStore('dashboards', () => {
           }))
           await db.dashboards.bulkPut(localMapped)
 
-          // Remove orphaned records no longer on the server
+          // Remove orphaned records no longer on the server,
+          // but protect locally-created temp-* records from deletion.
           const serverIds = new Set(localMapped.map(d => d.id))
           const allLocalIds = await db.dashboards.toCollection().primaryKeys()
-          const orphanedIds = allLocalIds.filter(id => !serverIds.has(id as string))
+          const orphanedIds = allLocalIds.filter(id => {
+            const idStr = id as string
+            if (idStr.startsWith('temp-')) return false  // protect pending offline records
+            return !serverIds.has(idStr)
+          })
           if (orphanedIds.length > 0) await db.dashboards.bulkDelete(orphanedIds)
 
           // Re-read from Dexie for authoritative local state

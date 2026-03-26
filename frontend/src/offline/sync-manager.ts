@@ -1860,22 +1860,28 @@ export class SyncManager {
       allWidgets.map((w) => toLocalItem(w, w.id) as LocalDashboardWidget)
     )
 
-    // Step 5: prune dashboards whose IDs are no longer on the server.
-    // noneOf([]) would delete everything, so guard against an empty list.
-    if (serverDashboardIds.length > 0) {
-      await db.dashboards.where('id').noneOf(serverDashboardIds).delete()
-    } else {
-      await db.dashboards.clear()
+    // Step 5: prune dashboards whose IDs are no longer on the server,
+    // but PROTECT locally-created temp-* records from deletion.
+    const serverDashboardIdSet = new Set(serverDashboardIds)
+    const allLocalDashboardIds = await db.dashboards.toCollection().primaryKeys() as string[]
+    const orphanedDashboardIds = allLocalDashboardIds.filter(id => {
+      if (id.startsWith('temp-')) return false  // protect pending offline records
+      return !serverDashboardIdSet.has(id)
+    })
+    if (orphanedDashboardIds.length > 0) {
+      await db.dashboards.bulkDelete(orphanedDashboardIds)
     }
 
-    // Step 6: prune widgets belonging to dashboards that no longer exist.
-    // We key on dashboard_id (an indexed field) rather than widget id because
-    // the server only returns widgets for existing dashboards — any widget
-    // whose parent dashboard was deleted is orphaned in Dexie.
-    if (serverDashboardIds.length > 0) {
-      await db.dashboardWidgets.where('dashboard_id').noneOf(serverDashboardIds).delete()
-    } else {
-      await db.dashboardWidgets.clear()
+    // Step 6: prune orphaned widgets with temp-* protection.
+    // Compute a full diff: server widget IDs vs all local widget IDs.
+    const serverWidgetIdSet = new Set(allWidgets.map(w => (w as { id: string }).id))
+    const allLocalWidgetIds = await db.dashboardWidgets.toCollection().primaryKeys() as string[]
+    const orphanedWidgetIds = allLocalWidgetIds.filter(id => {
+      if (id.startsWith('temp-')) return false  // protect pending offline widgets
+      return !serverWidgetIdSet.has(id)
+    })
+    if (orphanedWidgetIds.length > 0) {
+      await db.dashboardWidgets.bulkDelete(orphanedWidgetIds)
     }
 
     // Step 7: persist cursor for future incremental syncs.
