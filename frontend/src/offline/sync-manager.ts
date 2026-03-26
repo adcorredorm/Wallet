@@ -211,6 +211,27 @@ function isApiError(error: unknown): error is ApiError {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: detect connectivity errors vs HTTP server errors
+//
+// Why check !error.response first?
+// An Axios error with no .response means the request never reached the server
+// (DNS failure, TCP refused, browser offline). error.code also carries
+// ERR_NETWORK, ECONNABORTED, or ERR_CONNECTION_REFUSED in those cases.
+// We check both so the helper is robust regardless of which property the
+// environment populates.
+// ---------------------------------------------------------------------------
+interface AxiosLikeError {
+  response?: { status: number }
+  code?: string
+}
+
+export function isNetworkError(error: AxiosLikeError): boolean {
+  if (!error.response) return true
+  const networkCodes = ['ERR_NETWORK', 'ECONNABORTED', 'ERR_CONNECTION_REFUSED']
+  return networkCodes.includes(error.code ?? '')
+}
+
+// ---------------------------------------------------------------------------
 // Helper: map a raw server entity to its LocalXxx representation.
 //
 // This helper is local to sync-manager to avoid coupling between offline
@@ -1258,6 +1279,18 @@ export class SyncManager {
     // the user's perspective without a manual force-sync.
     if (httpStatus === 401) {
       throw error
+    }
+
+    // ── Network / connectivity error ────────────────────────────────────────
+    // No response from the server — do NOT consume a retry attempt.
+    // The mutation stays in the queue for the next connectivity-restore cycle.
+    const axiosLike = error as AxiosLikeError
+    if (isNetworkError(axiosLike)) {
+      const codeStr = (axiosLike as { code?: string }).code ? ` (code: ${(axiosLike as { code?: string }).code})` : ''
+      console.warn(
+        `[SyncManager] Network error for mutation id=${mutation.id}${codeStr} — keeping in queue, not incrementing retry.`
+      )
+      return
     }
 
     if (httpStatus !== null && httpStatus >= 400 && httpStatus < 500) {
