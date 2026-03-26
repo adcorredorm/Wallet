@@ -112,3 +112,33 @@ def test_revoke_refresh_token_is_idempotent(app, auth_service):
     with app.app_context():
         # Should not raise
         auth_service.revoke_refresh_token("nonexistent_token_string")
+
+
+def test_issue_refresh_token_cleans_expired_grace_tokens(app):
+    """issue_tokens (full_replace=True) deletes tokens past grace window."""
+    with app.app_context():
+        from app.extensions import db
+        from app.models.refresh_token import RefreshToken
+
+        svc = auth_service_instance(app)
+        user, _ = svc.find_or_create_user(
+            {"sub": "sub_cleanup", "email": "cleanup@test.com", "name": "Cleanup"}
+        )
+
+        # Manually insert a superseded token whose grace has expired (3 min ago)
+        expired_token = RefreshToken(
+            user_id=user.id,
+            token_hash="b" * 64,
+            expires_at=datetime.utcnow() + timedelta(days=90),
+            superseded_at=datetime.utcnow() - timedelta(seconds=180),
+        )
+        db.session.add(expired_token)
+        db.session.commit()
+        expired_id = expired_token.id
+
+        # issue_tokens uses full_replace=True — must delete ALL tokens including expired grace
+        svc.issue_tokens(user)
+
+        # Verify expired grace token was deleted
+        still_there = db.session.get(RefreshToken, expired_id)
+        assert still_there is None

@@ -156,29 +156,43 @@ class AuthService:
             algorithm="HS256",
         )
 
-    def _issue_refresh_token(self, user: User) -> str:
+    def _issue_refresh_token(self, user: User, full_replace: bool = False) -> str:
         """
-        Create a new refresh token for a user, replacing any existing one.
-
-        The old refresh token row is deleted before the new one is inserted,
-        enforcing the single-token-per-user invariant.
+        Create a new refresh token row for a user.
 
         Args:
             user: User instance to issue a refresh token for.
+            full_replace: When True (Google sign-in path), delete ALL existing
+                tokens for this user before inserting the new one.
+                When False (rotation path), only delete tokens whose grace
+                period has expired (superseded_at < utcnow() - grace_seconds).
 
         Returns:
             Plaintext opaque token string (64 hex chars). Only returned once;
             only the hash is stored in the database.
         """
         expiry_days = current_app.config["REFRESH_TOKEN_EXPIRY_DAYS"]
+        grace_seconds = current_app.config["REFRESH_TOKEN_GRACE_SECONDS"]
         token_plain = secrets.token_hex(32)  # 64-char hex string
         token_hash = _hash_token(token_plain)
         expires_at = datetime.utcnow() + timedelta(days=expiry_days)
 
-        # Enforce single token per user: delete any existing token rows
-        db.session.execute(
-            db.delete(RefreshToken).where(RefreshToken.user_id == user.id)
-        )
+        if full_replace:
+            # Google sign-in: delete ALL tokens for this user unconditionally
+            db.session.execute(
+                db.delete(RefreshToken).where(RefreshToken.user_id == user.id)
+            )
+        else:
+            # Rotation path: only remove tokens whose grace window has expired
+            grace_cutoff = datetime.utcnow() - timedelta(seconds=grace_seconds)
+            db.session.execute(
+                db.delete(RefreshToken).where(
+                    RefreshToken.user_id == user.id,
+                    RefreshToken.superseded_at.is_not(None),
+                    RefreshToken.superseded_at < grace_cutoff,
+                )
+            )
+
         new_token = RefreshToken(
             user_id=user.id,
             token_hash=token_hash,
@@ -192,6 +206,9 @@ class AuthService:
         """
         Issue a JWT and a fresh refresh token for the given user.
 
+        Uses full_replace=True: on Google sign-in, all existing tokens
+        for the user are invalidated unconditionally.
+
         Args:
             user: Authenticated User instance.
 
@@ -201,7 +218,7 @@ class AuthService:
             and on rotation — it is not stored in plaintext anywhere.
         """
         access_token = self._build_jwt(user)
-        refresh_token = self._issue_refresh_token(user)
+        refresh_token = self._issue_refresh_token(user, full_replace=True)
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
