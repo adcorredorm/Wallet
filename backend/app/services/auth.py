@@ -226,10 +226,15 @@ class AuthService:
 
     def rotate_refresh_token(self, token_plain: str) -> dict[str, str]:
         """
-        Validate and rotate a refresh token.
+        Validate and rotate a refresh token with a 2-minute grace window.
 
-        Finds the stored token by hash, verifies it is not expired, then
-        deletes the old row and issues a new JWT + refresh token pair.
+        Behaviour:
+        - Active token (superseded_at is None): mark as superseded, issue fresh pair.
+        - Superseded token within grace window: accept it, issue fresh pair (covers
+          lost-response retries from the client).
+        - Superseded token past grace window: reject with ValidationError.
+        - Unknown token: reject with ValidationError.
+        - Expired token (expires_at in the past): reject with ValidationError.
 
         Args:
             token_plain: Plaintext refresh token from the client.
@@ -238,9 +243,12 @@ class AuthService:
             Dict with new 'access_token' and 'refresh_token'.
 
         Raises:
-            ValidationError: If token is not found or has expired.
+            ValidationError: If token is not found, expired, or grace period elapsed.
         """
+        grace_seconds = current_app.config["REFRESH_TOKEN_GRACE_SECONDS"]
         token_hash = _hash_token(token_plain)
+        now = datetime.utcnow()
+
         stored = (
             db.session.execute(
                 db.select(RefreshToken).where(
@@ -254,21 +262,34 @@ class AuthService:
         if stored is None:
             raise ValidationError("Refresh token inválido o ya utilizado")
 
-        if stored.expires_at < datetime.utcnow():
-            # Token expired: clean it up
+        if stored.expires_at < now:
             db.session.delete(stored)
             db.session.commit()
             raise ValidationError("Refresh token expirado")
 
-        # Load the user before _issue_refresh_token deletes the stored token
+        # If the token was already superseded, check grace window
+        if stored.superseded_at is not None:
+            elapsed = (now - stored.superseded_at).total_seconds()
+            if elapsed >= grace_seconds:
+                raise ValidationError("Refresh token inválido o ya utilizado")
+            # Within grace: fall through and issue fresh pair (no need to re-supersede)
+        else:
+            # Active token: mark as superseded now
+            stored.superseded_at = now
+            db.session.flush()
+
         user = db.session.get(User, stored.user_id)
         if user is None:
             db.session.delete(stored)
             db.session.commit()
             raise ValidationError("Usuario no encontrado")
 
-        # _issue_refresh_token deletes all tokens for this user then inserts new
-        return self.issue_tokens(user)
+        access_token = self._build_jwt(user)
+        refresh_token_plain = self._issue_refresh_token(user, full_replace=False)
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token_plain,
+        }
 
     def revoke_refresh_token(self, token_plain: str) -> None:
         """

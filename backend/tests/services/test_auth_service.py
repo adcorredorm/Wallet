@@ -114,6 +114,76 @@ def test_revoke_refresh_token_is_idempotent(app, auth_service):
         auth_service.revoke_refresh_token("nonexistent_token_string")
 
 
+def test_rotate_refresh_token_sets_superseded_at(app):
+    """rotate_refresh_token sets superseded_at on the old token instead of deleting it."""
+    with app.app_context():
+        from app.extensions import db
+        from app.models.refresh_token import RefreshToken
+
+        svc = auth_service_instance(app)
+        user, _ = svc.find_or_create_user(
+            {"sub": "sub_supersede", "email": "supersede@test.com", "name": "S"}
+        )
+        tokens1 = svc.issue_tokens(user)
+
+        old_hash = _hash_token_for_test(tokens1["refresh_token"])
+
+        tokens2 = svc.rotate_refresh_token(tokens1["refresh_token"])
+        assert tokens2["refresh_token"] != tokens1["refresh_token"]
+
+        # Old token must still exist but have superseded_at set
+        old_token = db.session.execute(
+            db.select(RefreshToken).where(RefreshToken.token_hash == old_hash)
+        ).scalars().one_or_none()
+
+        assert old_token is not None, "Old token row must not be deleted on rotation"
+        assert old_token.superseded_at is not None, "superseded_at must be set"
+
+
+def test_rotate_refresh_token_accepts_superseded_within_grace(app):
+    """A superseded token reused within the grace window issues a fresh pair."""
+    with app.app_context():
+        svc = auth_service_instance(app)
+        user, _ = svc.find_or_create_user(
+            {"sub": "sub_grace", "email": "grace@test.com", "name": "G"}
+        )
+        tokens1 = svc.issue_tokens(user)
+
+        # First rotation — normal
+        svc.rotate_refresh_token(tokens1["refresh_token"])
+
+        # Simulate: client never got tokens2, retries with tokens1 (within grace window)
+        tokens3 = svc.rotate_refresh_token(tokens1["refresh_token"])
+        assert "access_token" in tokens3
+        assert "refresh_token" in tokens3
+        assert tokens3["refresh_token"] != tokens1["refresh_token"]
+
+
+def test_rotate_refresh_token_rejects_superseded_after_grace(app):
+    """A superseded token reused after the grace window is rejected."""
+    with app.app_context():
+        from app.extensions import db
+        from app.models.refresh_token import RefreshToken
+
+        svc = auth_service_instance(app)
+        user, _ = svc.find_or_create_user(
+            {"sub": "sub_grace_expired", "email": "graceexp@test.com", "name": "GE"}
+        )
+        tokens1 = svc.issue_tokens(user)
+
+        # Manually mark as superseded 3 minutes ago (past grace window)
+        old_hash = _hash_token_for_test(tokens1["refresh_token"])
+        old_token = db.session.execute(
+            db.select(RefreshToken).where(RefreshToken.token_hash == old_hash)
+        ).scalars().one()
+        old_token.superseded_at = datetime.utcnow() - timedelta(seconds=180)
+        db.session.commit()
+
+        # Attempt to rotate with expired-grace superseded token
+        with pytest.raises(Exception, match="inválido|expirado"):
+            svc.rotate_refresh_token(tokens1["refresh_token"])
+
+
 def test_issue_refresh_token_cleans_expired_grace_tokens(app):
     """issue_tokens (full_replace=True) deletes tokens past grace window."""
     with app.app_context():
