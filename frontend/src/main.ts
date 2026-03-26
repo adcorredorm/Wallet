@@ -72,6 +72,15 @@ authStore.initializeFromStorage().then(() => {
     console.warn('[boot] Exchange rates failed to load:', err)
   })
 
+  // Restore error count from Dexie at startup.
+  // The in-memory syncStore.errorCount resets to 0 on every page load.
+  // Reading it from Dexie immediately gives the user an accurate error
+  // indicator before any sync cycle runs (e.g. on a cold restart with no
+  // network, or while the first processQueue() is still in progress).
+  syncManager.refreshErrorCount().catch((err) => {
+    console.warn('[boot] Error count refresh failed:', err)
+  })
+
   // Check backend reachability at boot.
   // onOnline() only fires on transitions — if the device is already online,
   // no transition fires. This call handles the cold-start case.

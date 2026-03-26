@@ -34,21 +34,23 @@ const {
   mockPendingMutationsDelete,
   mockAccountsDelete,
 } = vi.hoisted(() => {
-  const makeEmptyTable = () => ({
-    where: vi.fn().mockReturnValue({
+  // makeEmptyWhere returns a where() mock whose equals() chain supports both
+  // .toArray() (used by loadErrors and cascadeDelete) and .count() (used by
+  // computeDependentCount). Both must be on the same returned object.
+  const makeEmptyWhere = () =>
+    vi.fn().mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
       }),
-    }),
-    delete: vi.fn().mockResolvedValue(undefined),
-  })
+    })
   return {
-    mockAccountsWhere: vi.fn().mockReturnValue({ equals: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }) }),
-    mockTransactionsWhere: makeEmptyTable().where,
-    mockTransfersWhere: makeEmptyTable().where,
-    mockCategoriesWhere: makeEmptyTable().where,
-    mockDashboardsWhere: makeEmptyTable().where,
-    mockDashboardWidgetsWhere: makeEmptyTable().where,
+    mockAccountsWhere: makeEmptyWhere(),
+    mockTransactionsWhere: makeEmptyWhere(),
+    mockTransfersWhere: makeEmptyWhere(),
+    mockCategoriesWhere: makeEmptyWhere(),
+    mockDashboardsWhere: makeEmptyWhere(),
+    mockDashboardWidgetsWhere: makeEmptyWhere(),
     mockPendingMutationsWhere: vi.fn().mockReturnValue({ equals: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }) }),
     mockPendingMutationsToArray: vi.fn().mockResolvedValue([]),
     mockPendingMutationsDelete: vi.fn().mockResolvedValue(undefined),
@@ -85,6 +87,7 @@ vi.mock('@/offline/sync-manager', () => ({
   },
   syncManager: {
     forceFullSync: vi.fn().mockResolvedValue(undefined),
+    refreshErrorCount: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -103,10 +106,22 @@ describe('SyncErrorSheet', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    // Default: all tables return empty arrays
-    mockAccountsWhere.mockReturnValue({
+    // Default: all tables return empty arrays for both toArray() and count()
+    const emptyChain = { toArray: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) }
+    ;[
+      mockAccountsWhere,
+      mockTransactionsWhere,
+      mockTransfersWhere,
+      mockCategoriesWhere,
+      mockDashboardsWhere,
+      mockDashboardWidgetsWhere,
+    ].forEach(mock => {
+      mock.mockReturnValue({ equals: vi.fn().mockReturnValue(emptyChain) })
+    })
+    mockPendingMutationsWhere.mockReturnValue({
       equals: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
     })
+    mockPendingMutationsToArray.mockResolvedValue([])
     wrappers = []
   })
 
@@ -201,12 +216,14 @@ describe('SyncErrorSheet', () => {
     })
     wrappers.push(wrapper)
 
-    // Configure mocks BEFORE opening the sheet so loadErrors() sees them
+    // Configure mocks BEFORE opening the sheet so loadErrors() sees them.
+    // equals() must return both toArray() (loadErrors) and count() (computeDependentCount).
     mockAccountsWhere.mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn().mockResolvedValue([
           { id: 'acc-1', name: 'Bancolombia', _sync_status: 'error', updated_at: '2026-01-01T00:00:00Z' },
         ]),
+        count: vi.fn().mockResolvedValue(0),
       }),
     })
     mockPendingMutationsWhere.mockReturnValue({

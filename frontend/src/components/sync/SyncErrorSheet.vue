@@ -114,17 +114,50 @@ function buildLabel(entityType: string, record: Record<string, unknown>): string
   }
 }
 
+// ── Table lookup helper ───────────────────────────────────────────────────────
+
+/**
+ * Map entity_type to its Dexie table.
+ *
+ * Why a helper instead of a switch in each caller?
+ * Both computeDependentCount and cascadeDelete iterate DEPENDENCY_FIELDS and
+ * need to resolve a table for each depType. A single helper keeps the map
+ * in one place and avoids duplicating the switch.
+ *
+ * Why return any?
+ * Dexie Table<T> generics differ per entity type. At the call sites we only
+ * use .where().equals().count() / .toArray() / .delete() — all available on
+ * every Table — so any is safe and avoids a union type explosion.
+ */
+function getTable(entityType: PendingMutation['entity_type']): any {
+  const map: Partial<Record<PendingMutation['entity_type'], any>> = {
+    account:          db.accounts,
+    transaction:      db.transactions,
+    transfer:         db.transfers,
+    category:         db.categories,
+    dashboard:        db.dashboards,
+    dashboard_widget: db.dashboardWidgets,
+    setting:          db.settings,
+  }
+  return map[entityType]
+}
+
+// ── Dependent count ───────────────────────────────────────────────────────────
+
 async function computeDependentCount(
   _entityType: PendingMutation['entity_type'],
   entityId: string
 ): Promise<number> {
-  // Count pending mutations in the queue that reference this entity as a FK dependency
-  const allMutations = await db.pendingMutations.toArray()
+  // Query actual Dexie entity tables using DEPENDENCY_FIELDS indices.
+  // This catches synced records that have no pending mutations — the old
+  // approach (scanning pendingMutations) only found unsynced dependents.
   let count = 0
-  for (const m of allMutations) {
-    if (m.entity_id === entityId) continue
-    const fields = DEPENDENCY_FIELDS[m.entity_type] ?? []
-    if (fields.some(f => m.payload[f] === entityId)) count++
+  for (const [depType, fields] of Object.entries(DEPENDENCY_FIELDS)) {
+    const table = getTable(depType as PendingMutation['entity_type'])
+    if (!table) continue
+    for (const field of fields) {
+      count += await table.where(field).equals(entityId).count()
+    }
   }
   return count
 }
@@ -146,7 +179,7 @@ async function discardEntity(entity: ErroredEntity): Promise<void> {
   try {
     await performDiscard(entity)
     await loadErrors()
-    syncStore.setErrorCount(erroredEntities.value.length)
+    await syncManager.refreshErrorCount()
   } finally {
     discardingId.value = null
   }
@@ -191,18 +224,24 @@ async function cascadeDelete(
   _entityType: PendingMutation['entity_type'],
   entityId: string
 ): Promise<void> {
-  // Find and delete all pending mutations whose FK fields reference entityId
-  const allMutations = await db.pendingMutations.toArray()
-  for (const m of allMutations) {
-    if (m.entity_id === entityId) continue
-    const fields = DEPENDENCY_FIELDS[m.entity_type] ?? []
-    if (fields.some(f => m.payload[f] === entityId)) {
-      // Delete the dependent entity from its table too
-      await deleteFromTable(m.entity_type, m.entity_id)
-      // Delete the mutation
-      if (m.id != null) await db.pendingMutations.delete(m.id)
-      // Recurse for deeper dependencies (dashboard → widget → nothing deeper)
-      await cascadeDelete(m.entity_type, m.entity_id)
+  // Query Dexie entity tables (not just pendingMutations) so synced records
+  // without pending mutations are also deleted.
+  for (const [depType, fields] of Object.entries(DEPENDENCY_FIELDS)) {
+    const table = getTable(depType as PendingMutation['entity_type'])
+    if (!table) continue
+    for (const field of fields) {
+      const dependents: Array<{ id: string }> = await table.where(field).equals(entityId).toArray()
+      for (const dep of dependents) {
+        // Delete any pending mutations for this dependent
+        const mutations = await db.pendingMutations.where('entity_id').equals(dep.id).toArray()
+        for (const m of mutations) {
+          if (m.id != null) await db.pendingMutations.delete(m.id)
+        }
+        // Delete the dependent entity from Dexie
+        await table.delete(dep.id)
+        // Recurse for deeper dependencies (e.g. category → subcategory → transactions)
+        await cascadeDelete(depType as PendingMutation['entity_type'], dep.id)
+      }
     }
   }
 }
@@ -224,8 +263,7 @@ async function discardAll(): Promise<void> {
       await performDiscard(entity)
     }
     erroredEntities.value = []
-    syncStore.setErrorCount(0)
-    syncStore.clearErrors()
+    await syncManager.refreshErrorCount()
     close()
     // Trigger full resync so Dexie is consistent with the server
     await syncManager.forceFullSync()

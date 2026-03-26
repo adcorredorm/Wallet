@@ -440,7 +440,7 @@ export class SyncManager {
           // NetworkOfflineError bubbles up from handleError — re-throw to
           // break the loop and skip the read-sync phase below.
           if (error instanceof NetworkOfflineError) throw error
-          await this.handleError(mutation, error, syncStore)
+          await this.handleError(mutation, error)
         }
       }
 
@@ -522,6 +522,9 @@ export class SyncManager {
       syncStore.setSyncing(false)
       syncStore.setLastSyncAt(new Date().toISOString())
       syncStore.setInitialSyncComplete(true)
+      // Reconcile error count from Dexie at end of every cycle (including
+      // boot-time cycles) so the indicator is correct from the first render.
+      await this.refreshErrorCount()
       // ─────────────────────────────────────────────────────────────────
 
       // If mutations were enqueued while this run was processing (e.g. a
@@ -571,6 +574,37 @@ export class SyncManager {
     syncStore.setInitialSyncComplete(false)
     syncStore.setSyncing(false)
     console.log('[SyncManager] reset() called — internal state cleared.')
+  }
+
+  /**
+   * Refresh the error count in the sync store from Dexie.
+   *
+   * Why query Dexie instead of using the in-memory errors array?
+   * The in-memory errors array only grows during the current sync session.
+   * It resets on every app reload and doesn't account for entities whose
+   * _sync_status was set to 'error' in a previous session. Dexie is the
+   * persistent source of truth — the error count must match what the
+   * SyncErrorSheet would show if the user opened it.
+   *
+   * Why a separate public method instead of inline logic?
+   * SyncErrorSheet and main.ts both need to trigger a recount after different
+   * events (discard, startup). A shared method keeps the table list in one place.
+   */
+  async refreshErrorCount(): Promise<void> {
+    const syncStore = getSyncStore()
+    const tables = [
+      db.accounts,
+      db.transactions,
+      db.transfers,
+      db.categories,
+      db.dashboards,
+      db.dashboardWidgets,
+    ]
+    let total = 0
+    for (const table of tables) {
+      total += await (table as any).where('_sync_status').equals('error').count()
+    }
+    syncStore.setErrorCount(total)
   }
 
   /**
@@ -1306,7 +1340,6 @@ export class SyncManager {
   private async handleError(
     mutation: PendingMutation,
     error: unknown,
-    syncStore: ReturnType<typeof getSyncStore>
   ): Promise<void> {
     const httpStatus = isApiError(error) ? error.status : null
 
@@ -1330,14 +1363,24 @@ export class SyncManager {
     // We throw NetworkOfflineError (rather than returning) so processQueue()
     // can catch it, break out of the mutation loop, and skip the read-sync
     // phase — preventing an infinite cascade of failing requests.
-    const axiosLike = error as AxiosLikeError
-    if (isNetworkError(axiosLike)) {
-      const codeStr = axiosLike.code ? ` (code: ${axiosLike.code})` : ''
-      const status = axiosLike.response?.status ? ` HTTP ${axiosLike.response.status}` : ''
-      console.warn(
-        `[SyncManager] Network error for mutation id=${mutation.id}${codeStr}${status} — aborting sync cycle.`
-      )
-      throw new NetworkOfflineError()
+    //
+    // Why skip the check when error is already an ApiError?
+    // Mutations use apiClient, whose response interceptor transforms every
+    // AxiosError into an ApiError({ status, message, errors }) before
+    // rejecting. ApiError has no .response property, so isNetworkError() would
+    // see !error.response === true and wrongly classify a real HTTP 404/422/500
+    // as a connectivity failure. An ApiError means the backend DID respond —
+    // it is never a network error regardless of the status code.
+    if (!isApiError(error)) {
+      const axiosLike = error as AxiosLikeError
+      if (isNetworkError(axiosLike)) {
+        const codeStr = axiosLike.code ? ` (code: ${axiosLike.code})` : ''
+        const status = axiosLike.response?.status ? ` HTTP ${axiosLike.response.status}` : ''
+        console.warn(
+          `[SyncManager] Network error for mutation id=${mutation.id}${codeStr}${status} — aborting sync cycle.`
+        )
+        throw new NetworkOfflineError()
+      }
     }
 
     if (httpStatus !== null && httpStatus >= 400 && httpStatus < 500) {
@@ -1349,16 +1392,12 @@ export class SyncManager {
 
       await this.markError(mutation.entity_type, mutation.entity_id, errorMessage)
 
-      // ── Phase 5: record the permanent error in the sync store ─────────────
-      // This surfaces the error count in the SyncIndicator header badge so
-      // the user can see that not all changes were saved to the server.
-      syncStore.addError({
-        entityType: mutation.entity_type,
-        entityId: mutation.entity_id,
-        operation: mutation.operation,
-        message: errorMessage,
-        timestamp: new Date().toISOString()
-      })
+      // ── Phase 5: update error count from Dexie (authoritative source) ─────
+      // We use refreshErrorCount() (Dexie query) rather than addError() so the
+      // count always matches what SyncErrorSheet would display. addError() only
+      // increments an in-memory counter that resets on reload and can diverge
+      // if markError() can't find the entity in Dexie.
+      await this.refreshErrorCount()
       // ─────────────────────────────────────────────────────────────────────
 
       // If a CREATE fails permanently the entity will never exist on the
@@ -1402,14 +1441,8 @@ export class SyncManager {
         )
         await this.markError(mutation.entity_type, mutation.entity_id, errorMessage)
 
-        // ── Phase 5: record as permanent error after max retries ──────────
-        syncStore.addError({
-          entityType: mutation.entity_type,
-          entityId: mutation.entity_id,
-          operation: mutation.operation,
-          message: errorMessage,
-          timestamp: new Date().toISOString()
-        })
+        // ── Phase 5: update error count from Dexie (authoritative source) ─
+        await this.refreshErrorCount()
         // ──────────────────────────────────────────────────────────────────
 
         if (mutation.operation === 'create') {
