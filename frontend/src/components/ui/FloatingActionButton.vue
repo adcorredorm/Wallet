@@ -93,16 +93,24 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+function handleEscapeKey(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isMenuOpen.value) {
+    isMenuOpen.value = false
+  }
+}
+
 /**
  * Add click listener when menu opens
  * Remove when component unmounts to prevent memory leaks
  */
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleEscapeKey)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleEscapeKey)
 })
 
 /**
