@@ -9,6 +9,7 @@
  * setup checklist guides the user to the next prerequisite.
  */
 
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAccountsStore, useCategoriesStore, useUiStore } from '@/stores'
 import AccountForm from '@/components/accounts/AccountForm.vue'
@@ -20,7 +21,10 @@ const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
 
+const submitting = ref(false)
+
 async function handleSubmit(data: CreateAccountDto | UpdateAccountDto) {
+  submitting.value = true
   try {
     const isOnboarding = accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
     await accountsStore.createAccount(data as CreateAccountDto)
@@ -28,6 +32,8 @@ async function handleSubmit(data: CreateAccountDto | UpdateAccountDto) {
     router.push(isOnboarding ? '/' : '/accounts')
   } catch (error: any) {
     uiStore.showError(error.message || 'Error al crear cuenta')
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -42,7 +48,7 @@ function handleCancel() {
 
     <BaseCard>
       <AccountForm
-        :loading="accountsStore.loading"
+        :loading="submitting"
         @submit="handleSubmit"
         @cancel="handleCancel"
       />
