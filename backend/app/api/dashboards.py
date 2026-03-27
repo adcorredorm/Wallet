@@ -32,7 +32,7 @@ from app.schemas.dashboard_crud import (
     WidgetResponse,
 )
 from app.utils.auth import require_auth
-from app.utils.responses import success_response, error_response
+from app.utils.responses import success_response, error_response, serialize_pydantic_errors
 from app.utils.exceptions import WalletException
 from app.utils.sync_cursor import encode_cursor, decode_cursor
 
@@ -124,7 +124,7 @@ def create_dashboard():
         status = 201 if created else 200
         return success_response(data=_serialize_dashboard(dashboard), status_code=status)
     except ValidationError as exc:
-        return error_response("Datos inválidos", status_code=400, errors=exc.errors())
+        return error_response("Datos inválidos", status_code=400, errors=serialize_pydantic_errors(exc.errors()))
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
@@ -185,7 +185,7 @@ def update_dashboard(dashboard_id: UUID):
         )
         return success_response(data=_serialize_dashboard(dashboard))
     except ValidationError as exc:
-        return error_response("Datos inválidos", status_code=400, errors=exc.errors())
+        return error_response("Datos inválidos", status_code=400, errors=serialize_pydantic_errors(exc.errors()))
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
@@ -243,7 +243,7 @@ def create_widget(dashboard_id: UUID):
         status = 201 if created else 200
         return success_response(data=_serialize_widget(widget), status_code=status)
     except ValidationError as exc:
-        return error_response("Datos inválidos", status_code=400, errors=exc.errors())
+        return error_response("Datos inválidos", status_code=400, errors=serialize_pydantic_errors(exc.errors()))
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
@@ -277,7 +277,7 @@ def update_widget(dashboard_id: UUID, widget_id: UUID):
         )
         return success_response(data=_serialize_widget(widget))
     except ValidationError as exc:
-        return error_response("Datos inválidos", status_code=400, errors=exc.errors())
+        return error_response("Datos inválidos", status_code=400, errors=serialize_pydantic_errors(exc.errors()))
     except WalletException as exc:
         return error_response(exc.message, status_code=exc.status_code)
     except Exception as exc:
