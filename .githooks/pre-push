@@ -20,8 +20,22 @@ while read local_ref local_sha remote_ref remote_sha; do
     REPO_ROOT="$(git rev-parse --show-toplevel)"
     cd "$REPO_ROOT/backend"
 
+    # Verify DATABASE_URL is set (required for production migrations)
+    if [ -z "${DATABASE_URL:-}" ]; then
+        # Try loading from .env (root or backend/)
+        for envfile in "$REPO_ROOT/.env" "$REPO_ROOT/backend/.env"; do
+            if [ -f "$envfile" ] && grep -qE '^DATABASE_URL=' "$envfile"; then
+                export $(grep -E '^DATABASE_URL=' "$envfile" | xargs)
+                break
+            fi
+        done
+        if [ -z "${DATABASE_URL:-}" ]; then
+            echo "❌ Error: DATABASE_URL no está definida. Verificá que backend/.env existe y tiene DATABASE_URL."
+            exit 1
+        fi
+    fi
+
     # Run migrations via Flask-Migrate (uses backend/migrations/, matches production DB history)
-    # DATABASE_URL is loaded from .env by run.py via load_dotenv()
     set +e
     migration_output=$(FLASK_APP=run:app flask db upgrade 2>&1)
     exit_code=$?
@@ -41,6 +55,26 @@ while read local_ref local_sha remote_ref remote_sha; do
     else
         echo "✓ Migraciones: $applied aplicadas correctamente"
     fi
+
+    # Verify DB is actually at Alembic head
+    set +e
+    current_output=$(FLASK_APP=run:app flask db current 2>&1)
+    head_output=$(FLASK_APP=run:app flask db heads 2>&1)
+    set -e
+
+    # Extract just the revision hash (strip INFO lines, "(head)" suffix, whitespace)
+    current_rev=$(echo "$current_output" | grep -v "^INFO" | head -1 | sed 's/ (head)//' | xargs)
+    head_rev=$(echo "$head_output" | grep -v "^INFO" | head -1 | sed 's/ (head)//' | xargs)
+
+    if [ "$current_rev" != "$head_rev" ]; then
+        echo "❌ DB no está en head después de upgrade."
+        echo "   Current: $current_rev"
+        echo "   Head:    $head_rev"
+        echo "   Push abortado. Corré 'flask db upgrade' manualmente y verificá."
+        exit 1
+    fi
+
+    echo "✓ DB verificada en head: $current_rev"
 done
 
 exit 0
