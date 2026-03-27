@@ -30,11 +30,12 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const formattedAmount = computed(() => {
-  let formatted = formatCurrency(Math.abs(props.amount), props.currency, props.compact)
+  const n = Number(props.amount)
+  let formatted = formatCurrency(Math.abs(n), props.currency, props.compact)
 
-  if (props.showSign && props.amount > 0) {
+  if (props.showSign && n > 0) {
     formatted = '+' + formatted
-  } else if (props.amount < 0) {
+  } else if (n < 0) {
     formatted = '-' + formatted
   }
 
@@ -43,7 +44,7 @@ const formattedAmount = computed(() => {
 
 const colorClass = computed(() => {
   if (!props.colorize) return ''
-  return props.amount >= 0 ? 'text-accent-green' : 'text-accent-red'
+  return Number(props.amount) >= 0 ? 'text-accent-green' : 'text-accent-red'
 })
 
 const sizeClasses = {
