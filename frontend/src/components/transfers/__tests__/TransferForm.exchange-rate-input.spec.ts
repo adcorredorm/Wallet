@@ -97,6 +97,7 @@ const USD_ACCOUNT: Account = {
   currency: 'USD',
   tags: [],
   active: true,
+  sort_order: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }
@@ -108,6 +109,7 @@ const COP_ACCOUNT: Account = {
   currency: 'COP',
   tags: [],
   active: true,
+  sort_order: 1,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }

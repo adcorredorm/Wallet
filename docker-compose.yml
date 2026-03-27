@@ -19,8 +19,6 @@ services:
     volumes:
       # Persistent volume for database data
       - postgres_data:/var/lib/postgresql/data
-      # Alembic migrations for initialization
-      - ./backend/alembic:/docker-entrypoint-initdb.d
     networks:
       - wallet_network
     healthcheck:

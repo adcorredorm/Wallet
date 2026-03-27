@@ -83,6 +83,8 @@ class AccountService:
         description: str | None = None,
         tags: list[str] | None = None,
         offline_id: str | None = None,
+        sort_order: int | None = None,
+        icon: str | None = None,
     ) -> Account:
         """
         Create a new account for a user.
@@ -90,6 +92,9 @@ class AccountService:
         If offline_id is provided and a record with that key already exists in
         the database the existing account is returned immediately without
         inserting a duplicate row (offline-first idempotency).
+
+        When sort_order is None, the service queries MAX(sort_order) for the
+        user's accounts and assigns MAX + 1 (or 0 if no accounts exist).
 
         Args:
             user_id: Owner's UUID.
@@ -99,6 +104,8 @@ class AccountService:
             description: Optional description.
             tags: Optional list of tags.
             offline_id: Optional client-generated idempotency key.
+            sort_order: Display order position. Auto-assigned when None.
+            icon: Optional emoji icon (max 50 chars).
 
         Returns:
             Created or pre-existing account instance.
@@ -110,6 +117,15 @@ class AccountService:
             if existing:
                 return existing
 
+        if sort_order is None:
+            max_result = db.session.execute(
+                select(func.max(Account.sort_order)).where(
+                    Account.user_id == user_id
+                )
+            )
+            current_max = max_result.scalar()
+            sort_order = 0 if current_max is None else current_max + 1
+
         return self.repository.create(
             user_id=user_id,
             name=name,
@@ -118,6 +134,8 @@ class AccountService:
             description=description,
             tags=tags or [],
             offline_id=offline_id,
+            sort_order=sort_order,
+            icon=icon,
         )
 
     def update(
@@ -130,6 +148,8 @@ class AccountService:
         description: str | None = None,
         tags: list[str] | None = None,
         active: bool | None = None,
+        sort_order: int | None = None,
+        icon: str | None = None,
     ) -> Account:
         """
         Update an existing account.
@@ -143,6 +163,8 @@ class AccountService:
             description: New description.
             tags: New tags list.
             active: New active status.
+            sort_order: New display order position.
+            icon: New emoji icon (max 50 chars).
 
         Returns:
             Updated account instance.
@@ -167,6 +189,10 @@ class AccountService:
             update_data["tags"] = tags
         if active is not None:
             update_data["active"] = active
+        if sort_order is not None:
+            update_data["sort_order"] = sort_order
+        if icon is not None:
+            update_data["icon"] = icon
 
         return self.repository.update(account, **update_data)
 

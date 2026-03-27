@@ -178,6 +178,8 @@ def create_account():
             description=account_data.description,
             tags=account_data.tags,
             offline_id=account_data.offline_id,
+            sort_order=account_data.sort_order,
+            icon=account_data.icon,
         )
 
         data = AccountResponse.model_validate(account).model_dump(mode="json")
@@ -257,6 +259,8 @@ def update_account(account_id: UUID):
             description=account_data.description,
             tags=account_data.tags,
             active=account_data.active,
+            sort_order=account_data.sort_order,
+            icon=account_data.icon,
         )
 
         data = AccountResponse.model_validate(account).model_dump(mode="json")

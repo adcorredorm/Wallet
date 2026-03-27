@@ -124,19 +124,27 @@ class TestGetById:
 class TestCreate:
     """Tests for create method."""
 
+    def _mock_db_max(self, mock_db, max_value=0):
+        """Helper: configure db.session.execute to return a MAX scalar."""
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = max_value
+        mock_db.session.execute.return_value = mock_result
+
     def test_create_account_success(self, account_service, mock_repository):
         """Should create account with provided data."""
         new_account = MagicMock()
         mock_repository.create.return_value = new_account
 
-        result = account_service.create(
-            user_id=USER_ID,
-            name="Nueva Cuenta",
-            type="debit",
-            currency="usd",
-            description="Test description",
-            tags=["tag1", "tag2"]
-        )
+        with patch('app.services.account.db') as mock_db:
+            self._mock_db_max(mock_db)
+            result = account_service.create(
+                user_id=USER_ID,
+                name="Nueva Cuenta",
+                type="debit",
+                currency="usd",
+                description="Test description",
+                tags=["tag1", "tag2"]
+            )
 
         assert result == new_account
         mock_repository.create.assert_called_once()
@@ -152,12 +160,14 @@ class TestCreate:
         new_account = MagicMock()
         mock_repository.create.return_value = new_account
 
-        result = account_service.create(
-            user_id=USER_ID,
-            name="Cuenta Mínima",
-            type="cash",
-            currency="MXN"
-        )
+        with patch('app.services.account.db') as mock_db:
+            self._mock_db_max(mock_db)
+            result = account_service.create(
+                user_id=USER_ID,
+                name="Cuenta Mínima",
+                type="cash",
+                currency="MXN"
+            )
 
         assert result == new_account
         call_kwargs = mock_repository.create.call_args.kwargs
@@ -168,12 +178,14 @@ class TestCreate:
         """Should convert currency code to uppercase."""
         mock_repository.create.return_value = MagicMock()
 
-        account_service.create(
-            user_id=USER_ID,
-            name="Test",
-            type="debit",
-            currency="eur"
-        )
+        with patch('app.services.account.db') as mock_db:
+            self._mock_db_max(mock_db)
+            account_service.create(
+                user_id=USER_ID,
+                name="Test",
+                type="debit",
+                currency="eur"
+            )
 
         call_kwargs = mock_repository.create.call_args.kwargs
         assert call_kwargs["currency"] == "EUR"
@@ -325,3 +337,177 @@ class TestDelete:
             account_service.delete(account_id, user_id=USER_ID)
 
 
+class TestSortOrderAndIcon:
+    """Tests for sort_order auto-assign and icon passthrough in AccountService."""
+
+    def test_create_without_sort_order_queries_max_and_assigns_next(
+        self, account_service, mock_repository
+    ):
+        """When sort_order=None, service queries MAX and assigns MAX+1."""
+        new_account = MagicMock()
+        mock_repository.create.return_value = new_account
+
+        with patch('app.services.account.db') as mock_db:
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 2  # existing MAX is 2
+            mock_db.session.execute.return_value = mock_result
+
+            account_service.create(
+                user_id=USER_ID,
+                name="Nueva",
+                type="debit",
+                currency="USD",
+                sort_order=None,
+            )
+
+        call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["sort_order"] == 3  # MAX + 1
+
+    def test_create_without_sort_order_assigns_zero_when_no_accounts_exist(
+        self, account_service, mock_repository
+    ):
+        """When MAX query returns None (no accounts), sort_order should be 0."""
+        new_account = MagicMock()
+        mock_repository.create.return_value = new_account
+
+        with patch('app.services.account.db') as mock_db:
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = None  # no existing accounts
+            mock_db.session.execute.return_value = mock_result
+
+            account_service.create(
+                user_id=USER_ID,
+                name="Primera",
+                type="cash",
+                currency="USD",
+                sort_order=None,
+            )
+
+        call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["sort_order"] == 0
+
+    def test_create_with_explicit_sort_order_uses_provided_value(
+        self, account_service, mock_repository
+    ):
+        """When sort_order is provided, skip MAX query and use the given value."""
+        new_account = MagicMock()
+        mock_repository.create.return_value = new_account
+
+        result = account_service.create(
+            user_id=USER_ID,
+            name="Explícita",
+            type="debit",
+            currency="USD",
+            sort_order=5,
+        )
+
+        call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["sort_order"] == 5
+
+    def test_create_passes_icon_to_repository(self, account_service, mock_repository):
+        """icon parameter must be forwarded to repository.create()."""
+        new_account = MagicMock()
+        mock_repository.create.return_value = new_account
+
+        with patch('app.services.account.db') as mock_db:
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 0
+            mock_db.session.execute.return_value = mock_result
+
+            account_service.create(
+                user_id=USER_ID,
+                name="Con icono",
+                type="debit",
+                currency="USD",
+                icon="💳",
+            )
+
+        call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["icon"] == "💳"
+
+    def test_create_with_none_icon_passes_none_to_repository(
+        self, account_service, mock_repository
+    ):
+        """icon=None must be forwarded as None to repository.create()."""
+        new_account = MagicMock()
+        mock_repository.create.return_value = new_account
+
+        with patch('app.services.account.db') as mock_db:
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 0
+            mock_db.session.execute.return_value = mock_result
+
+            account_service.create(
+                user_id=USER_ID,
+                name="Sin icono",
+                type="cash",
+                currency="USD",
+                icon=None,
+            )
+
+        call_kwargs = mock_repository.create.call_args.kwargs
+        assert call_kwargs["icon"] is None
+
+    def test_update_sort_order_added_to_update_data(
+        self, account_service, mock_repository, sample_account
+    ):
+        """sort_order must appear in the update_data dict when provided."""
+        mock_repository.get_by_id_or_fail.return_value = sample_account
+        mock_repository.update.return_value = sample_account
+
+        account_service.update(
+            account_id=sample_account.id,
+            user_id=USER_ID,
+            sort_order=3,
+        )
+
+        call_kwargs = mock_repository.update.call_args[1]
+        assert call_kwargs["sort_order"] == 3
+
+    def test_update_sort_order_not_added_when_none(
+        self, account_service, mock_repository, sample_account
+    ):
+        """sort_order must NOT appear in update_data when not provided."""
+        mock_repository.get_by_id_or_fail.return_value = sample_account
+        mock_repository.update.return_value = sample_account
+
+        account_service.update(
+            account_id=sample_account.id,
+            user_id=USER_ID,
+            name="Solo nombre",
+        )
+
+        call_kwargs = mock_repository.update.call_args[1]
+        assert "sort_order" not in call_kwargs
+
+    def test_update_icon_added_to_update_data(
+        self, account_service, mock_repository, sample_account
+    ):
+        """icon must appear in the update_data dict when provided."""
+        mock_repository.get_by_id_or_fail.return_value = sample_account
+        mock_repository.update.return_value = sample_account
+
+        account_service.update(
+            account_id=sample_account.id,
+            user_id=USER_ID,
+            icon="🏦",
+        )
+
+        call_kwargs = mock_repository.update.call_args[1]
+        assert call_kwargs["icon"] == "🏦"
+
+    def test_update_icon_not_added_when_not_provided(
+        self, account_service, mock_repository, sample_account
+    ):
+        """icon must NOT appear in update_data when not provided."""
+        mock_repository.get_by_id_or_fail.return_value = sample_account
+        mock_repository.update.return_value = sample_account
+
+        account_service.update(
+            account_id=sample_account.id,
+            user_id=USER_ID,
+            name="Solo nombre",
+        )
+
+        call_kwargs = mock_repository.update.call_args[1]
+        assert "icon" not in call_kwargs

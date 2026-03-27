@@ -25,6 +25,10 @@
  *   (test data only) so no records exist without base_rate.
  * - Version 5 adds dashboards and dashboardWidgets tables for the customizable
  *   analytics dashboard feature (Fase B). New tables start empty — no upgrade needed.
+ * - Version 6 adds active index to categories for archive/hard-delete filtering.
+ * - Version 7 adds sort_order index to accounts and icon field.
+ *   Upgrade migration assigns sequential sort_order (by created_at) and
+ *   a type-based default icon to existing records.
  */
 
 import Dexie, { type Table } from 'dexie'
@@ -167,6 +171,33 @@ class WalletDB extends Dexie {
             cat['active'] = true
           }
         })
+      })
+
+    this.version(7)
+      .stores({
+        // Add sort_order index to accounts so queries can order by it
+        accounts: 'id, server_id, type, active, sort_order, _sync_status',
+        transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+        transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+        categories: 'id, server_id, type, active, parent_category_id, _sync_status',
+        pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+        exchangeRates: 'currency_code',
+        settings: 'key, _sync_status',
+        dashboards: 'id, server_id, is_default, sort_order, _sync_status',
+        dashboardWidgets: 'id, server_id, dashboard_id, _sync_status'
+      })
+      .upgrade(async (tx) => {
+        // Backfill: assign sequential sort_order ordered by created_at,
+        // and a default icon by account type — matching backend migration logic.
+        const accounts = await tx.table('accounts').toArray()
+        accounts.sort((a: any, b: any) => (a.created_at || '').localeCompare(b.created_at || ''))
+        for (let i = 0; i < accounts.length; i++) {
+          const icon = accounts[i].type === 'cash' ? '💵' : '💳'
+          await tx.table('accounts').update(accounts[i].id, {
+            sort_order: i,
+            icon
+          })
+        }
       })
   }
 }

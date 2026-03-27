@@ -42,11 +42,13 @@ interface Props {
   account: LocalAccount | Account
   balance?: number
   clickable?: boolean
+  showDragHandle?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   balance: 0,
-  clickable: true
+  clickable: true,
+  showDragHandle: false
 })
 
 const emit = defineEmits<{
@@ -66,14 +68,17 @@ const settingsStore = useSettingsStore()
 
 const accountTypeLabel = computed(() => formatAccountType(props.account.type))
 
-// Icon for account type
+// Use account.icon when set; fall back to type-based icon for backwards
+// compatibility (records created before the icon field existed will have
+// icon undefined/null).
 const accountIcon = computed(() => {
-  const icons: Record<string, string> = {
+  if (props.account.icon) return props.account.icon
+  const defaults: Record<string, string> = {
     debit: '💳',
     credit: '💳',
     cash: '💵'
   }
-  return icons[props.account.type] || '💰'
+  return defaults[props.account.type] || '💰'
 })
 
 // ---------------------------------------------------------------------------
@@ -117,10 +122,21 @@ const convertedBalance = computed<number | null>(() => {
 </script>
 
 <template>
-  <BaseCard :clickable="clickable" @click="emit('click')">
+  <BaseCard :clickable="clickable && !showDragHandle" @click="!showDragHandle && emit('click')">
     <div class="flex items-center justify-between">
-      <!-- Left: Icon and info -->
+      <!-- Left: drag handle (reorder mode) + icon + info -->
       <div class="flex items-center gap-3 flex-1 min-w-0">
+        <!-- Drag handle — visible only in reorder mode -->
+        <div
+          v-if="showDragHandle"
+          class="drag-handle flex-shrink-0 cursor-grab active:cursor-grabbing text-dark-text-secondary touch-none"
+          aria-hidden="true"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </div>
+
         <!-- Icon -->
         <div class="text-3xl flex-shrink-0">
           {{ accountIcon }}

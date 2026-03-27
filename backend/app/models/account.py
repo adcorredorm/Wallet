@@ -8,7 +8,7 @@ Balance is calculated dynamically from transactions and transfers.
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, String, Boolean, Enum, UniqueConstraint
+from sqlalchemy import Column, String, Boolean, Enum, Integer, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 
@@ -51,6 +51,8 @@ class Account(BaseModel):
     description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    icon = Column(String(50), nullable=True)
 
     # Relationships
     transactions = relationship(

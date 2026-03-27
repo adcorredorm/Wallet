@@ -49,7 +49,14 @@ export const useAccountsStore = defineStore('accounts', () => {
 
   // Computed
   const activeAccounts = computed(() =>
-    accounts.value.filter(account => account.active)
+    accounts.value
+      .filter(account => account.active)
+      .sort((a, b) => {
+        const diff = (a.sort_order ?? 0) - (b.sort_order ?? 0)
+        if (diff !== 0) return diff
+        // Stable secondary sort by created_at for sort_order ties
+        return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+      })
   )
 
   // Why filter active === false rather than !active?
@@ -57,7 +64,13 @@ export const useAccountsStore = defineStore('accounts', () => {
   // Strict equality guards against undefined on records fetched from older
   // IndexedDB schema versions that pre-date the active column.
   const archivedAccounts = computed(() =>
-    accounts.value.filter(account => account.active === false)
+    accounts.value
+      .filter(account => account.active === false)
+      .sort((a, b) => {
+        const diff = (a.sort_order ?? 0) - (b.sort_order ?? 0)
+        if (diff !== 0) return diff
+        return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+      })
   )
 
   const selectedAccount = computed(() =>
@@ -211,6 +224,13 @@ export const useAccountsStore = defineStore('accounts', () => {
     //   - balance: 0 until the first transaction is recorded.
     //   - _sync_status: 'pending' signals that this record has an unsent mutation.
     //   - _local_updated_at: used for Last-Write-Wins conflict resolution.
+    // Compute next sort_order: MAX of existing accounts + 1, or 0 if none.
+    const maxSortOrder = accounts.value.reduce(
+      (max, a) => Math.max(max, a.sort_order ?? 0),
+      -1
+    )
+    const nextSortOrder = data.sort_order ?? maxSortOrder + 1
+
     const localAccount: LocalAccount = {
       id: tempId,
       name: data.name,
@@ -219,6 +239,8 @@ export const useAccountsStore = defineStore('accounts', () => {
       description: data.description,
       tags: data.tags ?? [],
       active: true,
+      sort_order: nextSortOrder,
+      icon: data.icon,
       balance: 0,
       created_at: now,
       updated_at: now,
@@ -514,6 +536,60 @@ export const useAccountsStore = defineStore('accounts', () => {
   }
 
   /**
+   * Reorder active accounts by assigning sequential sort_order values.
+   *
+   * Called after a drag-and-drop drop event in AccountList.
+   * Each ID at index i receives sort_order = i. Only accounts whose
+   * sort_order actually changed are written to Dexie and queued.
+   *
+   * Why sequential renumbering instead of fractional indexing?
+   * With <20 accounts the overhead of renumbering all N entries is trivial.
+   * Sequential integers are simpler to reason about and debuggable.
+   */
+  async function reorderAccounts(orderedIds: string[]) {
+    const localUpdatedAt = new Date().toISOString()
+    for (let i = 0; i < orderedIds.length; i++) {
+      const id = orderedIds[i]
+      const existing = accounts.value.find(a => a.id === id)
+      if (!existing || existing.sort_order === i) continue
+
+      // Step 1 — Write to IndexedDB
+      await db.accounts.update(id, {
+        sort_order: i,
+        _sync_status: 'pending',
+        _local_updated_at: localUpdatedAt
+      })
+
+      // Step 2 — Update reactive ref
+      const idx = accounts.value.findIndex(a => a.id === id)
+      if (idx !== -1) {
+        accounts.value[idx] = {
+          ...accounts.value[idx],
+          sort_order: i,
+          _sync_status: 'pending',
+          _local_updated_at: localUpdatedAt
+        }
+      }
+
+      // Step 3 — Enqueue update mutation (one per changed account)
+      const pendingCreate = await mutationQueue.findPendingCreate('account', id)
+      if (pendingCreate && pendingCreate.id != null) {
+        await mutationQueue.updatePayload(pendingCreate.id, {
+          ...pendingCreate.payload,
+          sort_order: i
+        })
+      } else {
+        await mutationQueue.enqueue({
+          entity_type: 'account',
+          entity_id: id,
+          operation: 'update',
+          payload: { sort_order: i } as Record<string, unknown>
+        })
+      }
+    }
+  }
+
+  /**
    * deleteAccount — kept as an alias for archiveAccount to avoid breaking
    * any existing callers that have not yet been migrated to the new name.
    *
@@ -613,6 +689,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     archiveAccount,
     hardDeleteAccount,
     restoreAccount,
+    reorderAccounts,
     deleteAccount,
     adjustBalance,
     selectAccount,

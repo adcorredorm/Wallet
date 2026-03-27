@@ -17,6 +17,8 @@ export interface Account {
   description?: string
   tags: string[]
   active: boolean
+  sort_order: number
+  icon?: string
   balance?: number  // Calculated balance (included in list response)
   created_at: string
   updated_at: string
@@ -34,6 +36,8 @@ export interface CreateAccountDto {
   currency: string
   description?: string
   tags?: string[]
+  sort_order?: number
+  icon?: string
 }
 
 export interface UpdateAccountDto {
@@ -43,4 +47,6 @@ export interface UpdateAccountDto {
   description?: string
   tags?: string[]
   active?: boolean
+  sort_order?: number
+  icon?: string
 }

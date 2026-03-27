@@ -6,10 +6,11 @@
  * Mobile-optimized with validation
  */
 
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import EmojiPicker from '@/components/ui/EmojiPicker.vue'
 import { ACCOUNT_TYPES, CURRENCIES } from '@/utils/constants'
 import { required, minLength, maxLength, currencyCode } from '@/utils/validators'
 import { useSettingsStore } from '@/stores/settings'
@@ -35,7 +36,8 @@ const form = reactive({
   type: props.account?.type || '' as AccountType,
   currency: props.account?.currency || settingsStore.primaryCurrency,
   description: props.account?.description || '',
-  tags: props.account?.tags?.join(', ') || ''
+  tags: props.account?.tags?.join(', ') || '',
+  icon: props.account?.icon || ''
 })
 
 // Validation errors
@@ -46,6 +48,18 @@ const errors = reactive({
 })
 
 const isEditMode = computed(() => !!props.account)
+
+// When type is set/changed in create mode, seed a default icon if none chosen yet.
+watch(() => form.type, (newType) => {
+  if (!isEditMode.value && !form.icon) {
+    const defaults: Record<string, string> = {
+      debit: '💳',
+      credit: '💳',
+      cash: '💵'
+    }
+    form.icon = defaults[newType] || ''
+  }
+})
 
 function validateForm(): boolean {
   let isValid = true
@@ -89,7 +103,8 @@ function handleSubmit() {
     description: form.description.trim() || undefined,
     tags: form.tags
       ? form.tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-      : []
+      : [],
+    icon: form.icon || undefined
   }
 
   emit('submit', data)
@@ -141,6 +156,12 @@ function handleSubmit() {
       placeholder="personal, banco1, ahorro (separadas por comas)"
       helper-text="Separadas por comas"
     />
+
+    <!-- Icono -->
+    <div>
+      <label class="label">Icono (opcional)</label>
+      <EmojiPicker v-model="form.icon" />
+    </div>
 
     <!-- Actions -->
     <div class="flex gap-3 pt-4 flex-col md:flex-row">

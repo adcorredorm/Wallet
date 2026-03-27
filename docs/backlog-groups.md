@@ -43,6 +43,7 @@ _Tocan el sistema de autenticacion, tokens, multi-dispositivo. Testear con login
 | Ticket | Status | Prioridad | ID Notion |
 |--------|--------|-----------|-----------|
 | INVESTIGAR: Inicio de sesion en multiples dispositivos | TODO | Medium | (buscar en Kanban) |
+| UX: en modo invitado, reemplazar boton Logout por "Borrar todo" con confirmacion | Backlog | Medium | 33079901-d1b8-8152 |
 
 > Ticket de token no reconocido cerrado (resuelto con grace period del Grupo B).
 

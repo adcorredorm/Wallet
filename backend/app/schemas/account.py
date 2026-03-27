@@ -74,6 +74,8 @@ class AccountCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     tags: list[str] = Field(default_factory=list)
     offline_id: Optional[str] = Field(None, max_length=100)
+    sort_order: Optional[int] = Field(None, ge=0)
+    icon: Optional[str] = Field(None, max_length=50)
 
     @field_validator("currency")
     @classmethod
@@ -116,6 +118,8 @@ class AccountUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     tags: Optional[list[str]] = None
     active: Optional[bool] = None
+    sort_order: Optional[int] = Field(None, ge=0)
+    icon: Optional[str] = Field(None, max_length=50)
 
     @field_validator("currency")
     @classmethod
@@ -162,6 +166,8 @@ class AccountResponse(BaseModel):
     description: Optional[str]
     tags: list[str]
     active: bool
+    sort_order: int
+    icon: Optional[str]
     created_at: datetime
     updated_at: datetime
 
