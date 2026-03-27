@@ -16,6 +16,7 @@ Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar
 | I | Deuda tecnica Backend (parcial) | absorbido en CD-Bloque 1 + Bloque 2 |
 | J | Deuda tecnica Frontend (TypeScript) | todos cerrados |
 | CD-Bloque 2 | Reorder cuentas + icon + Alembic cleanup | 2 cerrados + icon bonus |
+| F | Auth & Sesion | 2 cerrados (1 investigacion + 1 feature) |
 
 ---
 
@@ -27,16 +28,6 @@ _Toca CategoryListView, archive/restore, jerarquia padre-hijo. Testear en /categ
 | UX: categorias archivadas — lista agrupada, cascade restore y bloqueo de padre archivado | Backlog | Medium | 32379901-d1b8-816d |
 
 ---
-
-## Grupo F — Auth & Sesion
-_Tocan el sistema de autenticacion, tokens, multi-dispositivo. Testear con login/logout, multiples dispositivos._
-
-| Ticket | Status | Prioridad | ID Notion |
-|--------|--------|-----------|-----------|
-| INVESTIGAR: Inicio de sesion en multiples dispositivos | TODO | Medium | (buscar en Kanban) |
-| UX: en modo invitado, reemplazar boton Logout por "Borrar todo" con confirmacion | Backlog | Medium | 33079901-d1b8-8152 |
-
-> Ticket de token no reconocido cerrado (resuelto con grace period del Grupo B).
 
 ---
 
@@ -92,12 +83,10 @@ _Requieren ADD y brainstorming antes de implementar. Sin fecha._
 ## Orden sugerido de ataque
 
 ```
-F (auth, verificar si resuelto) → E (categorias) → G (sync avanzado) → K (stats)
-→ L (MCP/dev tools) → M (roadmap)
+E (categorias) → G (sync avanzado) → K (stats) → L (MCP/dev tools) → M (roadmap)
 ```
 
 Notas:
-- F requiere verificacion antes de trabajar (puede estar resuelto post Grupo B)
 - E es feature mediano — una sesion
 - G es el grupo mas complejo — requiere diseno previo
 - L es trabajo de infraestructura dev, no afecta al usuario
