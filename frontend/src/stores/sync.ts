@@ -113,6 +113,14 @@ export const useSyncStore = defineStore('sync', () => {
    */
   const syncErrorSheetOpen = ref(false)
 
+  /**
+   * True when the user has explicitly disabled cloud sync via Settings.
+   * When syncDisabled is true, SyncManager skips processQueue() and the UI
+   * shows a fixed grey cloud. The mutation queue continues enqueuing locally.
+   * Persisted in AuthDB — hydrated at boot from main.ts.
+   */
+  const syncDisabled = ref(false)
+
   // ── Computed: collapsed status token ────────────────────────────────────
 
   /**
@@ -134,7 +142,8 @@ export const useSyncStore = defineStore('sync', () => {
    * irrelevant — the sync engine is not running at all in guest mode.
    * Showing "guest" makes it immediately clear why data is not syncing.
    */
-  const syncStatus = computed<'synced' | 'syncing' | 'pending' | 'error' | 'offline' | 'guest'>(() => {
+  const syncStatus = computed<'disabled' | 'synced' | 'syncing' | 'pending' | 'error' | 'offline' | 'guest'>(() => {
+    if (syncDisabled.value) return 'disabled'
     if (!isOnline.value) return 'offline'
     if (isGuest.value) return 'guest'
     if (isSyncing.value) return 'syncing'
@@ -200,6 +209,10 @@ export const useSyncStore = defineStore('sync', () => {
     syncErrorSheetOpen.value = value
   }
 
+  function setSyncDisabled(value: boolean): void {
+    syncDisabled.value = value
+  }
+
   return {
     // State
     isOnline,
@@ -211,6 +224,7 @@ export const useSyncStore = defineStore('sync', () => {
     isGuest,
     errors,
     syncErrorSheetOpen,
+    syncDisabled,
     // Computed
     syncStatus,
     // Actions
@@ -224,5 +238,6 @@ export const useSyncStore = defineStore('sync', () => {
     addError,
     clearErrors,
     setSyncErrorSheetOpen,
+    setSyncDisabled,
   }
 })

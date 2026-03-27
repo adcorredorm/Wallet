@@ -24,6 +24,7 @@ Personal finance tracker for managing accounts, transactions, transfers, and cat
 - Amounts are always positive — transaction `type` (income/expense) determines the sign
 - All primary keys are UUIDs
 - Exchange rates are seeded into Dexie on first launch (`BASE_RATES` in `src/stores/exchangeRates.ts`). The backend upserts fresh rates on every sync. **On every minor version release, ask the user if they want to update `BASE_RATES` with the current rates from the DB** so offline cold-start accuracy stays acceptable.
+- All store CRUD operations must use `useOfflineMutation` composable — never call `mutationQueue.enqueue()` directly for standard create/update/delete. New entity types register a handler in `frontend/src/offline/handlers/` (zero SyncManager changes).
 
 ## Testing
 

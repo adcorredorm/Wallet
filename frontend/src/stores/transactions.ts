@@ -26,11 +26,12 @@ import type {
   UpdateTransactionDto,
   TransactionFilters,
 } from '@/types'
-import { db, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId } from '@/offline'
 import type { LocalTransaction } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
+import { useOfflineMutation } from '@/composables/useOfflineMutation'
 
 // Sort helper: newest transaction first (matches the server's default order).
 // Primary: date DESC. Secondary: created_at DESC as tiebreaker so that
@@ -60,6 +61,89 @@ export const useTransactionsStore = defineStore('transactions', () => {
   const filters = ref<TransactionFilters>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // Offline mutation composable — transactions
+  // ---------------------------------------------------------------------------
+
+  const transactionMutation = useOfflineMutation<LocalTransaction, CreateTransactionDto, UpdateTransactionDto>({
+    entityType: 'transaction',
+    table: db.transactions,
+    items: transactions,
+    generateId: generateTempId,
+    toLocal: (dto, id, now) => {
+      const txAccount = accountsStore.accounts.find(a => a.id === dto.account_id)
+      const txRate = txAccount
+        ? exchangeRatesStore.getRate(txAccount.currency, settingsStore.primaryCurrency)
+        : null
+
+      return {
+        id,
+        type: dto.type,
+        amount: dto.amount,
+        date: dto.date,
+        account_id: dto.account_id,
+        category_id: dto.category_id,
+        title: dto.title,
+        description: dto.description,
+        tags: dto.tags ?? [],
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
+        base_rate: txRate,
+      }
+    },
+    mergeUpdate: (existing, dto, _now) => ({
+      ...existing,
+      ...dto,
+    } as LocalTransaction),
+    toCreatePayload: (local) => ({
+      type: local.type,
+      amount: local.amount,
+      date: local.date,
+      account_id: local.account_id,
+      category_id: local.category_id,
+      title: local.title,
+      description: local.description,
+      tags: local.tags,
+      base_rate: local.base_rate,
+      offline_id: local.id,
+    }),
+    toUpdatePayload: (dto) => dto as Record<string, unknown>,
+    afterCreate: (local) => {
+      const delta = local.type === 'income' ? Number(local.amount) : -Number(local.amount)
+      accountsStore.adjustBalance(local.account_id, delta)
+    },
+    beforeUpdate: (_id, dto, existing) => {
+      const effectiveAccountId = dto.account_id ?? existing.account_id
+      const updateAccount = effectiveAccountId
+        ? accountsStore.accounts.find(a => a.id === effectiveAccountId)
+        : undefined
+      const updateRate = updateAccount
+        ? exchangeRatesStore.getRate(updateAccount.currency, settingsStore.primaryCurrency)
+        : null
+      return { ...dto, base_rate: updateRate } as UpdateTransactionDto
+    },
+    afterUpdate: (_id, _dto, old, merged) => {
+      const oldImpact = old.type === 'income' ? Number(old.amount) : -Number(old.amount)
+      const newType = merged.type
+      const newAmount = merged.amount
+      const newAccountId = merged.account_id
+      const newImpact = newType === 'income' ? Number(newAmount) : -Number(newAmount)
+      if (newAccountId === old.account_id) {
+        accountsStore.adjustBalance(old.account_id, newImpact - oldImpact)
+      } else {
+        accountsStore.adjustBalance(old.account_id, -oldImpact)
+        accountsStore.adjustBalance(newAccountId, newImpact)
+      }
+    },
+    afterRemove: (_id, removed) => {
+      const delta = removed.type === 'income' ? -Number(removed.amount) : Number(removed.amount)
+      accountsStore.adjustBalance(removed.account_id, delta)
+    },
+    afterRemoveEvent: 'wallet:local-delete',
+  })
 
   // Computed
   const incomeTransactions = computed(() =>
@@ -189,69 +273,19 @@ export const useTransactionsStore = defineStore('transactions', () => {
   // ---------------------------------------------------------------------------
 
   async function createTransaction(data: CreateTransactionDto) {
-    const tempId = generateTempId()
-    const now = new Date().toISOString()
-
-    // Compute base_rate: how many primaryCurrency units equal 1 unit of this
-    // account's currency at the moment of creation. null when offline with no cache.
-    const txAccount = accountsStore.accounts.find(a => a.id === data.account_id)
-    const txRate = txAccount
-      ? exchangeRatesStore.getRate(txAccount.currency, settingsStore.primaryCurrency)
-      : null
-
-    // Build the full local transaction record.
-    // tags defaults to an empty array when not provided by the caller, which
-    // matches the Transaction interface requirement (tags: string[], not optional).
-    // account_id and category_id are kept exactly as provided — they may be
-    // real server UUIDs or temp-* IDs if the account/category was created
-    // offline. The SyncManager resolves temp IDs before the network call.
-    const localTransaction: LocalTransaction = {
-      id: tempId,
-      type: data.type,
-      amount: data.amount,
-      date: data.date,
-      account_id: data.account_id,
-      category_id: data.category_id,
-      title: data.title,
-      description: data.description,
-      tags: data.tags ?? [],
-      created_at: now,
-      updated_at: now,
-      _sync_status: 'pending',
-      _local_updated_at: now,
-      base_rate: txRate
-    }
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — IndexedDB write.
-      await db.transactions.add(localTransaction)
-
-      // Step 2 — Optimistic UI update.
-      // unshift keeps the most recent transaction at the top of the list,
-      // matching the display order used by the existing read actions.
-      transactions.value.unshift(localTransaction)
-
-      // Adjust the account's in-memory balance immediately so balance
-      // displays are accurate while offline (before server sync).
-      const accountsStore = useAccountsStore()
-      const balanceDelta = data.type === 'income' ? Number(data.amount) : -Number(data.amount)
-      accountsStore.adjustBalance(data.account_id, balanceDelta)
-
-      // Step 3 — Enqueue CREATE mutation.
-      // offline_id in the payload allows the server to deduplicate retries.
-      // account_id / category_id are preserved verbatim (may be temp IDs).
-      await mutationQueue.enqueue({
-        entity_type: 'transaction',
-        entity_id: tempId,
-        operation: 'create',
-        payload: { ...data, base_rate: txRate, offline_id: tempId }
-      })
-
-      return localTransaction
+      const local = await transactionMutation.create(data)
+      // Move to front for display order (composable pushes to end)
+      const idx = transactions.value.indexOf(local)
+      if (idx > 0) {
+        transactions.value.splice(idx, 1)
+        transactions.value.unshift(local)
+      }
+      return local
     } catch (err: any) {
-      error.value = err.message || 'Error al crear transacción'
+      error.value = err.message || 'Error al crear transaccion'
       throw err
     } finally {
       loading.value = false
@@ -259,78 +293,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
   }
 
   async function updateTransaction(id: string, data: UpdateTransactionDto) {
-    const localUpdatedAt = new Date().toISOString()
-
-    // Recompute base_rate using the effective account after this update.
-    const effectiveAccountId = data.account_id ?? (
-      transactions.value.find(t => t.id === id)?.account_id
-    )
-    const updateAccount = effectiveAccountId
-      ? accountsStore.accounts.find(a => a.id === effectiveAccountId)
-      : undefined
-    const updateRate = updateAccount
-      ? exchangeRatesStore.getRate(updateAccount.currency, settingsStore.primaryCurrency)
-      : null
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — Partial IndexedDB update.
-      await db.transactions.update(id, {
-        ...data,
-        base_rate: updateRate,
-        _sync_status: 'pending',
-        _local_updated_at: localUpdatedAt
-      } as Parameters<typeof db.transactions.update>[1])
-
-      // Step 2 — Reactive ref update + optimistic balance adjustment.
-      const idx = transactions.value.findIndex(t => t.id === id)
-      if (idx !== -1) {
-        const old = transactions.value[idx]
-        transactions.value[idx] = {
-          ...old,
-          ...data,
-          base_rate: updateRate,
-          _sync_status: 'pending',
-          _local_updated_at: localUpdatedAt
-        } as LocalTransaction
-
-        // Compute how this update changes the account balance.
-        // If account_id changed, reverse the old account's effect and apply
-        // the new amount to the new account. If it stayed the same, just
-        // apply the net difference.
-        const accountsStore = useAccountsStore()
-        const oldImpact = old.type === 'income' ? Number(old.amount) : -Number(old.amount)
-        const newType = data.type ?? old.type
-        const newAmount = data.amount ?? old.amount
-        const newAccountId = data.account_id ?? old.account_id
-        const newImpact = newType === 'income' ? Number(newAmount) : -Number(newAmount)
-        if (newAccountId === old.account_id) {
-          accountsStore.adjustBalance(old.account_id, newImpact - oldImpact)
-        } else {
-          accountsStore.adjustBalance(old.account_id, -oldImpact)
-          accountsStore.adjustBalance(newAccountId, newImpact)
-        }
-      }
-
-      // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE if
-      // the transaction hasn't been synced yet.
-      const pendingCreate = await mutationQueue.findPendingCreate('transaction', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.updatePayload(pendingCreate.id, {
-          ...pendingCreate.payload,
-          ...data
-        })
-      } else {
-        await mutationQueue.enqueue({
-          entity_type: 'transaction',
-          entity_id: id,
-          operation: 'update',
-          payload: { ...data, base_rate: updateRate } as Record<string, unknown>
-        })
-      }
+      await transactionMutation.update(id, data)
     } catch (err: any) {
-      error.value = err.message || 'Error al actualizar transacción'
+      error.value = err.message || 'Error al actualizar transaccion'
       throw err
     } finally {
       loading.value = false
@@ -341,45 +309,9 @@ export const useTransactionsStore = defineStore('transactions', () => {
     loading.value = true
     error.value = null
     try {
-      // Capture the transaction before removal so we can reverse its balance effect.
-      const tx = transactions.value.find(t => t.id === id)
-
-      // Cancellation optimisation: if the CREATE is still queued (never synced),
-      // cancel both the CREATE and the entity — nothing to send to the server.
-      const pendingCreate = await mutationQueue.findPendingCreate('transaction', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.remove(pendingCreate.id)
-        await db.transactions.delete(id)
-        transactions.value = transactions.value.filter(t => t.id !== id)
-        if (tx) {
-          const accountsStore = useAccountsStore()
-          const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount)
-          accountsStore.adjustBalance(tx.account_id, delta)
-        }
-        return
-      }
-
-      // Entity exists on the server — hard-delete from Dexie, remove from UI, enqueue DELETE.
-      // Hard-delete (not mark-pending) so usePaginatedList never shows the item again.
-      // The mutation queue handles server sync; markError in SyncManager is a no-op on
-      // a missing record, and the server DELETE is still sent regardless.
-      await db.transactions.delete(id)
-      transactions.value = transactions.value.filter(t => t.id !== id)
-      if (tx) {
-        const accountsStore = useAccountsStore()
-        const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount)
-        accountsStore.adjustBalance(tx.account_id, delta)
-      }
-
-      await mutationQueue.enqueue({
-        entity_type: 'transaction',
-        entity_id: id,
-        operation: 'delete',
-        payload: { id }
-      })
-      window.dispatchEvent(new Event('wallet:local-delete'))
+      await transactionMutation.remove(id)
     } catch (err: any) {
-      error.value = err.message || 'Error al eliminar transacción'
+      error.value = err.message || 'Error al eliminar transaccion'
       throw err
     } finally {
       loading.value = false

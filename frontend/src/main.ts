@@ -18,6 +18,7 @@ import './assets/css/main.css'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { getSyncEnabled } from '@/offline/auth-db'
 
 const app = createApp(App)
 
@@ -81,11 +82,19 @@ authStore.initializeFromStorage().then(() => {
     console.warn('[boot] Error count refresh failed:', err)
   })
 
+  // Hydrate syncDisabled from AuthDB before the first processQueue().
+  // getSyncEnabled() returns true by default (when no row exists).
+  getSyncEnabled().then((enabled) => {
+    syncStore.setSyncDisabled(!enabled)
+  }).catch((err) => {
+    console.warn('[boot] getSyncEnabled failed:', err)
+  })
+
   // Check backend reachability at boot.
   // onOnline() only fires on transitions — if the device is already online,
   // no transition fires. This call handles the cold-start case.
   checkAndSetOnline().then((reachable) => {
-    if (reachable) syncManager.processQueue()
+    if (reachable && !syncStore.syncDisabled) syncManager.processQueue()
   }).catch((err) => {
     console.warn('[boot] Backend connectivity check failed:', err)
   })
@@ -206,7 +215,7 @@ async function checkAndSetOnline(): Promise<boolean> {
 // On device regaining network — check backend and sync if reachable.
 onOnline(() => {
   checkAndSetOnline().then((reachable) => {
-    if (reachable) syncManager.processQueue()
+    if (reachable && !syncStore.syncDisabled) syncManager.processQueue()
   }).catch((err) => {
     console.warn('[online] Backend connectivity check failed:', err)
   })
@@ -221,7 +230,7 @@ onOffline(() => {
 // while a sync is already in progress are silent no-ops.
 window.addEventListener('wallet:mutation-queued', () => {
   // Guard on syncStore.isOnline (backend-reachable), not navigator.onLine.
-  if (syncStore.isOnline) {
+  if (syncStore.isOnline && !syncStore.syncDisabled) {
     syncManager.processQueue()
   }
 })
@@ -230,7 +239,7 @@ window.addEventListener('wallet:mutation-queued', () => {
 // Handles backend-came-back-without-network-event and backend-went-down cases.
 setInterval(() => {
   checkAndSetOnline().then((reachable) => {
-    if (reachable) syncManager.processQueue()
+    if (reachable && !syncStore.syncDisabled) syncManager.processQueue()
   }).catch((err) => {
     console.warn('[poll] Backend connectivity check failed:', err)
   })

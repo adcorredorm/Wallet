@@ -24,11 +24,12 @@ import type {
   UpdateTransferDto,
   TransferFilters
 } from '@/types'
-import { db, generateTempId, mutationQueue } from '@/offline'
+import { db, generateTempId } from '@/offline'
 import type { LocalTransfer } from '@/offline'
 import { useAccountsStore } from '@/stores/accounts'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
+import { useOfflineMutation } from '@/composables/useOfflineMutation'
 
 export const useTransfersStore = defineStore('transfers', () => {
   // Cross-store references — called at the top of the setup function so that
@@ -44,6 +45,100 @@ export const useTransfersStore = defineStore('transfers', () => {
   const filters = ref<TransferFilters>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // Offline mutation composable — transfers
+  // ---------------------------------------------------------------------------
+
+  const transferMutation = useOfflineMutation<LocalTransfer, CreateTransferDto, UpdateTransferDto>({
+    entityType: 'transfer',
+    table: db.transfers,
+    items: transfers,
+    generateId: generateTempId,
+    toLocal: (dto, id, now) => {
+      const srcAccount = accountsStore.accounts.find(a => a.id === dto.source_account_id)
+      const srcRate = srcAccount
+        ? exchangeRatesStore.getRate(srcAccount.currency, settingsStore.primaryCurrency)
+        : null
+
+      return {
+        id,
+        source_account_id: dto.source_account_id,
+        destination_account_id: dto.destination_account_id,
+        amount: dto.amount,
+        date: dto.date,
+        title: dto.title,
+        description: dto.description,
+        tags: dto.tags ?? [],
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
+        destination_amount: dto.destination_amount,
+        exchange_rate: dto.exchange_rate,
+        destination_currency: dto.destination_currency,
+        base_rate: srcRate,
+      }
+    },
+    mergeUpdate: (existing, dto, _now) => ({
+      ...existing,
+      ...dto,
+    } as LocalTransfer),
+    toCreatePayload: (local) => ({
+      source_account_id: local.source_account_id,
+      destination_account_id: local.destination_account_id,
+      amount: local.amount,
+      date: local.date,
+      title: local.title,
+      description: local.description,
+      tags: local.tags,
+      destination_amount: local.destination_amount,
+      exchange_rate: local.exchange_rate,
+      destination_currency: local.destination_currency,
+      base_rate: local.base_rate,
+      offline_id: local.id,
+    }),
+    toUpdatePayload: (dto) => dto as Record<string, unknown>,
+    afterCreate: (local) => {
+      accountsStore.adjustBalance(local.source_account_id, -Number(local.amount))
+      accountsStore.adjustBalance(
+        local.destination_account_id,
+        Number(local.destination_amount ?? local.amount)
+      )
+    },
+    beforeUpdate: (_id, dto, existing) => {
+      const effectiveSrcId = dto.source_account_id ?? existing.source_account_id
+      const updateSrcAccount = effectiveSrcId
+        ? accountsStore.accounts.find(a => a.id === effectiveSrcId)
+        : undefined
+      const updateSrcRate = updateSrcAccount
+        ? exchangeRatesStore.getRate(updateSrcAccount.currency, settingsStore.primaryCurrency)
+        : null
+      return { ...dto, base_rate: updateSrcRate } as UpdateTransferDto
+    },
+    afterUpdate: (_id, _dto, old, merged) => {
+      // Reverse old transfer's effect (4 adjustBalance calls)
+      accountsStore.adjustBalance(old.source_account_id, Number(old.amount))
+      accountsStore.adjustBalance(
+        old.destination_account_id,
+        -Number(old.destination_amount ?? old.amount)
+      )
+      // Apply new values
+      accountsStore.adjustBalance(merged.source_account_id, -Number(merged.amount))
+      accountsStore.adjustBalance(
+        merged.destination_account_id,
+        Number(merged.destination_amount ?? merged.amount)
+      )
+    },
+    afterRemove: (_id, removed) => {
+      accountsStore.adjustBalance(removed.source_account_id, Number(removed.amount))
+      accountsStore.adjustBalance(
+        removed.destination_account_id,
+        -Number(removed.destination_amount ?? removed.amount)
+      )
+    },
+    afterRemoveEvent: 'wallet:local-delete',
+  })
 
   // ---------------------------------------------------------------------------
   // Actions — Reads (offline-first, Dexie-only)
@@ -85,76 +180,17 @@ export const useTransfersStore = defineStore('transfers', () => {
   // ---------------------------------------------------------------------------
 
   async function createTransfer(data: CreateTransferDto) {
-    const tempId = generateTempId()
-    const now = new Date().toISOString()
-
-    // Capture base_rate from the source account's currency at transfer creation time.
-    // Only the source account's rate is captured; the destination account's net worth
-    // effect is tracked via destination_amount which is already in destination currency.
-    const srcAccount = accountsStore.accounts.find(a => a.id === data.source_account_id)
-    const srcRate = srcAccount
-      ? exchangeRatesStore.getRate(srcAccount.currency, settingsStore.primaryCurrency)
-      : null
-
-    // Build the full local transfer record.
-    // tags defaults to [] because the Transfer interface requires string[]
-    // (not optional), while CreateTransferDto.tags is optional.
-    // source_account_id and destination_account_id are kept verbatim — they may
-    // be temp-* IDs if either account was created offline in the same session.
-    const localTransfer: LocalTransfer = {
-      id: tempId,
-      source_account_id: data.source_account_id,
-      destination_account_id: data.destination_account_id,
-      amount: data.amount,
-      date: data.date,
-      title: data.title,
-      description: data.description,
-      tags: data.tags ?? [],
-      created_at: now,
-      updated_at: now,
-      _sync_status: 'pending',
-      _local_updated_at: now,
-      // Cross-currency fields: undefined for same-currency transfers, present for FX transfers.
-      // Storing them here ensures IndexedDB (source of truth) has the full record and
-      // recomputeBalancesFromTransactions() can use destination_amount on reload.
-      destination_amount: data.destination_amount,
-      exchange_rate: data.exchange_rate,
-      destination_currency: data.destination_currency,
-      base_rate: srcRate
-    }
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — IndexedDB write.
-      await db.transfers.add(localTransfer)
-
-      // Step 2 — Optimistic UI update. unshift places the newest transfer
-      // at the top of the list to match read action ordering.
-      transfers.value.unshift(localTransfer)
-
-      // Adjust both account balances immediately so the UI is accurate offline.
-      // Source always loses `amount` (the amount sent, in the source currency).
-      // Destination gains `destination_amount` when set (cross-currency FX transfer)
-      // or falls back to `amount` for same-currency transfers where destination_amount
-      // is undefined. The ?? operator handles both cases cleanly.
-      accountsStore.adjustBalance(data.source_account_id, -Number(data.amount))
-      accountsStore.adjustBalance(
-        data.destination_account_id,
-        Number(data.destination_amount ?? data.amount)
-      )
-
-      // Step 3 — Enqueue CREATE mutation.
-      // offline_id enables server-side idempotency on retries.
-      // source_account_id / destination_account_id may be temp IDs.
-      await mutationQueue.enqueue({
-        entity_type: 'transfer',
-        entity_id: tempId,
-        operation: 'create',
-        payload: { ...data, base_rate: srcRate, offline_id: tempId }
-      })
-
-      return localTransfer
+      const local = await transferMutation.create(data)
+      // Move to front for display order (composable pushes to end)
+      const idx = transfers.value.indexOf(local)
+      if (idx > 0) {
+        transfers.value.splice(idx, 1)
+        transfers.value.unshift(local)
+      }
+      return local
     } catch (err: any) {
       error.value = err.message || 'Error al crear transferencia'
       throw err
@@ -164,78 +200,10 @@ export const useTransfersStore = defineStore('transfers', () => {
   }
 
   async function updateTransfer(id: string, data: UpdateTransferDto) {
-    const localUpdatedAt = new Date().toISOString()
-
-    // Recompute base_rate using the effective source account after this update.
-    const effectiveSrcId = data.source_account_id ?? (
-      transfers.value.find(t => t.id === id)?.source_account_id
-    )
-    const updateSrcAccount = effectiveSrcId
-      ? accountsStore.accounts.find(a => a.id === effectiveSrcId)
-      : undefined
-    const updateSrcRate = updateSrcAccount
-      ? exchangeRatesStore.getRate(updateSrcAccount.currency, settingsStore.primaryCurrency)
-      : null
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — Partial IndexedDB update.
-      await db.transfers.update(id, {
-        ...data,
-        base_rate: updateSrcRate,
-        _sync_status: 'pending',
-        _local_updated_at: localUpdatedAt
-      })
-
-      // Step 2 — Reactive ref update + optimistic balance adjustment.
-      const idx = transfers.value.findIndex(t => t.id === id)
-      if (idx !== -1) {
-        const old = transfers.value[idx]
-        transfers.value[idx] = {
-          ...old,
-          ...data,
-          base_rate: updateSrcRate,
-          _sync_status: 'pending',
-          _local_updated_at: localUpdatedAt
-        }
-
-        // Reverse the old transfer's effect, then apply the updated values.
-        // This handles all cases: amount change, account change, or both.
-        // For the destination reversal we use destination_amount ?? amount so a
-        // cross-currency transfer is undone at the correct received amount, not
-        // the source amount.
-        accountsStore.adjustBalance(old.source_account_id, Number(old.amount))
-        accountsStore.adjustBalance(
-          old.destination_account_id,
-          -Number(old.destination_amount ?? old.amount)
-        )
-        const newSourceId = data.source_account_id ?? old.source_account_id
-        const newDestinationId = data.destination_account_id ?? old.destination_account_id
-        const newAmount = data.amount ?? old.amount
-        const newDestinationAmount = data.destination_amount ?? old.destination_amount
-        accountsStore.adjustBalance(newSourceId, -Number(newAmount))
-        accountsStore.adjustBalance(
-          newDestinationId,
-          Number(newDestinationAmount ?? newAmount)
-        )
-      }
-
-      // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE.
-      const pendingCreate = await mutationQueue.findPendingCreate('transfer', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.updatePayload(pendingCreate.id, {
-          ...pendingCreate.payload,
-          ...data
-        })
-      } else {
-        await mutationQueue.enqueue({
-          entity_type: 'transfer',
-          entity_id: id,
-          operation: 'update',
-          payload: { ...data, base_rate: updateSrcRate } as Record<string, unknown>
-        })
-      }
+      await transferMutation.update(id, data)
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar transferencia'
       throw err
@@ -248,48 +216,7 @@ export const useTransfersStore = defineStore('transfers', () => {
     loading.value = true
     error.value = null
     try {
-      // Capture the transfer before removal so we can reverse its balance effects.
-      const transfer = transfers.value.find(t => t.id === id)
-
-      // Cancellation optimisation: if the CREATE is still pending, remove
-      // everything locally without sending anything to the server.
-      const pendingCreate = await mutationQueue.findPendingCreate('transfer', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.remove(pendingCreate.id)
-        await db.transfers.delete(id)
-        transfers.value = transfers.value.filter(t => t.id !== id)
-        if (transfer) {
-          // Restore source by adding back `amount`; restore destination by
-          // removing `destination_amount ?? amount` — mirroring the create logic.
-          accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
-          accountsStore.adjustBalance(
-            transfer.destination_account_id,
-            -Number(transfer.destination_amount ?? transfer.amount)
-          )
-        }
-        return
-      }
-
-      // Entity exists on the server — hard-delete from Dexie, remove from UI, enqueue DELETE.
-      // Same rationale as deleteTransaction: hard-delete so usePaginatedList never shows it.
-      await db.transfers.delete(id)
-      transfers.value = transfers.value.filter(t => t.id !== id)
-      if (transfer) {
-        // Same reversal logic as the pending-CREATE path above.
-        accountsStore.adjustBalance(transfer.source_account_id, Number(transfer.amount))
-        accountsStore.adjustBalance(
-          transfer.destination_account_id,
-          -Number(transfer.destination_amount ?? transfer.amount)
-        )
-      }
-
-      await mutationQueue.enqueue({
-        entity_type: 'transfer',
-        entity_id: id,
-        operation: 'delete',
-        payload: { id }
-      })
-      window.dispatchEvent(new Event('wallet:local-delete'))
+      await transferMutation.remove(id)
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar transferencia'
       throw err

@@ -55,33 +55,7 @@ import { mutationQueue } from './mutation-queue'
 import { isTempId } from './temp-id'
 import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget, LocalExchangeRate } from './types'
 import { syncClient } from '@/api/sync-client'
-import { accountsApi } from '@/api/accounts'
-import { transactionsApi } from '@/api/transactions'
-import { transfersApi } from '@/api/transfers'
-import { categoriesApi } from '@/api/categories'
 import { dashboardsApi } from '@/api/dashboards'
-import type {
-  Account,
-  Transaction,
-  Transfer,
-  Category,
-  CreateAccountDto,
-  UpdateAccountDto,
-  CreateTransactionDto,
-  UpdateTransactionDto,
-  CreateTransferDto,
-  UpdateTransferDto,
-  CreateCategoryDto,
-  UpdateCategoryDto
-} from '@/types'
-import type {
-  Dashboard,
-  DashboardWidget,
-  CreateDashboardDto,
-  UpdateDashboardDto,
-  CreateWidgetDto,
-  UpdateWidgetDto,
-} from '@/types/dashboard'
 
 // ---------------------------------------------------------------------------
 // Phase 5 — Sync store integration
@@ -352,6 +326,11 @@ export class SyncManager {
       syncStore.setGuest(true)
       return
     }
+
+    if (syncStore.syncDisabled) {
+      console.log('[SyncManager] Sync disabled by user — skipping queue processing.')
+      return
+    }
     // ─────────────────────────────────────────────────────────────────────
 
     this.processing = true
@@ -373,7 +352,17 @@ export class SyncManager {
         console.log('[SyncManager] Queue is empty. Running sync (full or incremental).')
       }
 
-      for (const mutation of mutations) {
+      for (const mutationSnapshot of mutations) {
+        // Re-read the mutation from Dexie to pick up payload rewrites made by
+        // resolveTemporaryId() in a previous iteration. The `mutations` array
+        // was loaded at the start of the loop, so its payloads are stale after
+        // any temp-ID resolution. Without this re-read, dependent mutations
+        // (e.g. a transaction referencing a just-synced account) would still
+        // carry the old temp-* ID in their payload, causing a 400 on the server.
+        const mutation = mutationSnapshot.id != null
+          ? (await db.pendingMutations.get(mutationSnapshot.id)) ?? mutationSnapshot
+          : mutationSnapshot
+
         // Skip mutations that are blocked due to a dependency CREATE failure.
         // The 'blocked: ' prefix is set by mutationQueue.markBlocked() and is
         // checked here to avoid sending mutations that we know will fail.
@@ -666,27 +655,21 @@ export class SyncManager {
   private async sendToServer(mutation: PendingMutation): Promise<unknown> {
     const payload = await this.resolvePayloadIds(mutation.payload)
 
-    switch (mutation.entity_type) {
-      case 'account':
-        return this.sendAccount(mutation, payload)
+    const { handlerRegistry } = await import('./handler-registry')
+    const handler = handlerRegistry.getHandler(mutation.entity_type)
 
-      case 'transaction':
-        return this.sendTransaction(mutation, payload)
-
-      case 'transfer':
-        return this.sendTransfer(mutation, payload)
-
-      case 'category':
-        return this.sendCategory(mutation, payload)
-
-      case 'setting':
-        return this.sendSetting(mutation, payload)
-
-      case 'dashboard':
-        return this.sendDashboard(mutation, payload)
-
-      case 'dashboard_widget':
-        return this.sendDashboardWidget(mutation, payload)
+    switch (mutation.operation) {
+      case 'create':
+        return handler.create(mutation, payload)
+      case 'update':
+        return handler.update(mutation, payload)
+      case 'delete':
+        return handler.delete(mutation, payload)
+      case 'delete_permanent':
+        if (!handler.delete_permanent) {
+          throw new Error(`delete_permanent not supported for ${mutation.entity_type}`)
+        }
+        return handler.delete_permanent(mutation, payload)
     }
   }
 
@@ -771,248 +754,6 @@ export class SyncManager {
     if (widgetByOfflineId?.server_id) return widgetByOfflineId.server_id
 
     return undefined
-  }
-
-  // Per-entity send helpers ─────────────────────────────────────────────────
-
-  private async sendAccount(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<Account> {
-    switch (mutation.operation) {
-      case 'create': {
-        // Strip the temp-* entity_id — the server assigns its own ID.
-        // offline_id is already in the payload from the store's enqueue call.
-        // We cast to CreateAccountDto because we know the store built the
-        // payload from a CreateAccountDto; the cast is safe here.
-        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
-        void _id // explicitly unused — we intentionally drop this field
-        return accountsApi.create(createPayload as unknown as CreateAccountDto)
-      }
-
-      case 'update': {
-        // The server uses X-Client-Updated-At for Last-Write-Wins conflict
-        // resolution. We read _local_updated_at from the stored entity rather
-        // than the payload because the payload only contains the fields that
-        // changed, not the full entity.
-        const entity = await db.accounts.get(mutation.entity_id)
-        const localUpdatedAt = entity?._local_updated_at ?? new Date().toISOString()
-
-        // apiClient is imported indirectly through accountsApi.update().
-        // To attach a custom header per-request we would need to access the
-        // axios instance directly. Since the stores already record
-        // _local_updated_at in IndexedDB and the backend can use it, we
-        // include it as a payload field as a fallback strategy if the header
-        // approach is not yet wired on the server.
-        //
-        // For the header approach: accountsApi.update() calls apiClient.put()
-        // which does not expose per-request config. We would need to add a
-        // headers option to the api function signature — that is a Phase 5
-        // concern. For Phase 4, we proceed without the header; LWW via the
-        // payload field is the active mechanism.
-        void localUpdatedAt
-
-        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return accountsApi.update(mutation.entity_id, updatePayload as unknown as UpdateAccountDto)
-      }
-
-      case 'delete':
-        await accountsApi.delete(mutation.entity_id)
-        // DELETE returns void; return a minimal object so processQueue's
-        // markSynced call has something to work with. For deletes, markSynced
-        // is a no-op because the entity has already been removed from the
-        // reactive store — we still call it for consistency.
-        return { id: mutation.entity_id } as Account
-
-      case 'delete_permanent':
-        await accountsApi.hardDelete(mutation.entity_id)
-        return { id: mutation.entity_id } as Account
-    }
-  }
-
-  private async sendTransaction(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<Transaction> {
-    switch (mutation.operation) {
-      case 'create': {
-        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return transactionsApi.create(createPayload as unknown as CreateTransactionDto)
-      }
-
-      case 'update': {
-        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return transactionsApi.update(mutation.entity_id, updatePayload as unknown as UpdateTransactionDto)
-      }
-
-      case 'delete':
-        await transactionsApi.delete(mutation.entity_id)
-        return { id: mutation.entity_id } as Transaction
-
-      case 'delete_permanent':
-        throw new Error(`delete_permanent not supported for transaction`)
-    }
-  }
-
-  private async sendTransfer(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<Transfer> {
-    switch (mutation.operation) {
-      case 'create': {
-        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return transfersApi.create(createPayload as unknown as CreateTransferDto)
-      }
-
-      case 'update': {
-        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return transfersApi.update(mutation.entity_id, updatePayload as unknown as UpdateTransferDto)
-      }
-
-      case 'delete':
-        await transfersApi.delete(mutation.entity_id)
-        return { id: mutation.entity_id } as Transfer
-
-      case 'delete_permanent':
-        throw new Error(`delete_permanent not supported for transfer`)
-    }
-  }
-
-  private async sendCategory(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<Category> {
-    switch (mutation.operation) {
-      case 'create': {
-        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return categoriesApi.create(createPayload as unknown as CreateCategoryDto)
-      }
-
-      case 'update': {
-        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return categoriesApi.update(mutation.entity_id, updatePayload as unknown as UpdateCategoryDto)
-      }
-
-      case 'delete':
-        await categoriesApi.delete(mutation.entity_id)
-        return { id: mutation.entity_id } as Category
-
-      case 'delete_permanent':
-        await categoriesApi.hardDelete(mutation.entity_id)
-        return { id: mutation.entity_id } as Category
-    }
-  }
-
-  /**
-   * Send a setting mutation to the API.
-   *
-   * Why only 'update' and not 'create' or 'delete'?
-   * Settings have upsert semantics: PUT /api/v1/settings/{key} creates the
-   * setting if it doesn't exist and replaces it if it does. The settingsStore
-   * always enqueues 'update' mutations — there is no 'create' distinction
-   * and settings are never deleted via the mutation queue.
-   *
-   * Why return a minimal { id, updated_at } object?
-   * processQueue() calls markSynced(entityType, entityId, serverResult) after
-   * this method returns. For settings, entityId is the string key
-   * ('primary_currency'). The server echoes the updated setting but we only
-   * need the id field to satisfy the markSynced signature.
-   */
-  private async sendSetting(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<{ id: string; updated_at?: string }> {
-    // Import lazily to avoid a circular dependency at module-load time.
-    // settings API is not imported at the top of this file because it was
-    // added in Phase 3.3, after the SyncManager was written. Using a dynamic
-    // import here keeps the SyncManager's import list clean.
-    const { updateSetting } = await import('@/api/settings')
-
-    const key = payload['key'] as string ?? mutation.entity_id
-    const value = payload['value']
-
-    await updateSetting(key, value)
-
-    // Return a shape compatible with markSynced's serverResult parameter.
-    return { id: key, updated_at: new Date().toISOString() }
-  }
-
-  private async sendDashboard(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<Dashboard> {
-    switch (mutation.operation) {
-      case 'create': {
-        const { id: _id, ...createPayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return dashboardsApi.create(createPayload as unknown as CreateDashboardDto)
-      }
-
-      case 'update': {
-        const { id: _id, ...updatePayload } = payload as Record<string, unknown> & { id?: string }
-        void _id
-        return dashboardsApi.update(mutation.entity_id, updatePayload as unknown as UpdateDashboardDto)
-      }
-
-      case 'delete':
-        await dashboardsApi.delete(mutation.entity_id)
-        return { id: mutation.entity_id } as Dashboard
-
-      case 'delete_permanent':
-        throw new Error(`delete_permanent not supported for dashboard`)
-    }
-  }
-
-  /**
-   * Send a dashboard_widget mutation to the API.
-   *
-   * Why extract dashboard_id from payload?
-   * The dashboards API requires dashboardId as a URL path parameter (not body).
-   * The store encodes it in the payload so the SyncManager can route the request
-   * to the correct endpoint. We strip it from the body before sending.
-   */
-  private async sendDashboardWidget(
-    mutation: PendingMutation,
-    payload: Record<string, unknown>
-  ): Promise<DashboardWidget> {
-    const dashboardId = payload['dashboard_id'] as string | undefined
-    if (!dashboardId) throw new Error(`[SyncManager] sendDashboardWidget: missing dashboard_id in payload for entity ${mutation.entity_id}`)
-
-    switch (mutation.operation) {
-      case 'create': {
-        const { id: _id, dashboard_id: _did, ...createPayload } =
-          payload as Record<string, unknown> & { id?: string; dashboard_id?: string }
-        void _id
-        void _did
-        return dashboardsApi.createWidget(dashboardId, createPayload as unknown as CreateWidgetDto)
-      }
-
-      case 'update': {
-        const { id: _id, dashboard_id: _did, ...updatePayload } =
-          payload as Record<string, unknown> & { id?: string; dashboard_id?: string }
-        void _id
-        void _did
-        return dashboardsApi.updateWidget(
-          dashboardId,
-          mutation.entity_id,
-          updatePayload as unknown as UpdateWidgetDto
-        )
-      }
-
-      case 'delete':
-        await dashboardsApi.deleteWidget(dashboardId, mutation.entity_id)
-        return { id: mutation.entity_id } as DashboardWidget
-
-      case 'delete_permanent':
-        throw new Error(`delete_permanent not supported for dashboard_widget`)
-    }
   }
 
   // -------------------------------------------------------------------------

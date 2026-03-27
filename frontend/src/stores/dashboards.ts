@@ -21,6 +21,7 @@ import { dashboardsApi } from '@/api/dashboards'
 import { db, mutationQueue } from '@/offline'
 import { generateTempId } from '@/offline/temp-id'
 import { useSettingsStore } from '@/stores/settings'
+import { useOfflineMutation } from '@/composables/useOfflineMutation'
 import type {
   DashboardWithWidgets,
   CreateDashboardDto,
@@ -47,6 +48,64 @@ export const useDashboardsStore = defineStore('dashboards', () => {
   // Single-flight guard for ensureStarterDashboard to prevent concurrent calls
   // from creating duplicate starter dashboards
   let _ensureStarterInFlight = false
+
+  // ---------------------------------------------------------------------------
+  // Offline mutation composable — dashboards
+  // ---------------------------------------------------------------------------
+
+  const dashboardMutation = useOfflineMutation<LocalDashboard, CreateDashboardDto, UpdateDashboardDto>({
+    entityType: 'dashboard',
+    table: db.dashboards,
+    items: dashboards,
+    generateId: generateTempId,
+    toLocal: (dto, id, now) => {
+      const settingsStore = useSettingsStore()
+      return {
+        id,
+        offline_id: id,
+        name: dto.name,
+        description: dto.description ?? null,
+        display_currency: dto.display_currency || settingsStore.primaryCurrency,
+        layout_columns: dto.layout_columns ?? 2,
+        is_default: dto.is_default ?? false,
+        sort_order: dto.sort_order ?? 0,
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
+      }
+    },
+    mergeUpdate: (existing, dto, now) => ({
+      ...existing,
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.description !== undefined && { description: dto.description }),
+      ...(dto.display_currency !== undefined && { display_currency: dto.display_currency }),
+      ...(dto.layout_columns !== undefined && { layout_columns: dto.layout_columns }),
+      ...(dto.is_default !== undefined && { is_default: dto.is_default }),
+      ...(dto.sort_order !== undefined && { sort_order: dto.sort_order }),
+      updated_at: now,
+    }),
+    toCreatePayload: (local) => ({
+      name: local.name,
+      description: local.description,
+      display_currency: local.display_currency,
+      layout_columns: local.layout_columns,
+      is_default: local.is_default,
+      sort_order: local.sort_order,
+      offline_id: local.id,
+    }),
+    toUpdatePayload: (dto) => dto as Record<string, unknown>,
+    beforeRemove: async (id) => {
+      // Cascade-delete widgets from Dexie before the dashboard is removed
+      // (matching original deleteDashboard which did this synchronously)
+      const widgetIds = await db.dashboardWidgets.where('dashboard_id').equals(id).primaryKeys()
+      if (widgetIds.length > 0) await db.dashboardWidgets.bulkDelete(widgetIds)
+    },
+    onRemoveFromState: (id) => {
+      dashboards.value = dashboards.value.filter(d => d.id !== id)
+      if (currentDashboard.value?.id === id) currentDashboard.value = null
+    },
+  })
 
 
   // ---------------------------------------------------------------------------
@@ -222,43 +281,10 @@ export const useDashboardsStore = defineStore('dashboards', () => {
    * in background. On success, reconciles the server-assigned ID.
    */
   async function createDashboard(dto: CreateDashboardDto) {
-    const settingsStore = useSettingsStore()
-    const payload: CreateDashboardDto = {
-      ...dto,
-      display_currency: dto.display_currency || settingsStore.primaryCurrency
-    }
-
     loading.value = true
     error.value = null
     try {
-      const tempId = generateTempId()
-      const now = new Date().toISOString()
-      const optimistic: LocalDashboard = {
-        id: tempId,
-        offline_id: tempId,
-        name: payload.name,
-        description: payload.description ?? null,
-        display_currency: payload.display_currency,
-        layout_columns: payload.layout_columns ?? 2,
-        is_default: payload.is_default ?? false,
-        sort_order: payload.sort_order ?? 0,
-        created_at: now,
-        updated_at: now,
-        _sync_status: 'pending',
-        _local_updated_at: now,
-      }
-
-      await db.dashboards.put(optimistic)
-      dashboards.value.push(optimistic)
-
-      await mutationQueue.enqueue({
-        entity_type: 'dashboard',
-        entity_id: tempId,
-        operation: 'create',
-        payload: { ...payload, offline_id: tempId } as Record<string, unknown>,
-      })
-
-      return optimistic
+      return await dashboardMutation.create(dto)
     } catch (err: any) {
       error.value = err.message || 'Error al crear dashboard'
       throw err
@@ -275,45 +301,13 @@ export const useDashboardsStore = defineStore('dashboards', () => {
     loading.value = true
     error.value = null
     try {
-      const existing = await db.dashboards.get(id)
-      if (!existing) throw new Error('Dashboard not found in local DB')
-
-      const now = new Date().toISOString()
-      const patch = {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.display_currency !== undefined && { display_currency: dto.display_currency }),
-        ...(dto.layout_columns !== undefined && { layout_columns: dto.layout_columns }),
-        ...(dto.is_default !== undefined && { is_default: dto.is_default }),
-        ...(dto.sort_order !== undefined && { sort_order: dto.sort_order }),
-        updated_at: now,
-        _sync_status: 'pending' as const,
-        _local_updated_at: now,
+      await dashboardMutation.update(id, dto)
+      // Update currentDashboard if it's the one being edited
+      const updated = dashboards.value.find(d => d.id === id)
+      if (currentDashboard.value?.id === id && updated) {
+        currentDashboard.value = { ...updated, widgets: currentDashboard.value.widgets }
       }
-
-      await db.dashboards.update(id, patch)
-      const optimistic: LocalDashboard = { ...existing, ...patch }
-
-      const idx = dashboards.value.findIndex(d => d.id === id)
-      if (idx >= 0) dashboards.value[idx] = optimistic
-      if (currentDashboard.value?.id === id) {
-        currentDashboard.value = { ...optimistic, widgets: currentDashboard.value.widgets }
-      }
-
-      // Merge into pending CREATE if one exists (avoids POST + PATCH round-trip)
-      const pendingCreate = await mutationQueue.findPendingCreate('dashboard', id)
-      if (pendingCreate?.id != null) {
-        await mutationQueue.updatePayload(pendingCreate.id, { ...pendingCreate.payload, ...dto })
-      } else {
-        await mutationQueue.enqueue({
-          entity_type: 'dashboard',
-          entity_id: id,
-          operation: 'update',
-          payload: dto as Record<string, unknown>,
-        })
-      }
-
-      return optimistic
+      return updated
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar dashboard'
       throw err
@@ -330,26 +324,7 @@ export const useDashboardsStore = defineStore('dashboards', () => {
     loading.value = true
     error.value = null
     try {
-      await db.dashboards.delete(id)
-      const widgetIds = await db.dashboardWidgets.where('dashboard_id').equals(id).primaryKeys()
-      if (widgetIds.length > 0) await db.dashboardWidgets.bulkDelete(widgetIds)
-
-      dashboards.value = dashboards.value.filter(d => d.id !== id)
-      if (currentDashboard.value?.id === id) currentDashboard.value = null
-
-      // If there is a pending CREATE (dashboard never reached server), cancel it
-      const pendingCreate = await mutationQueue.findPendingCreate('dashboard', id)
-      if (pendingCreate?.id != null) {
-        await mutationQueue.remove(pendingCreate.id)
-        // No DELETE mutation needed — entity never existed on server
-      } else {
-        await mutationQueue.enqueue({
-          entity_type: 'dashboard',
-          entity_id: id,
-          operation: 'delete',
-          payload: {},
-        })
-      }
+      await dashboardMutation.remove(id)
     } catch (err: any) {
       error.value = err.message || 'Error al eliminar dashboard'
       throw err

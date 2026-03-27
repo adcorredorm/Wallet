@@ -17,6 +17,13 @@ export { db } from './db'
 export { generateTempId, isTempId } from './temp-id'
 export { mutationQueue, MutationQueue } from './mutation-queue'
 export { syncManager, SyncManager } from './sync-manager'
+export { handlerRegistry } from './handler-registry'
+export type { EntityHandler } from './handler-registry'
+
+// Import handlers barrel to trigger self-registration of all entity handlers.
+// This must happen before the first processQueue() call.
+import './handlers'
+
 export type {
   LocalAccount,
   LocalTransaction,

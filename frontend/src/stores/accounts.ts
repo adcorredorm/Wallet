@@ -34,6 +34,7 @@ import { ref, computed } from 'vue'
 import type { CreateAccountDto, UpdateAccountDto, AccountBalance } from '@/types'
 import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalAccount } from '@/offline'
+import { useOfflineMutation } from '@/composables/useOfflineMutation'
 
 export const useAccountsStore = defineStore('accounts', () => {
   // State
@@ -86,6 +87,61 @@ export const useAccountsStore = defineStore('accounts', () => {
       balance: balances.value.get(account.id)?.balance ?? account.balance ?? 0
     }))
   )
+
+  // ---------------------------------------------------------------------------
+  // Offline mutation composable — accounts
+  // ---------------------------------------------------------------------------
+
+  const accountMutation = useOfflineMutation<LocalAccount, CreateAccountDto, UpdateAccountDto>({
+    entityType: 'account',
+    table: db.accounts,
+    items: accounts,
+    generateId: generateTempId,
+    toLocal: (dto, id, now) => {
+      const maxSortOrder = accounts.value.reduce(
+        (max, a) => Math.max(max, a.sort_order ?? 0),
+        -1
+      )
+      return {
+        id,
+        name: dto.name,
+        type: dto.type,
+        currency: dto.currency,
+        description: dto.description,
+        tags: dto.tags ?? [],
+        active: true,
+        sort_order: dto.sort_order ?? maxSortOrder + 1,
+        icon: dto.icon,
+        balance: 0,
+        created_at: now,
+        updated_at: now,
+        _sync_status: 'pending' as const,
+        _local_updated_at: now,
+      }
+    },
+    mergeUpdate: (existing, dto, _now) => ({
+      ...existing,
+      ...dto,
+    }),
+    toCreatePayload: (local) => ({
+      name: local.name,
+      type: local.type,
+      currency: local.currency,
+      description: local.description,
+      tags: local.tags,
+      sort_order: local.sort_order,
+      icon: local.icon,
+      offline_id: local.id,
+    }),
+    toUpdatePayload: (dto) => dto as Record<string, unknown>,
+    afterCreate: (local, dto) => {
+      balances.value.set(local.id, {
+        account_id: local.id,
+        balance: 0,
+        currency: dto.currency,
+      })
+    },
+  })
 
   // ---------------------------------------------------------------------------
   // Helper: normalise balance field from API (may arrive as string)
@@ -208,78 +264,10 @@ export const useAccountsStore = defineStore('accounts', () => {
   // ---------------------------------------------------------------------------
 
   async function createAccount(data: CreateAccountDto) {
-    // Why generateTempId()?
-    // We need a stable local identifier for the new record before the server
-    // assigns a real UUID. The 'temp-' prefix lets the SyncManager distinguish
-    // locally-created records from server-synced ones at a glance (O(1) check
-    // via isTempId()) without an extra database lookup.
-    const tempId = generateTempId()
-    const now = new Date().toISOString()
-
-    // Build the full local representation of the account.
-    // Required fields that the server would normally fill in are given sensible
-    // defaults:
-    //   - tags: CreateAccountDto.tags is optional, default to empty array.
-    //   - active: new accounts are always active.
-    //   - balance: 0 until the first transaction is recorded.
-    //   - _sync_status: 'pending' signals that this record has an unsent mutation.
-    //   - _local_updated_at: used for Last-Write-Wins conflict resolution.
-    // Compute next sort_order: MAX of existing accounts + 1, or 0 if none.
-    const maxSortOrder = accounts.value.reduce(
-      (max, a) => Math.max(max, a.sort_order ?? 0),
-      -1
-    )
-    const nextSortOrder = data.sort_order ?? maxSortOrder + 1
-
-    const localAccount: LocalAccount = {
-      id: tempId,
-      name: data.name,
-      type: data.type,
-      currency: data.currency,
-      description: data.description,
-      tags: data.tags ?? [],
-      active: true,
-      sort_order: nextSortOrder,
-      icon: data.icon,
-      balance: 0,
-      created_at: now,
-      updated_at: now,
-      _sync_status: 'pending',
-      _local_updated_at: now
-    }
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — Write to IndexedDB. This is the source of truth for offline
-      // data. If the app closes before sync, the record is preserved here.
-      await db.accounts.add(localAccount)
-
-      // Step 2 — Update the reactive ref. Vue re-renders immediately without
-      // waiting for the network. The user sees their new account right away.
-      accounts.value.push(localAccount)
-
-      // Seed the balances map so accountsWithBalances computed doesn't show
-      // undefined for the new account.
-      balances.value.set(tempId, {
-        account_id: tempId,
-        balance: 0,
-        currency: data.currency
-      })
-
-      // Step 3 — Enqueue the CREATE mutation.
-      // offline_id in the payload is the same tempId so the backend can use it
-      // for idempotency: if the same mutation is replayed due to a network
-      // timeout, the server detects the duplicate offline_id and returns the
-      // already-created account rather than creating a second one.
-      await mutationQueue.enqueue({
-        entity_type: 'account',
-        entity_id: tempId,
-        operation: 'create',
-        payload: { ...data, offline_id: tempId }
-      })
-
-      return localAccount
+      return await accountMutation.create(data)
     } catch (err: any) {
       error.value = err.message || 'Error al crear cuenta'
       throw err
@@ -289,56 +277,10 @@ export const useAccountsStore = defineStore('accounts', () => {
   }
 
   async function updateAccount(id: string, data: UpdateAccountDto) {
-    const localUpdatedAt = new Date().toISOString()
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — Patch the IndexedDB record.
-      // We use Dexie's update() which does a partial update (like PATCH),
-      // only overwriting the fields present in the object literal. The
-      // _sync_status and _local_updated_at metadata fields are always included
-      // to mark this record as dirty for the sync engine.
-      await db.accounts.update(id, {
-        ...data,
-        _sync_status: 'pending',
-        _local_updated_at: localUpdatedAt
-      })
-
-      // Step 2 — Update the reactive ref.
-      // Object spread preserves all existing fields on the record so we don't
-      // accidentally lose fields that are not part of UpdateAccountDto
-      // (e.g. created_at, server_id).
-      const idx = accounts.value.findIndex(a => a.id === id)
-      if (idx !== -1) {
-        accounts.value[idx] = {
-          ...accounts.value[idx],
-          ...data,
-          _sync_status: 'pending',
-          _local_updated_at: localUpdatedAt
-        }
-      }
-
-      // Step 3 — Merge optimisation: if there is already a pending CREATE for
-      // this entity, collapse the UPDATE into the CREATE payload instead of
-      // adding a second queue entry. This reduces the sync to a single POST
-      // instead of POST + PATCH.
-      const pendingCreate = await mutationQueue.findPendingCreate('account', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.updatePayload(pendingCreate.id, {
-          ...pendingCreate.payload,
-          ...data
-        })
-      } else {
-        // No pending CREATE — the entity exists on the server. Enqueue a
-        // normal UPDATE mutation that the sync engine will send as a PATCH.
-        await mutationQueue.enqueue({
-          entity_type: 'account',
-          entity_id: id,
-          operation: 'update',
-          payload: data as Record<string, unknown>
-        })
-      }
+      await accountMutation.update(id, data)
     } catch (err: any) {
       error.value = err.message || 'Error al actualizar cuenta'
       throw err

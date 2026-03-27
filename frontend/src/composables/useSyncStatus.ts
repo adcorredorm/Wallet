@@ -50,6 +50,8 @@ export function useSyncStatus() {
    */
   const statusLabel = computed(() => {
     switch (syncStore.syncStatus) {
+      case 'disabled':
+        return 'Sincronizacion pausada'
       case 'offline':
         return 'Sin conexión'
       case 'guest':
@@ -87,6 +89,7 @@ export function useSyncStatus() {
    */
   const statusColor = computed(() => {
     switch (syncStore.syncStatus) {
+      case 'disabled':  return 'text-slate-400'
       case 'offline':  return 'text-amber-400'
       // guest uses amber: same "attention" tone as offline — data is safe
       // locally but is not syncing. Not an error, just a notable state.

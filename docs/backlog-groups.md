@@ -17,6 +17,7 @@ Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar
 | J | Deuda tecnica Frontend (TypeScript) | todos cerrados |
 | CD-Bloque 2 | Reorder cuentas + icon + Alembic cleanup | 2 cerrados + icon bonus |
 | F | Auth & Sesion | 2 cerrados (1 investigacion + 1 feature) |
+| G | Sync & Offline avanzado | 4 cerrados (1 toggle + 1 refactor + 1 ya resuelto + 1 investigacion) |
 
 ---
 
@@ -30,16 +31,6 @@ _Toca CategoryListView, archive/restore, jerarquia padre-hijo. Testear en /categ
 ---
 
 ---
-
-## Grupo G — Sync & Offline avanzado
-_Tocan sync-manager, mutation queue, stores, y settings de sync. Testear con escenarios offline, API directa, y settings._
-
-| Ticket | Status | Prioridad | ID Notion |
-|--------|--------|-----------|-----------|
-| Settings: opcion para deshabilitar sync con backend (modo offline total) | Backlog | Medium | 32679901-d1b8-81df |
-| Refactor: composable useOfflineMutation para escrituras offline-first | Backlog | Medium | 32279901-d1b8-81d8 |
-| Revisar sync y visualizacion de entidades creadas via API directa | Backlog | Medium | 32179901-d1b8-8196 |
-| Revisar limites de IndexedDB (offline-first) | Backlog | Low | 31b79901-d1b8-8172 |
 
 ---
 
@@ -83,11 +74,10 @@ _Requieren ADD y brainstorming antes de implementar. Sin fecha._
 ## Orden sugerido de ataque
 
 ```
-E (categorias) → G (sync avanzado) → K (stats) → L (MCP/dev tools) → M (roadmap)
+E (categorias) → K (stats) → L (MCP/dev tools) → M (roadmap)
 ```
 
 Notas:
 - E es feature mediano — una sesion
-- G es el grupo mas complejo — requiere diseno previo
 - L es trabajo de infraestructura dev, no afecta al usuario
 - M son features grandes que necesitan ADD

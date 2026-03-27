@@ -93,21 +93,33 @@ You are a frontend developer specializing in Vue.js with expertise in mobile-fir
 </style>
 ```
 
-## Offline-First Data Layer — MutationQueue
+## Offline-First Data Layer — useOfflineMutation
 
-All write operations MUST go through `MutationQueue` (`frontend/src/offline/mutation-queue.ts`).
+All store write operations (create/update/delete) MUST go through the `useOfflineMutation` composable (`frontend/src/composables/useOfflineMutation.ts`).
 
 ### Rules
-1. **Never write directly to the backend API.** Write to Dexie first (source of truth), then `mutationQueue.enqueue()` to queue sync.
-2. **Operations using mutationQueue**: `create`, `update`, `delete`, `delete_permanent` on any entity.
-3. **Read operations** use `fetchAllWithRevalidation` / `fetchByIdWithRevalidation` from `frontend/src/offline/repository.ts`.
-4. **If modifying MutationQueue itself**: stop and notify the user — changes require coordinated updates in SyncManager, all stores, and PendingMutation type.
+1. **Never write directly to the backend API.** All writes go: Dexie (source of truth) → reactive state → `mutationQueue.enqueue()`.
+2. **Always use `useOfflineMutation`** for standard CRUD in Pinia stores. The composable handles the 3-step offline-first pattern and includes lifecycle hooks for entity-specific side effects (balance adjustments, base_rate computation, soft-delete, etc.).
+3. **Lifecycle hooks** (`beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeRemove`, `afterRemove`, `onRemove`, `onRemoveFromState`, `afterRemoveEvent`) let each store inject custom behavior without modifying the composable.
+4. **Non-CRUD operations** (archive, restore, reorder, hard-delete) may use `mutationQueue.enqueue()` directly when they don't fit the composable's create/update/remove pattern.
+5. **Read operations** use `fetchAllWithRevalidation` / `fetchByIdWithRevalidation` from `frontend/src/offline/repository.ts`.
+6. **New entity types** require: (a) a handler file in `src/offline/handlers/` that self-registers with the `HandlerRegistry`, (b) a `useOfflineMutation` config in the store. Zero changes to SyncManager.
+7. **If modifying the composable, MutationQueue, or HandlerRegistry**: stop and notify the user — changes require coordinated review.
+
+### Known exceptions
+1. **Dashboard widgets** (`dashboard_widget`) do NOT use `useOfflineMutation`. Their reactive state lives inside `currentDashboard.value.widgets` (nested in another ref), which doesn't fit the composable's `items: Ref<TLocal[]>` contract. Widget CRUD uses the 3-step pattern inline in `dashboards.ts`.
+2. **Category deleteCategory** does NOT use the composable's `remove()`. The cancellation path (pending CREATE exists) does a hard-delete from Dexie, while the normal path does a soft-delete (`db.update({ _sync_status: 'pending' })`). The composable's `onRemove` hook applies uniformly to both paths, which would break this dual behavior. deleteCategory uses the 3-step pattern inline in `categories.ts`.
+
+Both exceptions still use the handler registry for SyncManager dispatch.
 
 ### Key files
 | File | Role |
 |------|------|
+| `src/composables/useOfflineMutation.ts` | Reusable offline-first write composable with lifecycle hooks |
+| `src/offline/handler-registry.ts` | Dynamic entity handler registry for SyncManager |
+| `src/offline/handlers/*.ts` | Per-entity handlers (self-register at import time) |
 | `src/offline/mutation-queue.ts` | Enqueue, remove, retry logic |
-| `src/offline/sync-manager.ts` | Processes queue, sends to backend |
+| `src/offline/sync-manager.ts` | Processes queue, dispatches to handler registry |
 | `src/offline/types.ts` | `PendingMutation` type |
 | `src/offline/repository.ts` | Read helpers |
 

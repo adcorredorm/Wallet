@@ -31,6 +31,7 @@ import { CategoryType } from '@/types/category'
 import type { CreateCategoryDto, UpdateCategoryDto } from '@/types'
 import { db, generateTempId, mutationQueue } from '@/offline'
 import type { LocalCategory } from '@/offline'
+import { useOfflineMutation } from '@/composables/useOfflineMutation'
 
 /**
  * CategoryGroup — a parent category with its direct children.
@@ -48,6 +49,47 @@ export const useCategoriesStore = defineStore('categories', () => {
   const categories = ref<LocalCategory[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // Offline mutation composable — categories
+  // ---------------------------------------------------------------------------
+
+  const categoryMutation = useOfflineMutation<LocalCategory, CreateCategoryDto, UpdateCategoryDto>({
+    entityType: 'category',
+    table: db.categories,
+    items: categories,
+    generateId: generateTempId,
+    toLocal: (dto, id, now) => ({
+      id,
+      name: dto.name,
+      type: dto.type,
+      icon: dto.icon,
+      color: dto.color,
+      parent_category_id: dto.parent_category_id,
+      active: true,
+      created_at: now,
+      updated_at: now,
+      _sync_status: 'pending' as const,
+      _local_updated_at: now,
+    }),
+    mergeUpdate: (existing, dto, _now) => ({
+      ...existing,
+      ...dto,
+    }),
+    toCreatePayload: (local) => ({
+      name: local.name,
+      type: local.type,
+      icon: local.icon,
+      color: local.color,
+      parent_category_id: local.parent_category_id,
+      offline_id: local.id,
+    }),
+    toUpdatePayload: (dto) => dto as Record<string, unknown>,
+    // Soft-delete: mark _sync_status: 'pending' instead of hard-deleting from Dexie
+    onRemove: async (id, _existing) => {
+      await db.categories.update(id, { _sync_status: 'pending' })
+    },
+  })
 
   // Computed
 
@@ -239,55 +281,12 @@ export const useCategoriesStore = defineStore('categories', () => {
   // ---------------------------------------------------------------------------
 
   async function createCategory(data: CreateCategoryDto) {
-    const tempId = generateTempId()
-    const now = new Date().toISOString()
-
-    // Build the full local category record.
-    // parent_category_id is optional in both Category and CreateCategoryDto —
-    // we carry it through as-is. If the parent was created offline its value
-    // will be a temp-* ID; the SyncManager resolves it before the network call.
-    //
-    // Why active: true here?
-    // Category.active is a required field (non-optional boolean). New categories
-    // are always active by definition — only an archive action sets active=false.
-    // Without this field the object would fail the LocalCategory type check
-    // because active is required on the Category base interface.
-    const localCategory: LocalCategory = {
-      id: tempId,
-      name: data.name,
-      type: data.type,
-      icon: data.icon,
-      color: data.color,
-      parent_category_id: data.parent_category_id,
-      active: true,
-      created_at: now,
-      updated_at: now,
-      _sync_status: 'pending',
-      _local_updated_at: now
-    }
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — IndexedDB write.
-      await db.categories.add(localCategory)
-
-      // Step 2 — Optimistic UI update.
-      // push keeps parent categories before their children, which is consistent
-      // with how the existing read actions populate the array.
-      categories.value.push(localCategory)
-
-      // Step 3 — Enqueue CREATE mutation.
-      await mutationQueue.enqueue({
-        entity_type: 'category',
-        entity_id: tempId,
-        operation: 'create',
-        payload: { ...data, offline_id: tempId }
-      })
-
-      return localCategory
+      return await categoryMutation.create(data)
     } catch (err: any) {
-      error.value = err.message || 'Error al crear categoría'
+      error.value = err.message || 'Error al crear categoria'
       throw err
     } finally {
       loading.value = false
@@ -295,46 +294,12 @@ export const useCategoriesStore = defineStore('categories', () => {
   }
 
   async function updateCategory(id: string, data: UpdateCategoryDto) {
-    const localUpdatedAt = new Date().toISOString()
-
     loading.value = true
     error.value = null
     try {
-      // Step 1 — Partial IndexedDB update.
-      await db.categories.update(id, {
-        ...data,
-        _sync_status: 'pending',
-        _local_updated_at: localUpdatedAt
-      })
-
-      // Step 2 — Reactive ref update.
-      const idx = categories.value.findIndex(c => c.id === id)
-      if (idx !== -1) {
-        categories.value[idx] = {
-          ...categories.value[idx],
-          ...data,
-          _sync_status: 'pending',
-          _local_updated_at: localUpdatedAt
-        }
-      }
-
-      // Step 3 — Merge optimisation: collapse UPDATE into pending CREATE.
-      const pendingCreate = await mutationQueue.findPendingCreate('category', id)
-      if (pendingCreate && pendingCreate.id != null) {
-        await mutationQueue.updatePayload(pendingCreate.id, {
-          ...pendingCreate.payload,
-          ...data
-        })
-      } else {
-        await mutationQueue.enqueue({
-          entity_type: 'category',
-          entity_id: id,
-          operation: 'update',
-          payload: data as Record<string, unknown>
-        })
-      }
+      await categoryMutation.update(id, data)
     } catch (err: any) {
-      error.value = err.message || 'Error al actualizar categoría'
+      error.value = err.message || 'Error al actualizar categoria'
       throw err
     } finally {
       loading.value = false

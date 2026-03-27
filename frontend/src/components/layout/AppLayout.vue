@@ -42,6 +42,9 @@ import NetworkBanner from '@/components/sync/NetworkBanner.vue'
 import GuestBanner from '@/components/sync/GuestBanner.vue'
 // Ticket 5: sync error bottom sheet — global overlay for discarding errored mutations
 import SyncErrorSheet from '@/components/sync/SyncErrorSheet.vue'
+import { useSyncStore } from '@/stores/sync'
+
+const syncStore = useSyncStore()
 </script>
 
 <template>
@@ -52,7 +55,7 @@ import SyncErrorSheet from '@/components/sync/SyncErrorSheet.vue'
       visible. Uses a max-height collapse animation so the push-down is smooth
       rather than an instant layout jump.
     -->
-    <NetworkBanner />
+    <NetworkBanner v-if="!syncStore.syncDisabled" />
 
     <!--
       GuestBanner (Multiusuario)
@@ -68,7 +71,7 @@ import SyncErrorSheet from '@/components/sync/SyncErrorSheet.vue'
       appears on every screen equally, following the same pattern as
       NetworkBanner. This avoids having to add it to every individual view.
     -->
-    <GuestBanner />
+    <GuestBanner v-if="!syncStore.syncDisabled" />
 
     <!--
       Side Drawer

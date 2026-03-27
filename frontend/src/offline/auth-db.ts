@@ -120,3 +120,23 @@ export async function deleteLastUser(): Promise<void> {
 export async function clearAuthDb(): Promise<void> {
   await authDb.auth.clear()
 }
+
+// ---------------------------------------------------------------------------
+// sync_enabled — user preference for cloud sync (device-local, never synced)
+//
+// Why store as string in AuthDB instead of boolean?
+// AuthDB's AuthEntry interface stores value: string. The typed helpers
+// abstract the string<>boolean conversion away from callers.
+//
+// Default: true (sync is enabled unless the user explicitly disables it).
+// ---------------------------------------------------------------------------
+
+export async function getSyncEnabled(): Promise<boolean> {
+  const entry = await authDb.auth.get('sync_enabled')
+  if (!entry) return true // default: sync enabled
+  return entry.value === 'true'
+}
+
+export async function setSyncEnabled(enabled: boolean): Promise<void> {
+  await authDb.auth.put({ key: 'sync_enabled', value: String(enabled) })
+}

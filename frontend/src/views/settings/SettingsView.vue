@@ -41,6 +41,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { useAuthStore } from '@/stores/auth'
 import { syncManager } from '@/offline/sync-manager'
+import { setSyncEnabled } from '@/offline/auth-db'
 import { SUPPORTED_CURRENCIES } from '@/utils/constants'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
@@ -59,6 +60,35 @@ const router = useRouter()
 // ---------------------------------------------------------------------------
 const showLogoutModal = ref(false)
 const showGuestResetModal = ref(false)
+const showDisableSyncModal = ref(false)
+
+function openDisableSyncModal(): void {
+  showDisableSyncModal.value = true
+}
+
+function closeDisableSyncModal(): void {
+  showDisableSyncModal.value = false
+}
+
+function handleSyncToggle(): void {
+  if (!syncStore.syncDisabled) {
+    openDisableSyncModal()
+  } else {
+    handleEnableSync()
+  }
+}
+
+async function handleDisableSync(): Promise<void> {
+  closeDisableSyncModal()
+  await setSyncEnabled(false)
+  syncStore.setSyncDisabled(true)
+}
+
+async function handleEnableSync(): Promise<void> {
+  await setSyncEnabled(true)
+  syncStore.setSyncDisabled(false)
+  syncManager.processQueue()
+}
 
 function openGuestResetModal(): void {
   showGuestResetModal.value = true
@@ -312,9 +342,32 @@ function currentCurrencyLabel(): string {
 
       <div class="border-t border-dark-bg-tertiary/50" />
 
+      <!-- Sync toggle row -->
+      <div
+        class="flex items-center justify-between gap-3 min-h-[44px]"
+      >
+        <span class="text-sm text-dark-text-primary">Sincronizacion con la nube</span>
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="!syncStore.syncDisabled"
+          :aria-label="`Sincronizacion con la nube: ${syncStore.syncDisabled ? 'desactivada' : 'activada'}`"
+          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          :class="syncStore.syncDisabled ? 'bg-slate-600' : 'bg-blue-600'"
+          @click="handleSyncToggle"
+        >
+          <span
+            class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
+            :class="syncStore.syncDisabled ? 'translate-x-1' : 'translate-x-6'"
+          />
+        </button>
+      </div>
+
+      <div class="border-t border-dark-bg-tertiary/50" />
+
       <button
         @click="handleForceSync"
-        :disabled="syncStore.isSyncing"
+        :disabled="syncStore.isSyncing || syncStore.syncDisabled"
         class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
                bg-blue-600 text-white text-sm font-medium
                hover:bg-blue-700
@@ -569,6 +622,59 @@ function currentCurrencyLabel(): string {
 
               <button
                 @click="closeGuestResetModal"
+                class="w-full px-4 py-3 rounded-xl text-sm text-dark-text-secondary
+                       hover:text-dark-text-primary transition-colors min-h-[44px]"
+                style="background-color: rgba(51, 65, 85, 0.3);"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Disable sync warning modal -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div
+          v-if="showDisableSyncModal"
+          class="fixed inset-0 z-50 flex items-end justify-center sm:items-center px-4 pb-6 sm:pb-0"
+          style="background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disable-sync-modal-title"
+          @click.self="closeDisableSyncModal"
+        >
+          <div
+            class="w-full max-w-sm rounded-2xl p-6 space-y-5"
+            style="background-color: #1e293b; border: 1px solid rgba(51, 65, 85, 0.8);"
+          >
+            <div class="space-y-2">
+              <h2
+                id="disable-sync-modal-title"
+                class="text-lg font-semibold text-dark-text-primary"
+              >
+                Desactivar sincronizacion?
+              </h2>
+              <p class="text-sm text-dark-text-secondary leading-relaxed">
+                Sin sincronizacion, tus datos no se respaldan en la nube. Los cambios seguiran guardandose localmente.
+              </p>
+            </div>
+
+            <div class="space-y-3">
+              <button
+                @click="handleDisableSync"
+                class="w-full flex items-center justify-center px-4 py-3 rounded-xl
+                       text-sm font-medium transition-colors min-h-[44px]
+                       hover:opacity-90"
+                style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5;"
+              >
+                Desactivar
+              </button>
+
+              <button
+                @click="closeDisableSyncModal"
                 class="w-full px-4 py-3 rounded-xl text-sm text-dark-text-secondary
                        hover:text-dark-text-primary transition-colors min-h-[44px]"
                 style="background-color: rgba(51, 65, 85, 0.3);"
