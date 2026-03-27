@@ -150,7 +150,7 @@ function goToTransaction(transaction: any) {
                   />
                 </div>
                 <div class="text-sm text-dark-text-secondary">
-                  <p>{{ getAccountName((item as LocalTransfer).source_account_id) }} → {{ getAccountName((item as LocalTransfer).destination_account_id) }}</p>
+                  <p class="truncate">{{ getAccountName((item as LocalTransfer).source_account_id) }} → {{ getAccountName((item as LocalTransfer).destination_account_id) }}</p>
                   <p>{{ formatDateRelative((item as LocalTransfer).date) }}</p>
                 </div>
               </div>
