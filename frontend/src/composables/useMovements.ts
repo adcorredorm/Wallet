@@ -190,7 +190,6 @@ export function useMovements(
   // -------------------------------------------------------------------------
 
   function onSyncComplete() {
-    currentPage.value = 1
     void fetchPage()
   }
 
