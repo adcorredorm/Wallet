@@ -104,6 +104,7 @@ onMounted(async () => {
     :open="showCreate"
     :primary-currency="settingsStore.primaryCurrency"
     @close="showCreate = false"
+    @created="editMode = true"
   />
 
   <!-- Settings modal — only mounted when a dashboard is active (dashboardId required) -->

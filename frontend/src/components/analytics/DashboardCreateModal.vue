@@ -34,6 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  created: []
 }>()
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,7 @@ async function onSave() {
     await store.fetchDashboard(created.id)
 
     resetForm()
+    emit('created')
     emit('close')
   } catch (e) {
     console.error('Error creating dashboard:', e)
