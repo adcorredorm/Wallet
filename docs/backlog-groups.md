@@ -15,16 +15,7 @@ Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar
 | H | UI bugs menores | absorbido en CD-Bloque 1 |
 | I | Deuda tecnica Backend (parcial) | absorbido en CD-Bloque 1 + Bloque 2 |
 | J | Deuda tecnica Frontend (TypeScript) | todos cerrados |
-
----
-
-## Grupo CD — Bloque 2: reorder cuentas + Alembic cleanup
-_Ambos tocan migraciones de DB. Requieren ADD antes de implementar._
-
-| Ticket | Status | Prioridad | ID Notion |
-|--------|--------|-----------|-----------|
-| Habilidad para reordenar las cuentas | TODO | Medium | 32979901-d1b8-8068 |
-| Limpiar sistema Alembic duplicado (backend/alembic/ vs backend/migrations/) | TODO | Low | 32879901-d1b8-8136 |
+| CD-Bloque 2 | Reorder cuentas + icon + Alembic cleanup | 2 cerrados + icon bonus |
 
 ---
 
@@ -101,13 +92,11 @@ _Requieren ADD y brainstorming antes de implementar. Sin fecha._
 ## Orden sugerido de ataque
 
 ```
-CD-Bloque2 (reorder + Alembic) → F (auth, verificar si resuelto)
-→ E (categorias) → G (sync avanzado) → K (stats)
+F (auth, verificar si resuelto) → E (categorias) → G (sync avanzado) → K (stats)
 → L (MCP/dev tools) → M (roadmap)
 ```
 
 Notas:
-- CD-Bloque2: 2 tickets medium que tocan migraciones — requiere ADD
 - F requiere verificacion antes de trabajar (puede estar resuelto post Grupo B)
 - E es feature mediano — una sesion
 - G es el grupo mas complejo — requiere diseno previo

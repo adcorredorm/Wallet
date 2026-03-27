@@ -58,6 +58,21 @@ const router = useRouter()
 // system is added in the future, this can be migrated then.
 // ---------------------------------------------------------------------------
 const showLogoutModal = ref(false)
+const showGuestResetModal = ref(false)
+
+function openGuestResetModal(): void {
+  showGuestResetModal.value = true
+}
+
+function closeGuestResetModal(): void {
+  showGuestResetModal.value = false
+}
+
+async function handleGuestReset(): Promise<void> {
+  closeGuestResetModal()
+  await authStore.logout(true)
+  await router.push('/')
+}
 
 function openLogoutModal(): void {
   showLogoutModal.value = true
@@ -313,69 +328,96 @@ function currentCurrencyLabel(): string {
     </div>
 
     <!--
-      Cerrar sesión section — only rendered when authenticated.
+      Cuenta / Datos locales section — always visible.
 
-      Why v-if="authStore.hasSession" instead of v-show?
-      The button should not exist at all in guest mode — it's semantically
-      meaningless to "log out" when you are not logged in. v-if is correct
-      here: we want to remove the element from the DOM entirely, not just
-      hide it, to avoid any possibility of focus or keyboard access.
+      Why v-if/v-else on inner <template> instead of v-if on the whole card?
+      The card itself is always visible regardless of auth state. In authenticated
+      mode it shows "Cerrar sesión"; in guest mode it shows "Borrar todo".
+      Using v-if on inner templates ensures the logout button does not exist in
+      the DOM in guest mode (preventing keyboard/focus access to a semantically
+      meaningless action), while the guest reset button does not exist when
+      authenticated.
     -->
     <div
-      v-if="authStore.hasSession"
       class="rounded-xl bg-dark-bg-secondary border border-dark-bg-tertiary/50 p-4 space-y-4"
     >
-      <div>
-        <h2 class="text-base font-semibold text-dark-text-primary">
-          Cuenta
-        </h2>
-        <p class="mt-0.5 text-sm text-dark-text-secondary leading-relaxed">
-          Gestiona tu sesión y los datos locales del dispositivo.
-        </p>
-      </div>
+      <!-- Authenticated mode -->
+      <template v-if="authStore.hasSession">
+        <div>
+          <h2 class="text-base font-semibold text-dark-text-primary">
+            Cuenta
+          </h2>
+          <p class="mt-0.5 text-sm text-dark-text-secondary leading-relaxed">
+            Gestiona tu sesión y los datos locales del dispositivo.
+          </p>
+        </div>
 
-      <div class="border-t border-dark-bg-tertiary/50" />
+        <div class="border-t border-dark-bg-tertiary/50" />
 
-      <!--
-        "Cerrar sesión" button.
-
-        Why a dedicated section (card) instead of a floating button?
-        Groups the destructive action with its context ("Cuenta") following
-        the same card pattern used throughout the app. A floating button
-        at the bottom of the page would be visually orphaned and might be
-        mistaken for a FAB.
-
-        Why text-red-400 but not bg-red?
-        Red background buttons are for immediately destructive actions with
-        no undo (e.g., "Eliminar cuenta permanentemente"). Logout is
-        recoverable — the user can log back in. Red text on a neutral
-        background communicates "caution" without "danger".
-      -->
-      <button
-        @click="openLogoutModal"
-        class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
-               border border-red-500/30 text-red-400 text-sm font-medium
-               hover:bg-red-500/10
-               transition-colors min-h-[44px]"
-        aria-label="Cerrar sesión de tu cuenta"
-      >
-        <!-- Logout icon (Heroicons outline) -->
-        <svg
-          class="w-4 h-4 flex-shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
+        <button
+          @click="openLogoutModal"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                 border border-red-500/30 text-red-400 text-sm font-medium
+                 hover:bg-red-500/10
+                 transition-colors min-h-[44px]"
+          aria-label="Cerrar sesión de tu cuenta"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-          />
-        </svg>
-        Cerrar sesión
-      </button>
+          <svg
+            class="w-4 h-4 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
+          </svg>
+          Cerrar sesión
+        </button>
+      </template>
+
+      <!-- Guest mode -->
+      <template v-else>
+        <div>
+          <h2 class="text-base font-semibold text-dark-text-primary">
+            Datos locales
+          </h2>
+          <p class="mt-0.5 text-sm text-dark-text-secondary leading-relaxed">
+            Gestiona los datos guardados en este dispositivo.
+          </p>
+        </div>
+
+        <div class="border-t border-dark-bg-tertiary/50" />
+
+        <button
+          @click="openGuestResetModal"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                 border border-red-500/30 text-red-400 text-sm font-medium
+                 hover:bg-red-500/10
+                 transition-colors min-h-[44px]"
+          aria-label="Borrar todos los datos locales"
+        >
+          <svg
+            class="w-4 h-4 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
+          </svg>
+          Borrar todo
+        </button>
+      </template>
     </div>
 
     <!--
@@ -387,11 +429,10 @@ function currentCurrencyLabel(): string {
       3. We need TWO options (keep data vs. delete all), which confirm()
          cannot provide.
 
-      Why not Teleport to <body>?
-      The modal uses a fixed overlay that covers the entire viewport.
-      Teleporting to <body> is cleaner for z-index stacking in complex
-      layouts, but this app uses a simple flex layout where a fixed overlay
-      works correctly without Teleport. We avoid the complexity for now.
+      Why Teleport to <body>?
+      Fixed overlays need to escape the component's stacking context. Teleporting
+      to <body> guarantees the z-index works correctly regardless of parent
+      transforms or overflow clipping.
 
       Why backdrop-blur?
       Adds depth to the dark overlay without making it fully opaque. The
@@ -474,6 +515,60 @@ function currentCurrencyLabel(): string {
               <!-- Cancel -->
               <button
                 @click="closeLogoutModal"
+                class="w-full px-4 py-3 rounded-xl text-sm text-dark-text-secondary
+                       hover:text-dark-text-primary transition-colors min-h-[44px]"
+                style="background-color: rgba(51, 65, 85, 0.3);"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Guest reset modal -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div
+          v-if="showGuestResetModal"
+          class="fixed inset-0 z-50 flex items-end justify-center sm:items-center px-4 pb-6 sm:pb-0"
+          style="background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="guest-reset-modal-title"
+          @click.self="closeGuestResetModal"
+        >
+          <div
+            class="w-full max-w-sm rounded-2xl p-6 space-y-5"
+            style="background-color: #1e293b; border: 1px solid rgba(51, 65, 85, 0.8);"
+          >
+            <div class="space-y-2">
+              <h2
+                id="guest-reset-modal-title"
+                class="text-lg font-semibold text-dark-text-primary"
+              >
+                Borrar datos locales
+              </h2>
+              <p class="text-sm text-dark-text-secondary leading-relaxed">
+                Se eliminarán todas las cuentas, movimientos y categorías guardadas en este dispositivo. Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            <div class="space-y-3">
+              <button
+                @click="handleGuestReset"
+                class="w-full flex flex-col items-start gap-0.5 px-4 py-3 rounded-xl
+                       text-left transition-colors min-h-[60px]
+                       hover:opacity-90"
+                style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5;"
+              >
+                <span class="font-medium text-sm">Borrar todo</span>
+                <span class="text-xs opacity-75">Elimina todos los datos locales de este dispositivo</span>
+              </button>
+
+              <button
+                @click="closeGuestResetModal"
                 class="w-full px-4 py-3 rounded-xl text-sm text-dark-text-secondary
                        hover:text-dark-text-primary transition-colors min-h-[44px]"
                 style="background-color: rgba(51, 65, 85, 0.3);"
