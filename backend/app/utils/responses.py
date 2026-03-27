@@ -7,23 +7,43 @@ from flask import jsonify
 import math
 
 
+_JSON_PRIMITIVES = (str, int, float, bool)  # None handled separately via `is None`
+
+
+def _make_json_safe(value: object) -> object:
+    """Recursively convert any non-JSON-primitive value to str().
+
+    JSON-safe primitives (str, int, float, bool, None) pass through unchanged.
+    Dicts are recursed into key-by-key. Lists have each element processed.
+    Everything else is converted with str().
+    """
+    if value is None or isinstance(value, _JSON_PRIMITIVES):
+        return value
+    if isinstance(value, dict):
+        return {k: _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_make_json_safe(item) for item in value]
+    return str(value)
+
+
 def serialize_pydantic_errors(errors: list) -> list:
     """Convert Pydantic v2 ValidationError.errors() to JSON-serializable format.
 
-    Pydantic v2 stores the original Exception in ctx['error'], which is not
-    JSON serializable. This converts those Exception instances to strings.
+    Pydantic v2 ctx dicts can contain arbitrary objects (Decimal, Enum, Exception,
+    custom types, nested dicts/lists). This recursively converts any non-JSON-safe
+    value to str() so the result can be passed to jsonify() without TypeError.
+
+    Args:
+        errors: The list returned by ``ValidationError.errors()``.
+
+    Returns:
+        A new list of error dicts safe for JSON serialization.
     """
     result = []
     for error in errors:
-        serialized = {}
-        for k, v in error.items():
-            if k == "ctx" and isinstance(v, dict):
-                serialized[k] = {
-                    ck: str(cv) if isinstance(cv, Exception) else cv
-                    for ck, cv in v.items()
-                }
-            else:
-                serialized[k] = v
+        serialized = dict(error)
+        if "ctx" in serialized and isinstance(serialized["ctx"], dict):
+            serialized["ctx"] = {k: _make_json_safe(v) for k, v in serialized["ctx"].items()}
         result.append(serialized)
     return result
 
