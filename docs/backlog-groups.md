@@ -38,7 +38,7 @@ _Tickets pequeños que no pertenecen a un grupo. Se pueden hacer en cualquier mo
 
 | Ticket | Status | Complejidad | ID Notion |
 |--------|--------|-------------|-----------|
-| Ocultar saldos en home (modo privacidad) | TODO | Baja | 33079901-d1b8-81ed-a2ee-d6a2bb371b14 |
+| Ocultar saldos en home (modo privacidad) | Done | Baja | 33079901-d1b8-81ed-a2ee-d6a2bb371b14 |
 
 ---
 
