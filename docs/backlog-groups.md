@@ -1,4 +1,4 @@
-# Backlog Groups — 2026-03-26
+# Backlog Groups — 2026-03-28
 
 Tickets activos agrupados por area testeable.
 Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar y testear juntos.
@@ -19,6 +19,7 @@ Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar
 | F | Auth & Sesion | 2 cerrados (1 investigacion + 1 feature) |
 | G | Sync & Offline avanzado | 4 cerrados (1 toggle + 1 refactor + 1 ya resuelto + 1 investigacion) |
 | E | Categorias: archivado avanzado | 1 cerrado (won't do — sobreingeniería) |
+| Quick wins | Ocultar saldos en home | 1 cerrado (v1.5.0-hide-balances) |
 
 ---
 
