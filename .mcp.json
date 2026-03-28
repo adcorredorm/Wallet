@@ -3,6 +3,23 @@
     "playwright": {
       "command": "/opt/homebrew/bin/npx",
       "args": ["--offline", "@playwright/mcp@0.0.68"]
+    },
+    "neon": {
+      "type": "http",
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "Authorization": "Bearer ${NEON_API_KEY}",
+        "X-Neon-Read-Only": "true"
+      }
+    },
+    "postgres-local": {
+      "command": "/opt/homebrew/bin/npx",
+      "args": [
+        "-y",
+        "@henkey/postgres-mcp-server",
+        "--connection-string",
+        "postgresql://wallet_user:wallet_password@localhost:5432/wallet_db"
+      ]
     }
   }
 }
