@@ -33,6 +33,7 @@ import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useSettingsStore } from '@/stores/settings'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
+import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
 
 // ── Props ──────────────────────────────────────────────────────────────────
 // Why keep loading as a prop?
@@ -90,10 +91,20 @@ const convertedNetWorth = computed<number | null>(() => {
 <template>
   <BaseCard padding="lg">
     <div class="text-center">
-      <!-- Label -->
-      <p class="text-sm text-dark-text-secondary mb-2">
-        Patrimonio Neto
-      </p>
+      <!-- Label with privacy toggle -->
+      <div class="flex items-center justify-center gap-1.5 mb-2">
+        <p class="text-sm text-dark-text-secondary">
+          Patrimonio Neto
+        </p>
+        <button
+          class="text-dark-text-tertiary hover:text-dark-text-secondary transition-colors"
+          aria-label="Ocultar saldos"
+          @click="settingsStore.toggleHideBalances()"
+        >
+          <EyeSlashIcon v-if="settingsStore.hideBalances" class="w-4 h-4" />
+          <EyeIcon v-else class="w-4 h-4" />
+        </button>
+      </div>
 
       <!-- Loading spinner -->
       <div v-if="loading" class="flex justify-center">
@@ -101,20 +112,26 @@ const convertedNetWorth = computed<number | null>(() => {
       </div>
 
       <template v-else>
-        <!-- Headline: converted total in primary currency -->
-        <!-- Only shown when exchange rates are available -->
+        <!-- Hidden state: masked placeholder -->
+        <p
+          v-if="settingsStore.hideBalances"
+          class="text-2xl font-bold text-dark-text-tertiary tracking-widest"
+        >
+          &bull; &bull; &bull; &bull; &bull;
+        </p>
+
+        <!-- Visible state: converted total in primary currency -->
         <CurrencyDisplay
-          v-if="convertedNetWorth !== null"
+          v-else-if="convertedNetWorth !== null"
           :amount="convertedNetWorth"
           :currency="settingsStore.primaryCurrency"
           size="xl"
           :colorize="true"
         />
 
-        <!-- No-rates notice: only when rates are absent AND there is more
-             than one currency (a single currency needs no rate). -->
+        <!-- No-rates notice -->
         <p
-          v-if="convertedNetWorth === null && balancesByCurrency.size > 1"
+          v-if="!settingsStore.hideBalances && convertedNetWorth === null && balancesByCurrency.size > 1"
           class="mt-2 text-xs text-dark-text-secondary italic"
         >
           Total sin convertir — tasas no disponibles
