@@ -20,17 +20,7 @@ Criterio: tickets que tocan las mismas pantallas/modulos y se pueden desarrollar
 | G | Sync & Offline avanzado | 4 cerrados (1 toggle + 1 refactor + 1 ya resuelto + 1 investigacion) |
 | E | Categorias: archivado avanzado | 1 cerrado (won't do — sobreingeniería) |
 | Quick wins | Ocultar saldos en home | 1 cerrado (v1.5.0-hide-balances) |
-
----
-
-## Grupo L — MCP & Integraciones dev (parcial)
-_Herramientas de desarrollo y MCP servers. No afectan el producto final._
-
-| Ticket | Status | Prioridad | Notas |
-|--------|--------|-----------|-------|
-| Anadir MCP de PostgreSQL para QA | Done | Medium | Neon MCP (prod, read-only) + @henkey/postgres-mcp-server (local) |
-| Exponer MCP en el backend | Pospuesto | Medium | Se implementará junto con Bot de TG (Grupo M-T3) |
-| Configurar MCP de GitHub para el repo | Won't do | Medium | `gh` CLI es suficiente, MCP no agrega valor |
+| L | MCP & Integraciones dev | 1 done + 1 pospuesto (M-T3) + 1 won't do |
 
 ---
 
