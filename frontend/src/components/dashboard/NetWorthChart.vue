@@ -216,52 +216,59 @@ const chartData = computed(() => {
 })
 
 // ── Chart options ──────────────────────────────────────────────────────────
-const chartOptions = computed<ChartOptions<'line'>>(() => ({
-  responsive: true,
-  // maintainAspectRatio: false is required when the container has a fixed height.
-  // Without it, Chart.js will override our 220px height to maintain its own ratio.
-  maintainAspectRatio: false,
-  interaction: {
-    mode: 'index' as const,
-    intersect: false, // tooltip shows on hover anywhere on the vertical axis
-  },
-  plugins: {
-    legend: { display: false }, // no legend — the chart title is self-explanatory
-    tooltip: {
-      backgroundColor: COLOR_TOOLTIP_BG,
-      titleColor: COLOR_TICK,
-      bodyColor: COLOR_TOOLTIP_TEXT,
-      borderColor: 'rgba(51, 65, 85, 0.8)',
-      borderWidth: 1,
-      padding: 12,
-      callbacks: {
-        label: (context: TooltipItem<'line'>) => {
-          return formatCurrency(context.parsed.y ?? 0, settingsStore.primaryCurrency)
+const chartOptions = computed<ChartOptions<'line'>>(() => {
+  const hidden = settingsStore.hideBalances
+
+  return {
+    responsive: true,
+    // maintainAspectRatio: false is required when the container has a fixed height.
+    // Without it, Chart.js will override our 220px height to maintain its own ratio.
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false, // tooltip shows on hover anywhere on the vertical axis
+    },
+    plugins: {
+      legend: { display: false }, // no legend — the chart title is self-explanatory
+      tooltip: hidden
+        ? { enabled: false }
+        : {
+            backgroundColor: COLOR_TOOLTIP_BG,
+            titleColor: COLOR_TICK,
+            bodyColor: COLOR_TOOLTIP_TEXT,
+            borderColor: 'rgba(51, 65, 85, 0.8)',
+            borderWidth: 1,
+            padding: 12,
+            callbacks: {
+              label: (context: TooltipItem<'line'>) => {
+                return formatCurrency(context.parsed.y ?? 0, settingsStore.primaryCurrency)
+              },
+            },
+          },
+    },
+    scales: {
+      x: {
+        grid: { color: COLOR_GRID },
+        ticks: {
+          color: COLOR_TICK,
+          maxTicksLimit: 6,
+          // Never rotate x-axis labels — horizontal labels are more readable on mobile
+          maxRotation: 0,
+        },
+      },
+      y: {
+        grid: { display: !hidden, color: COLOR_GRID },
+        ticks: {
+          display: !hidden,
+          color: COLOR_TICK,
+          callback: (value: number | string) =>
+            formatCurrency(Number(value), settingsStore.primaryCurrency, true),
         },
       },
     },
-  },
-  scales: {
-    x: {
-      grid: { color: COLOR_GRID },
-      ticks: {
-        color: COLOR_TICK,
-        maxTicksLimit: 6,
-        // Never rotate x-axis labels — horizontal labels are more readable on mobile
-        maxRotation: 0,
-      },
-    },
-    y: {
-      grid: { color: COLOR_GRID },
-      ticks: {
-        color: COLOR_TICK,
-        callback: (value: number | string) =>
-          formatCurrency(Number(value), settingsStore.primaryCurrency, true),
-      },
-    },
-  },
-  animation: { duration: 200 },
-}))
+    animation: { duration: 200 },
+  }
+})
 
 </script>
 
