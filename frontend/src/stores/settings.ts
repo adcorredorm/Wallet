@@ -37,7 +37,8 @@ import { fetchSettings } from '@/api/settings'
 // Default values — used when Dexie is empty AND the API is unreachable.
 // ---------------------------------------------------------------------------
 const DEFAULTS: Record<string, unknown> = {
-  primary_currency: 'COP'
+  primary_currency: 'COP',
+  hide_balances: false
 }
 
 // Regex that validates an ISO 4217 currency code (2–10 uppercase ASCII letters).
@@ -81,6 +82,10 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   const primaryCurrency = computed(
     () => (settings.value['primary_currency'] as string) ?? 'COP'
+  )
+
+  const hideBalances = computed(
+    () => (settings.value['hide_balances'] as boolean) ?? false
   )
 
   // ---------------------------------------------------------------------------
@@ -271,6 +276,21 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function toggleHideBalances(): Promise<void> {
+    const newValue = !hideBalances.value
+    const now = new Date().toISOString()
+
+    await db.settings.put({
+      key: 'hide_balances',
+      value: newValue,
+      updated_at: now,
+      _sync_status: 'synced',
+      _local_updated_at: now
+    })
+
+    settings.value = { ...settings.value, hide_balances: newValue }
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -304,9 +324,11 @@ export const useSettingsStore = defineStore('settings', () => {
     error,
     // Computed
     primaryCurrency,
+    hideBalances,
     // Actions
     loadSettings,
     setPrimaryCurrency,
+    toggleHideBalances,
     getSetting
   }
 })
