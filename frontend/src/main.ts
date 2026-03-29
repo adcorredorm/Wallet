@@ -270,3 +270,41 @@ window.addEventListener('wallet:sync-complete', () => {
     accountsStore.recomputeBalancesFromTransactions().catch(() => {})
   })
 })
+
+/**
+ * Recurring Transactions Engine
+ *
+ * Runs after app mount (with a short delay to let stores hydrate from IndexedDB)
+ * and every time the tab becomes visible again after being backgrounded.
+ *
+ * Why 1500ms delay at startup?
+ * The engine needs accountsStore and categoriesStore to be populated before it
+ * can check inactive accounts/categories. The delay gives the initial loadSettings
+ * and Dexie reads time to complete. On a fast device this is conservative; on a
+ * slow device it prevents processing rules against empty stores.
+ *
+ * Why visibilitychange?
+ * If the app was backgrounded for days/weeks, the engine runs catch-up on the
+ * first foreground — generating all missed auto transactions so balances are
+ * accurate immediately.
+ */
+import { useRecurringEngine } from '@/composables/useRecurringEngine'
+
+authStore.initializeFromStorage().then(() => {
+  // Run once after boot — deferred to let stores hydrate
+  setTimeout(() => {
+    const engine = useRecurringEngine()
+    engine.run().catch((err) => {
+      console.warn('[recurring] Engine startup run failed:', err)
+    })
+  }, 1500)
+}).catch(() => {/* auth already handled above */})
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const engine = useRecurringEngine()
+    engine.run().catch((err) => {
+      console.warn('[recurring] Engine visibilitychange run failed:', err)
+    })
+  }
+})
