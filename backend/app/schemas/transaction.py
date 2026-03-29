@@ -64,6 +64,7 @@ class TransactionCreate(BaseModel):
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     base_rate: Optional[Decimal] = None
+    recurring_rule_id: Optional[UUID] = None
 
     @field_validator("amount")
     @classmethod
@@ -251,6 +252,7 @@ class TransactionResponse(BaseModel):
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     base_rate: Optional[Decimal] = None
+    recurring_rule_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

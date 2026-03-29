@@ -12,6 +12,7 @@ from app.services.dashboard import DashboardService
 from app.services.exchange_rate import ExchangeRateService
 from app.services.user_setting import SettingsService
 from app.services.dashboard_crud import DashboardCrudService
+from app.services.recurring_rule import RecurringRuleService
 
 __all__ = [
     "AccountService",
@@ -22,4 +23,5 @@ __all__ = [
     "ExchangeRateService",
     "SettingsService",
     "DashboardCrudService",
+    "RecurringRuleService",
 ]

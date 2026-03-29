@@ -229,6 +229,7 @@ def create_transaction():
             original_currency=transaction_data.original_currency,
             exchange_rate=transaction_data.exchange_rate,
             base_rate=transaction_data.base_rate,
+            recurring_rule_id=transaction_data.recurring_rule_id,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")

@@ -107,6 +107,7 @@ class TransactionService:
         original_currency: str | None = None,
         exchange_rate: Decimal | None = None,
         base_rate: Decimal | None = None,
+        recurring_rule_id: UUID | None = None,
     ) -> Transaction:
         """
         Create a new transaction for a user.
@@ -139,6 +140,8 @@ class TransactionService:
             exchange_rate: Units of account currency per 1 unit of original_currency.
             base_rate: Units of primaryCurrency per 1 unit of the account's
                 native currency. Stored as-is; NULL when unavailable offline.
+            recurring_rule_id: Optional FK to the RecurringRule that generated
+                this transaction. None for manually created transactions.
 
         Returns:
             Created or pre-existing transaction instance.
@@ -179,6 +182,7 @@ class TransactionService:
             original_currency=original_currency,
             exchange_rate=exchange_rate,
             base_rate=base_rate,
+            recurring_rule_id=recurring_rule_id,
         )
 
     def update(

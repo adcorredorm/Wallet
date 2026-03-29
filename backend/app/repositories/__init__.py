@@ -12,6 +12,7 @@ from app.repositories.transfer import TransferRepository
 from app.repositories.exchange_rate import ExchangeRateRepository
 from app.repositories.user_setting import SettingsRepository
 from app.repositories.dashboard import DashboardRepository
+from app.repositories.recurring_rule import RecurringRuleRepository
 
 __all__ = [
     "AccountRepository",
@@ -21,4 +22,5 @@ __all__ = [
     "ExchangeRateRepository",
     "SettingsRepository",
     "DashboardRepository",
+    "RecurringRuleRepository",
 ]
