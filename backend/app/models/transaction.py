@@ -18,6 +18,7 @@ from app.models.base import BaseModel
 if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.category import Category
+    from app.models.recurring_rule import RecurringRule
 
 
 class TransactionType(enum.Enum):
@@ -75,6 +76,11 @@ class Transaction(BaseModel):
     original_currency = Column(String(10), nullable=True)
     exchange_rate = Column(Numeric(20, 10), nullable=True)
     base_rate = Column(Numeric(20, 10), nullable=True)
+    recurring_rule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("recurring_rules.id"),
+        nullable=True,
+    )
 
     # Relationships
     account = relationship(
@@ -85,6 +91,7 @@ class Transaction(BaseModel):
         "Category",
         back_populates="transactions",
     )
+    recurring_rule = relationship("RecurringRule")
 
     # Indexes and constraints
     __table_args__ = (

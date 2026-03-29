@@ -15,6 +15,7 @@ from app.models.exchange_rate import ExchangeRate
 from app.models.user_setting import UserSetting
 from app.models.dashboard import Dashboard
 from app.models.dashboard_widget import DashboardWidget, WidgetType
+from app.models.recurring_rule import RecurringRule, RecurringFrequency, RecurringRuleStatus
 
 __all__ = [
     "BaseModel",
@@ -32,4 +33,7 @@ __all__ = [
     "Dashboard",
     "DashboardWidget",
     "WidgetType",
+    "RecurringRule",
+    "RecurringFrequency",
+    "RecurringRuleStatus",
 ]
