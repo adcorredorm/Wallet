@@ -36,7 +36,7 @@ function todayISO(): string {
  * Advance a date string (YYYY-MM-DD) by one recurrence interval.
  * Handles day-of-month overflow: day_of_month=31 in April → April 30.
  */
-function advanceDate(currentDate: string, rule: LocalRecurringRule): string {
+export function advanceDate(currentDate: string, rule: Pick<LocalRecurringRule, 'frequency' | 'interval' | 'day_of_month'>): string {
   const date = new Date(currentDate + 'T00:00:00')
 
   switch (rule.frequency) {
@@ -152,7 +152,7 @@ export function useRecurringEngine() {
             category_id: rule.category_id,
             title: rule.title,
             description: rule.description ?? undefined,
-            tags: rule.tags,
+            tags: [...rule.tags],
             recurring_rule_id: rule.id,
           } as any)
           occurrencesCreated++
@@ -168,8 +168,15 @@ export function useRecurringEngine() {
 
     } else {
       // ── Verification mode: one pending for most recent overdue cycle ────────
-      // Walk forward to find the most recent cycle that is still <= today
+      // Walk forward to find the most recent cycle that is still <= today.
       let mostRecentDate = nextDate
+
+      // Check end_date completion before starting
+      if (rule.end_date && nextDate > rule.end_date) {
+        await rulesStore.updateRule(rule.id, { status: 'completed' })
+        return
+      }
+
       let candidate = advanceDate(mostRecentDate, rule)
       while (candidate <= today) {
         mostRecentDate = candidate
@@ -191,11 +198,17 @@ export function useRecurringEngine() {
         })
       }
 
-      // Advance next_occurrence_date to the cycle after the most recent
+      // Only advance next_occurrence_date — do NOT increment occurrences_created.
+      // occurrences_created is incremented when the user confirms the pending occurrence.
       const nextAfterMostRecent = advanceDate(mostRecentDate, rule)
       await rulesStore.updateRule(rule.id, {
         next_occurrence_date: nextAfterMostRecent,
       } as any)
+
+      // Check end_date completion (occurrences-based completion happens on confirm)
+      if (rule.end_date && nextAfterMostRecent > rule.end_date) {
+        await rulesStore.updateRule(rule.id, { status: 'completed' })
+      }
     }
   }
 

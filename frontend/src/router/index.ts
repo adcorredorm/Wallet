@@ -168,6 +168,41 @@ const router = createRouter({
       }
     },
     {
+      path: '/recurring',
+      name: 'recurring',
+      component: () => import('@/views/recurring/RecurringListView.vue'),
+      meta: {
+        title: 'Recurrentes',
+      }
+    },
+    {
+      path: '/recurring/new',
+      name: 'recurring-create',
+      component: () => import('@/views/recurring/RecurringCreateView.vue'),
+      meta: {
+        title: 'Nueva Regla Recurrente',
+        showBackButton: true
+      }
+    },
+    {
+      path: '/recurring/:id',
+      name: 'recurring-detail',
+      component: () => import('@/views/recurring/RecurringDetailView.vue'),
+      meta: {
+        title: 'Regla Recurrente',
+        showBackButton: true
+      }
+    },
+    {
+      path: '/recurring/:id/edit',
+      name: 'recurring-edit',
+      component: () => import('@/views/recurring/RecurringEditView.vue'),
+      meta: {
+        title: 'Editar Regla Recurrente',
+        showBackButton: true
+      }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/settings/SettingsView.vue'),

@@ -88,7 +88,6 @@ class RecurringRuleService:
         description: str | None = None,
         tags: list[str] | None = None,
         requires_confirmation: bool = False,
-        day_of_week: int | None = None,
         day_of_month: int | None = None,
         end_date=None,
         max_occurrences: int | None = None,
@@ -115,7 +114,6 @@ class RecurringRuleService:
             description: Optional description.
             tags: Optional tags.
             requires_confirmation: Auto (False) or verification (True) mode.
-            day_of_week: 0-6 for weekly rules.
             day_of_month: 1-31 for monthly/yearly rules.
             end_date: Optional end date.
             max_occurrences: Optional occurrence limit.
@@ -132,23 +130,22 @@ class RecurringRuleService:
             user_id=user_id,
             offline_id=offline_id,
             title=title,
-            type=TransactionType(type.upper()),
+            type=TransactionType(type),
             amount=amount,
             account_id=account_id,
             category_id=category_id,
-            frequency=RecurringFrequency(frequency.upper()),
+            frequency=RecurringFrequency(frequency),
             start_date=start_date,
             next_occurrence_date=next_occurrence_date,
             interval=interval,
             description=description,
             tags=tags or [],
             requires_confirmation=requires_confirmation,
-            day_of_week=day_of_week,
             day_of_month=day_of_month,
             end_date=end_date,
             max_occurrences=max_occurrences,
             occurrences_created=0,
-            status=RecurringRuleStatus(status.upper()),
+            status=RecurringRuleStatus(status),
         )
 
     def update(
@@ -179,11 +176,11 @@ class RecurringRuleService:
             if value is None:
                 continue
             if key == "type":
-                update_data[key] = TransactionType(value.upper())
+                update_data[key] = TransactionType(value)
             elif key == "frequency":
-                update_data[key] = RecurringFrequency(value.upper())
+                update_data[key] = RecurringFrequency(value)
             elif key == "status":
-                update_data[key] = RecurringRuleStatus(value.upper())
+                update_data[key] = RecurringRuleStatus(value)
             else:
                 update_data[key] = value
 

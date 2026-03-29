@@ -11,13 +11,13 @@ import { db } from '@/offline'
 import { generateTempId } from '@/offline'
 import type { LocalPendingOccurrence, PendingOccurrenceStatus } from '@/offline/types'
 
+// Shared state — all callers see the same data
+const occurrences = ref<LocalPendingOccurrence[]>([])
+const pendingCount = computed(
+  () => occurrences.value.filter(o => o.status === 'pending').length
+)
+
 export function usePendingOccurrences() {
-  const occurrences = ref<LocalPendingOccurrence[]>([])
-
-  const pendingCount = computed(
-    () => occurrences.value.filter(o => o.status === 'pending').length
-  )
-
   async function loadOccurrences() {
     occurrences.value = await db.pendingOccurrences.toArray()
   }

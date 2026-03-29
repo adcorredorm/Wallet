@@ -184,7 +184,6 @@ def create_recurring_rule():
             description=body.description,
             tags=body.tags,
             requires_confirmation=body.requires_confirmation,
-            day_of_week=body.day_of_week,
             day_of_month=body.day_of_month,
             end_date=body.end_date,
             max_occurrences=body.max_occurrences,

@@ -85,16 +85,16 @@ class TestRecurringRuleModel:
 
     def test_frequency_enum_values(self):
         from app.models.recurring_rule import RecurringFrequency
-        assert RecurringFrequency.DAILY.value == "DAILY"
-        assert RecurringFrequency.WEEKLY.value == "WEEKLY"
-        assert RecurringFrequency.MONTHLY.value == "MONTHLY"
-        assert RecurringFrequency.YEARLY.value == "YEARLY"
+        assert RecurringFrequency.DAILY.value == "daily"
+        assert RecurringFrequency.WEEKLY.value == "weekly"
+        assert RecurringFrequency.MONTHLY.value == "monthly"
+        assert RecurringFrequency.YEARLY.value == "yearly"
 
     def test_status_enum_values(self):
         from app.models.recurring_rule import RecurringRuleStatus
-        assert RecurringRuleStatus.ACTIVE.value == "ACTIVE"
-        assert RecurringRuleStatus.PAUSED.value == "PAUSED"
-        assert RecurringRuleStatus.COMPLETED.value == "COMPLETED"
+        assert RecurringRuleStatus.ACTIVE.value == "active"
+        assert RecurringRuleStatus.PAUSED.value == "paused"
+        assert RecurringRuleStatus.COMPLETED.value == "completed"
 
     def test_model_repr(self, app):
         from app.models.recurring_rule import RecurringRule, RecurringFrequency, RecurringRuleStatus
@@ -118,8 +118,8 @@ class TestRecurringRuleModel:
             )
             r = repr(rule)
             assert "Netflix" in r
-            assert "MONTHLY" in r
-            assert "ACTIVE" in r
+            assert "monthly" in r
+            assert "active" in r
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ class TestRecurringRuleService:
             rule = self._make_rule(service, account_id, category_id)
             assert rule.id is not None
             assert rule.title == "Netflix"
-            assert rule.status.value == "ACTIVE"
+            assert rule.status.value == "active"
             assert rule.occurrences_created == 0
 
     def test_create_idempotent_on_offline_id(self, app, account_id, category_id):
@@ -222,7 +222,7 @@ class TestRecurringRuleService:
                 user_id=_TEST_USER_ID, status="active"
             )
             for r in active_rules:
-                assert r.status.value == "ACTIVE"
+                assert r.status.value == "active"
 
     def test_get_filtered_with_future_updated_since_returns_empty(self, app, account_id, category_id):
         from app.services.recurring_rule import RecurringRuleService
@@ -248,7 +248,7 @@ class TestRecurringRuleService:
                 status="paused",
             )
             assert updated.title == "Spotify"
-            assert updated.status.value == "PAUSED"
+            assert updated.status.value == "paused"
 
     def test_delete_removes_rule(self, app, account_id, category_id):
         from app.services.recurring_rule import RecurringRuleService
@@ -284,7 +284,6 @@ def _make_mock_rule(rule_id=None):
     rule.requires_confirmation = False
     rule.frequency = RecurringFrequency.MONTHLY
     rule.interval = 1
-    rule.day_of_week = None
     rule.day_of_month = None
     rule.start_date = date(2026, 1, 1)
     rule.end_date = None

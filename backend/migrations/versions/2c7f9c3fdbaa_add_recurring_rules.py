@@ -54,7 +54,6 @@ def upgrade():
             requires_confirmation BOOLEAN NOT NULL,
             frequency recurringfrequency NOT NULL,
             interval INTEGER NOT NULL,
-            day_of_week INTEGER,
             day_of_month INTEGER,
             start_date DATE NOT NULL,
             end_date DATE,

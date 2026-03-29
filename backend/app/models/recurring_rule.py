@@ -65,7 +65,6 @@ class RecurringRule(BaseModel):
             True=verification (PendingOccurrence created for user to confirm).
         frequency: Base time unit for the schedule.
         interval: Every N periods (e.g. interval=2, frequency=weekly → biweekly).
-        day_of_week: 0=Monday … 6=Sunday. Used when frequency=weekly.
         day_of_month: 1–31. Used when frequency=monthly or yearly. Day overflow
             (e.g. 31 in April) handled by the frontend engine.
         start_date: First possible occurrence date.
@@ -88,9 +87,8 @@ class RecurringRule(BaseModel):
     description = Column(String(500), nullable=True)
     tags = Column(ARRAY(String(50)), default=list, nullable=False)
     requires_confirmation = Column(Boolean, nullable=False, default=False)
-    frequency = Column(Enum(RecurringFrequency), nullable=False)
+    frequency = Column(Enum(RecurringFrequency, values_callable=lambda x: [e.value for e in x]), nullable=False)
     interval = Column(Integer, nullable=False, default=1)
-    day_of_week = Column(Integer, nullable=True)
     day_of_month = Column(Integer, nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
@@ -98,7 +96,7 @@ class RecurringRule(BaseModel):
     occurrences_created = Column(Integer, nullable=False, default=0)
     next_occurrence_date = Column(Date, nullable=False)
     status = Column(
-        Enum(RecurringRuleStatus),
+        Enum(RecurringRuleStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RecurringRuleStatus.ACTIVE,
     )

@@ -24,8 +24,21 @@ import { TRANSACTION_TYPES, CURRENCIES } from '@/utils/constants'
 import { positiveNumber } from '@/utils/validators'
 import { formatDateForInput } from '@/utils/formatters'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
+import { useRecurringRulesStore } from '@/stores/recurringRules'
+import { advanceDate } from '@/composables/useRecurringEngine'
 import type { Transaction, CreateTransactionDto, UpdateTransactionDto, TransactionType, Account, Category } from '@/types'
 import { CategoryType } from '@/types'
+import type { RecurringFrequency } from '@/types/recurring-rule'
+
+interface Prefill {
+  type?: 'income' | 'expense'
+  amount?: number
+  date?: string
+  account_id?: string
+  category_id?: string
+  title?: string
+  description?: string
+}
 
 interface Props {
   transaction?: Transaction
@@ -33,6 +46,7 @@ interface Props {
   categories: Category[]
   loading?: boolean
   initialAccountId?: string
+  prefill?: Prefill
 }
 
 const props = defineProps<Props>()
@@ -43,19 +57,20 @@ const emit = defineEmits<{
 }>()
 
 const exchangeRatesStore = useExchangeRatesStore()
+const rulesStore = useRecurringRulesStore()
 
 // ---------------------------------------------------------------------------
 // Main form state
 // ---------------------------------------------------------------------------
 
 const form = reactive({
-  type: props.transaction?.type || 'expense' as TransactionType,
-  amount: props.transaction?.amount || 0,
-  date: props.transaction?.date || formatDateForInput(new Date()),
-  account_id: props.transaction?.account_id || props.initialAccountId || '',
-  category_id: props.transaction?.category_id || '',
-  title: props.transaction?.title || '',
-  description: props.transaction?.description || '',
+  type: (props.prefill?.type ?? props.transaction?.type ?? 'expense') as TransactionType,
+  amount: props.prefill?.amount || props.transaction?.amount || 0,
+  date: props.prefill?.date || props.transaction?.date || formatDateForInput(new Date()),
+  account_id: props.prefill?.account_id || props.transaction?.account_id || props.initialAccountId || '',
+  category_id: props.prefill?.category_id || props.transaction?.category_id || '',
+  title: props.prefill?.title || props.transaction?.title || '',
+  description: props.prefill?.description || props.transaction?.description || '',
   tags: props.transaction?.tags?.join(', ') || ''
 })
 
@@ -279,6 +294,27 @@ onMounted(() => {
 })
 
 // ---------------------------------------------------------------------------
+// Recurring section state
+// ---------------------------------------------------------------------------
+
+const isRecurring = ref(false)
+const recurringFrequency = ref<RecurringFrequency>('monthly')
+const recurringInterval = ref(1)
+const recurringDayOfMonth = ref<number | null>(null)
+// duration: 'indefinite' | 'until_date' | 'n_occurrences'
+const recurringDurationType = ref<'indefinite' | 'until_date' | 'n_occurrences'>('indefinite')
+const recurringEndDate = ref('')
+const recurringMaxOccurrences = ref<number | null>(null)
+const recurringRequiresConfirmation = ref(false)
+
+const FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Diario' },
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'monthly', label: 'Mensual' },
+  { value: 'yearly', label: 'Anual' },
+]
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -328,8 +364,61 @@ function validateForm(): boolean {
 // Submit
 // ---------------------------------------------------------------------------
 
-function handleSubmit() {
+async function handleSubmit() {
   if (!validateForm()) return
+
+  const parsedTags = form.tags
+    ? form.tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+    : []
+
+  // If recurring is enabled (create mode only), create the rule first then the transaction
+  if (isRecurring.value && !isEditMode.value) {
+    const rule = await rulesStore.createRule({
+      title: form.title.trim() || `${form.type === 'income' ? 'Ingreso' : 'Gasto'} recurrente`,
+      type: form.type,
+      amount: form.amount,
+      account_id: form.account_id,
+      category_id: form.category_id,
+      description: form.description.trim() || undefined,
+      tags: parsedTags,
+      requires_confirmation: recurringRequiresConfirmation.value,
+      frequency: recurringFrequency.value,
+      interval: recurringInterval.value,
+      day_of_month: recurringFrequency.value === 'monthly'
+        ? (recurringDayOfMonth.value && !Number.isNaN(recurringDayOfMonth.value) ? recurringDayOfMonth.value : parseInt(form.date.split('-')[2]))
+        : undefined,
+      start_date: form.date,
+      end_date: recurringDurationType.value === 'until_date' ? recurringEndDate.value : undefined,
+      max_occurrences: recurringDurationType.value === 'n_occurrences' ? (recurringMaxOccurrences.value ?? undefined) : undefined,
+      // next_occurrence_date is the cycle AFTER this first transaction
+      next_occurrence_date: advanceDate(form.date, {
+        frequency: recurringFrequency.value,
+        interval: recurringInterval.value,
+        day_of_month: recurringFrequency.value === 'monthly'
+          ? (recurringDayOfMonth.value && !Number.isNaN(recurringDayOfMonth.value) ? recurringDayOfMonth.value : parseInt(form.date.split('-')[2]))
+          : null,
+      }),
+      status: 'active',
+    })
+
+    const data: CreateTransactionDto = {
+      type: form.type,
+      amount: form.amount,
+      date: form.date,
+      account_id: form.account_id,
+      category_id: form.category_id,
+      title: form.title.trim() || undefined,
+      description: form.description.trim() || undefined,
+      tags: parsedTags,
+      original_amount: fxActive.value ? (originalAmount.value ?? null) : null,
+      original_currency: fxActive.value ? (foreignCurrency.value || null) : null,
+      exchange_rate: fxActive.value ? (exchangeRate.value ?? null) : null,
+      recurring_rule_id: rule.id,
+    }
+
+    emit('submit', data)
+    return
+  }
 
   const data: CreateTransactionDto | UpdateTransactionDto = {
     type: form.type,
@@ -339,9 +428,7 @@ function handleSubmit() {
     category_id: form.category_id,
     title: form.title.trim() || undefined,
     description: form.description.trim() || undefined,
-    tags: form.tags
-      ? form.tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-      : [],
+    tags: parsedTags,
     // FX fields — null when no foreign currency is involved
     original_amount: fxActive.value ? (originalAmount.value ?? null) : null,
     original_currency: fxActive.value ? (foreignCurrency.value || null) : null,
@@ -412,6 +499,148 @@ function handleSubmit() {
       :max="formatDateForInput(new Date())"
       required
     />
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Sección Recurrente (solo en creación) -->
+    <!-- ------------------------------------------------------------------ -->
+    <div v-if="!isEditMode" class="rounded-lg border border-dark-border bg-dark-bg-secondary overflow-hidden">
+      <!-- Checkbox toggle -->
+      <label
+        class="flex items-center gap-3 px-4 py-3 cursor-pointer min-h-touch hover:bg-dark-bg-tertiary transition-colors select-none"
+      >
+        <input
+          v-model="isRecurring"
+          type="checkbox"
+          class="w-5 h-5 rounded accent-accent cursor-pointer"
+        />
+        <div>
+          <span class="text-sm font-medium text-dark-text-primary">Recurrente</span>
+          <p class="text-xs text-dark-text-secondary">Crear una regla que repita esta transacción automáticamente</p>
+        </div>
+      </label>
+
+      <!-- Expandable recurring options -->
+      <Transition name="rec-expand">
+        <div
+          v-if="isRecurring"
+          class="px-4 pb-4 space-y-4 border-t border-dark-border pt-4"
+        >
+          <!-- Frecuencia -->
+          <BaseSelect
+            v-model="recurringFrequency"
+            label="Frecuencia"
+            :options="FREQUENCY_OPTIONS"
+          />
+
+          <!-- Intervalo -->
+          <div>
+            <label class="block text-sm font-medium text-dark-text-secondary mb-1">
+              Cada cuántos periodos
+            </label>
+            <input
+              v-model.number="recurringInterval"
+              type="number"
+              min="1"
+              max="365"
+              class="w-full bg-dark-bg-tertiary border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent"
+              style="min-height: 44px;"
+            />
+            <p class="mt-1 text-xs text-dark-text-secondary">
+              Ej: 1 = cada {{ FREQUENCY_OPTIONS.find(f => f.value === recurringFrequency)?.label?.toLowerCase() ?? 'período' }}
+            </p>
+          </div>
+
+          <!-- Día del mes (mensual) -->
+          <div v-if="recurringFrequency === 'monthly'">
+            <label class="block text-sm font-medium text-dark-text-secondary mb-1">
+              Día del mes (opcional)
+            </label>
+            <input
+              v-model.number="recurringDayOfMonth"
+              type="number"
+              min="1"
+              max="31"
+              placeholder="Día de la fecha seleccionada"
+              class="w-full bg-dark-bg-tertiary border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent placeholder:text-dark-text-tertiary"
+              style="min-height: 44px;"
+            />
+          </div>
+
+          <!-- Duración -->
+          <div>
+            <span class="block text-sm font-medium text-dark-text-secondary mb-2">Duración</span>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  v-model="recurringDurationType"
+                  type="radio"
+                  value="indefinite"
+                  class="accent-accent"
+                />
+                <span class="text-sm text-dark-text-primary">Indefinida</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  v-model="recurringDurationType"
+                  type="radio"
+                  value="until_date"
+                  class="accent-accent"
+                />
+                <span class="text-sm text-dark-text-primary">Hasta una fecha</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  v-model="recurringDurationType"
+                  type="radio"
+                  value="n_occurrences"
+                  class="accent-accent"
+                />
+                <span class="text-sm text-dark-text-primary">Número de repeticiones</span>
+              </label>
+            </div>
+
+            <!-- End date input -->
+            <div v-if="recurringDurationType === 'until_date'" class="mt-3">
+              <DatePicker
+                v-model="recurringEndDate"
+                label="Fecha de fin"
+              />
+            </div>
+
+            <!-- Max occurrences input -->
+            <div v-if="recurringDurationType === 'n_occurrences'" class="mt-3">
+              <label class="block text-sm font-medium text-dark-text-secondary mb-1">
+                Número de repeticiones
+              </label>
+              <input
+                v-model.number="recurringMaxOccurrences"
+                type="number"
+                min="1"
+                max="9999"
+                placeholder="Ej: 12"
+                class="w-full bg-dark-bg-tertiary border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent placeholder:text-dark-text-tertiary"
+                style="min-height: 44px;"
+              />
+            </div>
+          </div>
+
+          <!-- Requiere confirmación -->
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input
+              v-model="recurringRequiresConfirmation"
+              type="checkbox"
+              class="w-5 h-5 rounded accent-accent cursor-pointer mt-0.5 shrink-0"
+            />
+            <div>
+              <span class="text-sm font-medium text-dark-text-primary">Requiere confirmación</span>
+              <p class="text-xs text-dark-text-secondary">
+                Cada ciclo creará una transacción pendiente que deberás aprobar manualmente en lugar de registrarse de forma automática.
+              </p>
+            </div>
+          </label>
+        </div>
+      </Transition>
+    </div>
 
     <!-- ------------------------------------------------------------------ -->
     <!-- Opciones avanzadas (collapsible) -->
@@ -604,6 +833,20 @@ function handleSubmit() {
 
 .adv-expand-enter-from,
 .adv-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Recurring section expand — same accordion pattern. */
+.rec-expand-enter-active,
+.rec-expand-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 800px;
+}
+
+.rec-expand-enter-from,
+.rec-expand-leave-to {
   max-height: 0;
   opacity: 0;
 }

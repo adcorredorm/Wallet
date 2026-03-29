@@ -92,6 +92,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         _sync_status: 'pending' as const,
         _local_updated_at: now,
         base_rate: txRate,
+        recurring_rule_id: (dto as any).recurring_rule_id ?? null,
       }
     },
     mergeUpdate: (existing, dto, _now) => ({
@@ -109,6 +110,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       tags: local.tags,
       base_rate: local.base_rate,
       offline_id: local.id,
+      recurring_rule_id: local.recurring_rule_id ?? undefined,
     }),
     toUpdatePayload: (dto) => dto as Record<string, unknown>,
     afterCreate: (local) => {

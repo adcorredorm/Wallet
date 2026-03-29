@@ -16,6 +16,8 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useTransactionsStore, useAccountsStore, useCategoriesStore, useUiStore } from '@/stores'
+import { useRecurringRulesStore } from '@/stores/recurringRules'
+import { usePendingOccurrences } from '@/composables/usePendingOccurrences'
 import TransactionForm from '@/components/transactions/TransactionForm.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -28,6 +30,20 @@ const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
 const uiStore = useUiStore()
+const rulesStore = useRecurringRulesStore()
+
+// Pre-fill from pending occurrence (bell dropdown "Edit" action)
+const pendingOccurrenceId = route.query.pending_occurrence_id as string | undefined
+const recurringRuleId = route.query.recurring_rule_id as string | undefined
+const prefill = pendingOccurrenceId ? {
+  type: (route.query.type as 'income' | 'expense') ?? 'expense',
+  amount: route.query.amount ? Number(route.query.amount) : undefined,
+  date: route.query.date as string | undefined,
+  account_id: route.query.account_id as string | undefined,
+  category_id: route.query.category_id as string | undefined,
+  title: route.query.title as string | undefined,
+  description: route.query.description as string | undefined,
+} : undefined
 
 const accounts = computed(() => accountsStore.activeAccounts)
 const categories = computed(() => categoriesStore.categories)
@@ -37,9 +53,32 @@ const needsSetup = computed(
   () => accountsStore.activeAccounts.length === 0 || categoriesStore.activeCategories.length === 0
 )
 
+const pendingHelper = usePendingOccurrences()
+
 async function handleSubmit(data: CreateTransactionDto | UpdateTransactionDto) {
   try {
-    await transactionsStore.createTransaction(data as CreateTransactionDto)
+    const createData = data as CreateTransactionDto
+    // If editing a pending occurrence, attach the recurring_rule_id
+    if (pendingOccurrenceId && recurringRuleId) {
+      ;(createData as any).recurring_rule_id = recurringRuleId
+    }
+    await transactionsStore.createTransaction(createData)
+    // Mark pending occurrence as confirmed and increment occurrences_created on the rule
+    if (pendingOccurrenceId) {
+      await pendingHelper.loadOccurrences()
+      await pendingHelper.confirm(pendingOccurrenceId)
+      if (recurringRuleId) {
+        await rulesStore.loadRules()
+        const rule = rulesStore.rules.find(r => r.id === recurringRuleId)
+        if (rule) {
+          const newCount = (rule.occurrences_created ?? 0) + 1
+          await rulesStore.updateRule(rule.id, { occurrences_created: newCount } as any)
+          if (rule.max_occurrences && newCount >= rule.max_occurrences) {
+            await rulesStore.updateRule(rule.id, { status: 'completed' } as any)
+          }
+        }
+      }
+    }
     uiStore.showSuccess('Transacción creada exitosamente')
     router.push('/')
   } catch (error: any) {
@@ -72,6 +111,7 @@ function handleCancel() {
         :categories="categories"
         :loading="transactionsStore.loading"
         :initial-account-id="initialAccountId"
+        :prefill="prefill"
         @submit="handleSubmit"
         @cancel="handleCancel"
       />

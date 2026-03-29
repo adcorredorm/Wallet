@@ -61,6 +61,7 @@ async function loadErrors(): Promise<void> {
       { table: db.categories,       entityType: 'category'         as const },
       { table: db.dashboards,       entityType: 'dashboard'        as const },
       { table: db.dashboardWidgets, entityType: 'dashboard_widget' as const },
+      { table: db.recurringRules,   entityType: 'recurring_rule'   as const },
     ]
 
     const allErrored: ErroredEntity[] = []
@@ -109,6 +110,8 @@ function buildLabel(entityType: string, record: Record<string, unknown>): string
       return `Dashboard: ${record['name'] ?? record['id']}`
     case 'dashboard_widget':
       return `Widget: ${record['title'] ?? record['id']}`
+    case 'recurring_rule':
+      return `Regla recurrente: ${record['title'] ?? record['id']}`
     default:
       return String(record['id'])
   }
@@ -137,6 +140,7 @@ function getTable(entityType: PendingMutation['entity_type']): any {
     category:         db.categories,
     dashboard:        db.dashboards,
     dashboard_widget: db.dashboardWidgets,
+    recurring_rule:   db.recurringRules,
     setting:          db.settings,
   }
   return map[entityType]
@@ -216,6 +220,7 @@ async function deleteFromTable(
     case 'category':         await db.categories.delete(id);       break
     case 'dashboard':        await db.dashboards.delete(id);       break
     case 'dashboard_widget': await db.dashboardWidgets.delete(id); break
+    case 'recurring_rule':   await db.recurringRules.delete(id);   break
     case 'setting':          await db.settings.delete(id);         break
   }
 }

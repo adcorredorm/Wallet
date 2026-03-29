@@ -47,6 +47,7 @@ export interface CreateTransactionDto {
   original_currency?: string | null
   exchange_rate?: number | null
   base_rate?: number | null  // Captured at write time; null when offline with no cached rates
+  recurring_rule_id?: string | null  // FK -> recurring_rules (set when created from a rule)
 }
 
 export interface UpdateTransactionDto {

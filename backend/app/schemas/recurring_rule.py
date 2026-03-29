@@ -43,7 +43,6 @@ class RecurringRuleCreate(BaseModel):
     requires_confirmation: bool = False
     frequency: RecurringFrequency
     interval: int = Field(default=1, ge=1)
-    day_of_week: Optional[int] = Field(None, ge=0, le=6)
     day_of_month: Optional[int] = Field(None, ge=1, le=31)
     start_date: DateType
     end_date: Optional[DateType] = None
@@ -78,7 +77,6 @@ class RecurringRuleUpdate(BaseModel):
     requires_confirmation: Optional[bool] = None
     frequency: Optional[RecurringFrequency] = None
     interval: Optional[int] = Field(None, ge=1)
-    day_of_week: Optional[int] = Field(None, ge=0, le=6)
     day_of_month: Optional[int] = Field(None, ge=1, le=31)
     end_date: Optional[DateType] = None
     max_occurrences: Optional[int] = Field(None, ge=1)
@@ -121,7 +119,6 @@ class RecurringRuleResponse(BaseModel):
     requires_confirmation: bool
     frequency: RecurringFrequency
     interval: int
-    day_of_week: Optional[int]
     day_of_month: Optional[int]
     start_date: DateType
     end_date: Optional[DateType]

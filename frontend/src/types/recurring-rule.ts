@@ -14,7 +14,6 @@ export interface RecurringRule {
   requires_confirmation: boolean
   frequency: RecurringFrequency
   interval: number
-  day_of_week?: number | null   // 0-6, for weekly
   day_of_month?: number | null  // 1-31, for monthly/yearly
   start_date: string            // YYYY-MM-DD
   end_date?: string | null      // YYYY-MM-DD
@@ -38,7 +37,6 @@ export interface CreateRecurringRuleDto {
   requires_confirmation?: boolean
   frequency: RecurringFrequency
   interval?: number
-  day_of_week?: number | null
   day_of_month?: number | null
   start_date: string
   end_date?: string | null
@@ -57,7 +55,6 @@ export interface UpdateRecurringRuleDto {
   requires_confirmation?: boolean
   frequency?: RecurringFrequency
   interval?: number
-  day_of_week?: number | null
   day_of_month?: number | null
   end_date?: string | null
   max_occurrences?: number | null

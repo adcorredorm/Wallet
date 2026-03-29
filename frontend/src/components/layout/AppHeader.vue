@@ -15,16 +15,24 @@
  * - This reduces bottom nav clutter while maintaining accessibility
  */
 
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUiStore } from '@/stores'
 import HamburgerButton from '@/components/ui/HamburgerButton.vue'
 // Phase 5: sync status indicator in the header right slot
 import SyncIndicator from '@/components/sync/SyncIndicator.vue'
+import NotificationBell from '@/components/recurring/NotificationBell.vue'
+import { usePendingOccurrences } from '@/composables/usePendingOccurrences'
 
 const route = useRoute()
 const router = useRouter()
 const uiStore = useUiStore()
+
+const pendingHelper = usePendingOccurrences()
+
+onMounted(async () => {
+  await pendingHelper.loadOccurrences()
+})
 
 const pageTitle = computed(() => route.meta.title as string || 'Wallet')
 const showBackButton = computed(() => route.meta.showBackButton as boolean || false)
@@ -96,6 +104,7 @@ function toggleDrawer() {
         text by default, keeping the header visually clean on mobile.
       -->
       <div class="flex items-center gap-2">
+        <NotificationBell :count="pendingHelper.pendingCount.value" />
         <SyncIndicator />
       </div>
     </div>
