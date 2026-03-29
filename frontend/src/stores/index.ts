@@ -13,3 +13,5 @@ export { useSyncStore } from './sync'
 export type { SyncError } from './sync'
 // Phase 3.2: exchange rates cache + conversion helpers
 export { useExchangeRatesStore } from './exchangeRates'
+// Recurring transactions
+export { useRecurringRulesStore } from './recurringRules'

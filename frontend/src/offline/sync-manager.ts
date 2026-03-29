@@ -53,7 +53,7 @@
 import { db } from './db'
 import { mutationQueue } from './mutation-queue'
 import { isTempId } from './temp-id'
-import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget, LocalExchangeRate } from './types'
+import type { PendingMutation, LocalAccount, LocalTransaction, LocalTransfer, LocalCategory, LocalDashboard, LocalDashboardWidget, LocalExchangeRate, LocalRecurringRule } from './types'
 import { syncClient } from '@/api/sync-client'
 import { dashboardsApi } from '@/api/dashboards'
 
@@ -592,6 +592,7 @@ export class SyncManager {
       db.categories,
       db.dashboards,
       db.dashboardWidgets,
+      db.recurringRules,
     ]
     let total = 0
     for (const table of tables) {
@@ -757,6 +758,12 @@ export class SyncManager {
     const widgetByOfflineId = await db.dashboardWidgets.filter(w => w.offline_id === tempId).first()
     if (widgetByOfflineId?.server_id) return widgetByOfflineId.server_id
 
+    const recurringRule = await db.recurringRules.get(tempId)
+    if (recurringRule?.server_id) return recurringRule.server_id
+
+    const recurringRuleByOfflineId = await db.recurringRules.filter(r => r.offline_id === tempId).first()
+    if (recurringRuleByOfflineId?.server_id) return recurringRuleByOfflineId.server_id
+
     return undefined
   }
 
@@ -857,6 +864,14 @@ export class SyncManager {
 
       case 'dashboard_widget':
         // dashboard_widget does not act as a FK in any other table.
+        break
+
+      case 'recurring_rule':
+        // Update transactions that reference this rule via recurring_rule_id.
+        // recurring_rule_id is not indexed — use filter for FK cascade.
+        await db.transactions
+          .filter(tx => tx.recurring_rule_id === tempId)
+          .modify({ recurring_rule_id: realId })
         break
     }
 
@@ -985,6 +1000,21 @@ export class SyncManager {
         }
         break
       }
+
+      case 'recurring_rule': {
+        const old = await db.recurringRules.get(tempId)
+        if (old) {
+          const updated: LocalRecurringRule = {
+            ...old,
+            id: realId,
+            server_id: realId,
+            offline_id: old.offline_id ?? tempId,
+          }
+          await db.recurringRules.delete(tempId)
+          await db.recurringRules.put(updated)
+        }
+        break
+      }
     }
   }
 
@@ -1053,6 +1083,10 @@ export class SyncManager {
 
       case 'dashboard_widget':
         await db.dashboardWidgets.update(serverResult.id, syncFields)
+        break
+
+      case 'recurring_rule':
+        await db.recurringRules.update(serverResult.id, syncFields)
         break
     }
   }
@@ -1221,6 +1255,7 @@ export class SyncManager {
       case 'setting': await db.settings.update(entityId, fields); break
       case 'dashboard': await db.dashboards.update(entityId, fields); break
       case 'dashboard_widget': await db.dashboardWidgets.update(entityId, fields); break
+      case 'recurring_rule': await db.recurringRules.update(entityId, fields); break
     }
   }
 
@@ -1277,6 +1312,10 @@ export class SyncManager {
 
       case 'dashboard_widget':
         await db.dashboardWidgets.update(entityId, errorFields)
+        break
+
+      case 'recurring_rule':
+        await db.recurringRules.update(entityId, errorFields)
         break
     }
   }
@@ -1403,6 +1442,7 @@ export class SyncManager {
       '__sync__cursor_categories',
       '__sync__cursor_dashboards',
       '__sync__cursor_exchange_rates',
+      '__sync__cursor_recurring_rules',
     ]
     await db.settings.bulkDelete(keys)
   }
@@ -1466,10 +1506,15 @@ export class SyncManager {
           )
         }
       })(),
+      syncEntity<LocalRecurringRule>(
+        '/recurring-rules?limit=10000',
+        'recurring_rules',
+        (items) => db.recurringRules.bulkPut(items.map((item) => toLocalItem(item, item.id) as LocalRecurringRule)),
+      ),
       this.syncDashboards(),
     ])
 
-    const names = ['accounts', 'transactions', 'transfers', 'categories', 'exchange_rates', 'dashboards']
+    const names = ['accounts', 'transactions', 'transfers', 'categories', 'exchange_rates', 'recurring_rules', 'dashboards']
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         console.warn(`[SyncManager] full-read-sync failed for ${names[index]}:`, result.reason)
@@ -1526,6 +1571,11 @@ export class SyncManager {
         url: '/categories',
         cursorKey: 'categories',
         writer: (items) => db.categories.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalCategory)),
+      },
+      {
+        url: '/recurring-rules',
+        cursorKey: 'recurring_rules',
+        writer: (items) => db.recurringRules.bulkPut(items.map((i) => toLocalItem(i, i.id) as LocalRecurringRule)),
       },
     ]
 
