@@ -341,8 +341,6 @@ export class SyncManager {
     console.log('[SyncManager] Starting queue processing.')
 
     // ── Phase 5: update sync store ─────────────────────────────────────────
-    const uiStore = getUiStore()
-
     // Tell the UI that syncing is active and report the current queue depth.
     syncStore.setSyncing(true)
     const initialCount = await mutationQueue.count()
@@ -494,16 +492,6 @@ export class SyncManager {
       // network requests.
       window.dispatchEvent(new CustomEvent('wallet:sync-complete'))
 
-      // ── Phase 5: show success toast if mutations were actually synced ──
-      // Why only when initialCount > 0?
-      // If the queue was empty (e.g. a routine boot-time sync with no pending
-      // changes), showing "Datos sincronizados" would be misleading and noisy.
-      // Only show the toast when real pending mutations were flushed to the
-      // server — i.e. the user's offline changes actually made it through.
-      if (initialCount > 0) {
-        uiStore.showSuccess('Datos sincronizados', 3000)
-      }
-      // ───────────────────────────────────────────────────────────────────
     } finally {
       this.processing = false
       console.log('[SyncManager] Queue processing complete.')
@@ -618,6 +606,8 @@ export class SyncManager {
       await this.clearSyncCursors()
       await this.fullReadSync()
       console.log('[SyncManager] Force full sync complete.')
+      const uiStore = getUiStore()
+      uiStore.showSuccess('Datos sincronizados', 3000)
     } finally {
       this.processing = false
       syncStore.setSyncing(false)
