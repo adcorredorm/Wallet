@@ -25,6 +25,7 @@ import type { Transaction } from '@/types/transaction'
 import type { Transfer } from '@/types/transfer'
 import type { Category } from '@/types/category'
 import type { Dashboard, DashboardWidget } from '@/types/dashboard'
+import type { RecurringRule } from '@/types/recurring-rule'
 
 // Union literal — intentionally not an enum so it can be used as a plain
 // string comparison without a runtime import.
@@ -44,6 +45,7 @@ export interface LocalTransaction extends Transaction {
   original_currency?: string  // ISO 4217 code of the original currency (e.g. 'COP')
   exchange_rate?: number      // Rate applied at the time of the transaction
   base_rate?: number | null   // Units of primaryCurrency per 1 unit of account.currency at capture time; null when offline with no cached rate
+  recurring_rule_id?: string | null  // FK -> recurringRules (offline or server ID)
 }
 
 export interface LocalTransfer extends Transfer {
@@ -77,7 +79,7 @@ export interface LocalCategory extends Category {
  */
 export interface PendingMutation {
   id?: number                                                                    // Auto-incremented by Dexie (undefined before first insert)
-  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget'
+  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget' | 'recurring_rule'
   entity_id: string                                                              // Local ID (may be a temp-* UUID)
   operation: 'create' | 'update' | 'delete' | 'delete_permanent'
   payload: Record<string, unknown>                                  // Serialised DTO
@@ -143,4 +145,21 @@ export interface LocalDashboardWidget extends DashboardWidget {
   server_id?: string
   _sync_status: SyncStatus
   _local_updated_at: string
+}
+
+export interface LocalRecurringRule extends RecurringRule {
+  server_id?: string
+  _sync_status: SyncStatus
+  _local_updated_at: string
+}
+
+export type PendingOccurrenceStatus = 'pending' | 'confirmed' | 'discarded' | 'expired'
+
+export interface LocalPendingOccurrence {
+  id: string                        // client-generated UUID
+  recurring_rule_id: string         // FK -> LocalRecurringRule
+  due_date: string                  // YYYY-MM-DD
+  suggested_amount: number          // copied from rule at generation time
+  status: PendingOccurrenceStatus
+  created_at: string                // ISO timestamp
 }

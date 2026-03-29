@@ -29,6 +29,8 @@
  * - Version 7 adds sort_order index to accounts and icon field.
  *   Upgrade migration assigns sequential sort_order (by created_at) and
  *   a type-based default icon to existing records.
+ * - Version 8 adds recurringRules and pendingOccurrences tables for the
+ *   Recurring Transactions feature. New tables start empty — no upgrade needed.
  */
 
 import Dexie, { type Table } from 'dexie'
@@ -41,7 +43,9 @@ import type {
   LocalExchangeRate,
   LocalSetting,
   LocalDashboard,
-  LocalDashboardWidget
+  LocalDashboardWidget,
+  LocalRecurringRule,
+  LocalPendingOccurrence
 } from './types'
 
 class WalletDB extends Dexie {
@@ -56,6 +60,8 @@ class WalletDB extends Dexie {
   settings!: Table<LocalSetting>
   dashboards!: Table<LocalDashboard>
   dashboardWidgets!: Table<LocalDashboardWidget>
+  recurringRules!: Table<LocalRecurringRule>
+  pendingOccurrences!: Table<LocalPendingOccurrence>
 
   constructor() {
     super('WalletDB')
@@ -199,6 +205,23 @@ class WalletDB extends Dexie {
           })
         }
       })
+
+    this.version(8).stores({
+      // Carry forward all v7 tables unchanged
+      accounts: 'id, server_id, type, active, sort_order, _sync_status',
+      transactions: 'id, server_id, account_id, category_id, type, date, _sync_status',
+      transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+      categories: 'id, server_id, type, active, parent_category_id, _sync_status',
+      pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+      exchangeRates: 'currency_code',
+      settings: 'key, _sync_status',
+      dashboards: 'id, server_id, is_default, sort_order, _sync_status',
+      dashboardWidgets: 'id, server_id, dashboard_id, _sync_status',
+      // New in v8 — recurring transactions
+      recurringRules: 'id, server_id, account_id, category_id, status, next_occurrence_date, _sync_status',
+      pendingOccurrences: 'id, recurring_rule_id, status, due_date',
+    })
+    // No upgrade() needed — new tables start empty
   }
 }
 
