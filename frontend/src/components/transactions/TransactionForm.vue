@@ -409,7 +409,7 @@ async function handleSubmit() {
       category_id: form.category_id,
       title: form.title.trim() || undefined,
       description: form.description.trim() || undefined,
-      tags: parsedTags,
+      tags: [...parsedTags.filter(t => t !== 'Recurrente'), 'Recurrente'],
       original_amount: fxActive.value ? (originalAmount.value ?? null) : null,
       original_currency: fxActive.value ? (foreignCurrency.value || null) : null,
       exchange_rate: fxActive.value ? (exchangeRate.value ?? null) : null,

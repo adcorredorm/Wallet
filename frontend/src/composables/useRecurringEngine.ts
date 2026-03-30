@@ -152,7 +152,7 @@ export function useRecurringEngine() {
             category_id: rule.category_id,
             title: rule.title,
             description: rule.description ?? undefined,
-            tags: [...rule.tags],
+            tags: [...rule.tags.filter(t => t !== 'Recurrente'), 'Recurrente'],
             recurring_rule_id: rule.id,
           } as any)
           occurrencesCreated++
