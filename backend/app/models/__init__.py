@@ -16,6 +16,7 @@ from app.models.user_setting import UserSetting
 from app.models.dashboard import Dashboard
 from app.models.dashboard_widget import DashboardWidget, WidgetType
 from app.models.recurring_rule import RecurringRule, RecurringFrequency, RecurringRuleStatus
+from app.models.budget import Budget, BudgetType, BudgetStatus, BudgetFrequency
 
 __all__ = [
     "BaseModel",
@@ -36,4 +37,8 @@ __all__ = [
     "RecurringRule",
     "RecurringFrequency",
     "RecurringRuleStatus",
+    "Budget",
+    "BudgetType",
+    "BudgetStatus",
+    "BudgetFrequency",
 ]

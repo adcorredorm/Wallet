@@ -18,6 +18,7 @@ from app.api.settings import settings_bp
 from app.api.dashboards import dashboards_bp
 from app.api.internal import internal_bp
 from app.api.recurring_rules import recurring_rules_bp
+from app.api.budgets import budgets_bp
 
 
 def register_blueprints(app: Flask) -> None:
@@ -39,3 +40,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(dashboards_bp)
     app.register_blueprint(internal_bp)
     app.register_blueprint(recurring_rules_bp)
+    app.register_blueprint(budgets_bp)
