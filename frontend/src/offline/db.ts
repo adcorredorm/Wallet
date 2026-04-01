@@ -47,7 +47,8 @@ import type {
   LocalDashboard,
   LocalDashboardWidget,
   LocalRecurringRule,
-  LocalPendingOccurrence
+  LocalPendingOccurrence,
+  LocalBudget
 } from './types'
 
 class WalletDB extends Dexie {
@@ -64,6 +65,7 @@ class WalletDB extends Dexie {
   dashboardWidgets!: Table<LocalDashboardWidget>
   recurringRules!: Table<LocalRecurringRule>
   pendingOccurrences!: Table<LocalPendingOccurrence>
+  budgets!: Table<LocalBudget>
 
   constructor() {
     super('WalletDB')
@@ -241,6 +243,23 @@ class WalletDB extends Dexie {
       pendingOccurrences: 'id, recurring_rule_id, status, due_date',
     })
     // No upgrade() needed — Dexie adds new indexes to existing data automatically
+
+    this.version(10).stores({
+      accounts: 'id, server_id, type, active, sort_order, _sync_status',
+      transactions: 'id, server_id, account_id, category_id, type, date, _sync_status, fee_for_transaction_id, fee_for_transfer_id',
+      transfers: 'id, server_id, source_account_id, destination_account_id, date, _sync_status',
+      categories: 'id, server_id, type, active, parent_category_id, _sync_status',
+      pendingMutations: '++id, entity_type, entity_id, operation, queued_at',
+      exchangeRates: 'currency_code',
+      settings: 'key, _sync_status',
+      dashboards: 'id, server_id, is_default, sort_order, _sync_status',
+      dashboardWidgets: 'id, server_id, dashboard_id, _sync_status',
+      recurringRules: 'id, server_id, account_id, category_id, status, next_occurrence_date, _sync_status',
+      pendingOccurrences: 'id, recurring_rule_id, status, due_date',
+      // New in v10 — budgets feature
+      budgets: 'id, server_id, account_id, category_id, budget_type, status, _sync_status',
+    })
+    // No upgrade() needed — new table starts empty
   }
 }
 

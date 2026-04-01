@@ -15,3 +15,5 @@ export type { SyncError } from './sync'
 export { useExchangeRatesStore } from './exchangeRates'
 // Recurring transactions
 export { useRecurringRulesStore } from './recurringRules'
+// Budgets
+export { useBudgetsStore } from './budgets'

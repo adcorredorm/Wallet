@@ -26,6 +26,7 @@ import type { Transfer } from '@/types/transfer'
 import type { Category } from '@/types/category'
 import type { Dashboard, DashboardWidget } from '@/types/dashboard'
 import type { RecurringRule } from '@/types/recurring-rule'
+import type { Budget } from '@/types/budget'
 
 // Union literal — intentionally not an enum so it can be used as a plain
 // string comparison without a runtime import.
@@ -79,7 +80,7 @@ export interface LocalCategory extends Category {
  */
 export interface PendingMutation {
   id?: number                                                                    // Auto-incremented by Dexie (undefined before first insert)
-  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget' | 'recurring_rule'
+  entity_type: 'account' | 'transaction' | 'transfer' | 'category' | 'setting' | 'dashboard' | 'dashboard_widget' | 'recurring_rule' | 'budget'
   entity_id: string                                                              // Local ID (may be a temp-* UUID)
   operation: 'create' | 'update' | 'delete' | 'delete_permanent'
   payload: Record<string, unknown>                                  // Serialised DTO
@@ -148,6 +149,12 @@ export interface LocalDashboardWidget extends DashboardWidget {
 }
 
 export interface LocalRecurringRule extends RecurringRule {
+  server_id?: string
+  _sync_status: SyncStatus
+  _local_updated_at: string
+}
+
+export interface LocalBudget extends Budget {
   server_id?: string
   _sync_status: SyncStatus
   _local_updated_at: string
