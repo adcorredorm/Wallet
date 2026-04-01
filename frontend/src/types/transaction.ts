@@ -19,6 +19,8 @@ export interface Transaction {
   description?: string
   tags: string[]
   base_rate?: number | null  // Units of primaryCurrency per 1 unit of account.currency at transaction time
+  fee_for_transaction_id?: string | null  // FK -> transactions.id (set when this is a fee for another transaction)
+  fee_for_transfer_id?: string | null     // FK -> transfers.id (set when this is a fee for a transfer)
   created_at: string
   updated_at: string
   // Populated relations (optional, depends on API response)
@@ -48,6 +50,8 @@ export interface CreateTransactionDto {
   exchange_rate?: number | null
   base_rate?: number | null  // Captured at write time; null when offline with no cached rates
   recurring_rule_id?: string | null  // FK -> recurring_rules (set when created from a rule)
+  fee_for_transaction_id?: string | null  // FK -> transactions.id (set when this is a fee for another transaction)
+  fee_for_transfer_id?: string | null     // FK -> transfers.id (set when this is a fee for a transfer)
 }
 
 export interface UpdateTransactionDto {
@@ -64,6 +68,8 @@ export interface UpdateTransactionDto {
   original_currency?: string | null
   exchange_rate?: number | null
   base_rate?: number | null
+  fee_for_transaction_id?: string | null  // FK -> transactions.id
+  fee_for_transfer_id?: string | null     // FK -> transfers.id
 }
 
 export interface TransactionFilters {
