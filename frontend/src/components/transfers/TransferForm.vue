@@ -32,7 +32,8 @@ import ExchangeRateInput from '@/components/shared/ExchangeRateInput.vue'
 import { positiveNumber } from '@/utils/validators'
 import { formatDateForInput } from '@/utils/formatters'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
-import type { Transfer, CreateTransferDto, UpdateTransferDto, Account } from '@/types'
+import { useCategoriesStore } from '@/stores/categories'
+import type { Transfer, CreateTransferDto, UpdateTransferDto, Account, CreateTransactionDto } from '@/types'
 
 interface Props {
   transfer?: Transfer
@@ -43,7 +44,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  submit: [data: CreateTransferDto | UpdateTransferDto]
+  submit: [data: CreateTransferDto | UpdateTransferDto, feeData?: CreateTransactionDto]
   cancel: []
 }>()
 
@@ -52,6 +53,38 @@ const emit = defineEmits<{
 // ---------------------------------------------------------------------------
 
 const exchangeRatesStore = useExchangeRatesStore()
+const categoriesStore = useCategoriesStore()
+
+// ---------------------------------------------------------------------------
+// Fee section state (create mode only)
+// ---------------------------------------------------------------------------
+
+const hasFee = ref(false)
+const feeType = ref<'fixed' | 'percentage'>('fixed')
+const feeAmount = ref<number>(0)
+const feeCategoryId = ref<string>('')
+
+const FEE_TYPE_OPTIONS = [
+  { value: 'fixed', label: 'Fijo' },
+  { value: 'percentage', label: 'Porcentaje (%)' },
+]
+
+const feeCategories = computed(() =>
+  categoriesStore.categories.filter(c => c.type === 'expense' || c.type === 'both')
+)
+
+const computedFeeAmount = computed<number | null>(() => {
+  if (!hasFee.value || feeType.value !== 'percentage') return null
+  if (!form.amount || feeAmount.value <= 0) return null
+  return parseFloat(((feeAmount.value / 100) * form.amount).toFixed(8))
+})
+
+const resolvedFeeAmount = computed<number>(() => {
+  if (feeType.value === 'percentage') {
+    return computedFeeAmount.value ?? 0
+  }
+  return feeAmount.value
+})
 
 // ---------------------------------------------------------------------------
 // Form data
@@ -328,7 +361,20 @@ function handleSubmit() {
     destination_currency: isCrossCurrency.value ? destAccountCurrency.value : undefined
   }
 
-  emit('submit', data)
+  let feeData: CreateTransactionDto | undefined
+  if (hasFee.value && !isEditMode.value && resolvedFeeAmount.value > 0 && feeCategoryId.value) {
+    feeData = {
+      type: 'expense' as any,
+      amount: resolvedFeeAmount.value,
+      date: form.date,
+      account_id: form.source_account_id,
+      category_id: feeCategoryId.value,
+      tags: [],
+      // fee_for_transfer_id will be set by TransferCreateView after it knows the transfer ID
+    }
+  }
+
+  emit('submit', data, feeData)
 }
 </script>
 
@@ -482,6 +528,75 @@ function handleSubmit() {
       helper-text="Separadas por comas"
     />
 
+    <!-- Fee toggle (create mode only) -->
+    <div v-if="!isEditMode" class="rounded-lg border border-slate-700 bg-slate-800 overflow-hidden">
+      <label
+        class="flex items-center gap-3 px-4 py-3 cursor-pointer min-h-[44px] hover:bg-slate-700 transition-colors select-none"
+      >
+        <input
+          v-model="hasFee"
+          type="checkbox"
+          class="w-5 h-5 rounded accent-blue-500 cursor-pointer"
+        />
+        <div>
+          <span class="text-sm font-medium text-slate-200">Agregar fee</span>
+          <p class="text-xs text-slate-400">Registrar comisión o cargo asociado a esta transferencia</p>
+        </div>
+      </label>
+
+      <Transition name="fee-expand">
+        <div
+          v-if="hasFee"
+          class="px-4 pb-4 space-y-3 border-t border-slate-700 pt-4"
+        >
+          <!-- Tipo -->
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Tipo de fee</label>
+            <select
+              v-model="feeType"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              style="min-height: 44px;"
+            >
+              <option v-for="opt in FEE_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+
+          <!-- Monto -->
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Monto del fee</label>
+            <input
+              v-model.number="feeAmount"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              inputmode="decimal"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              style="min-height: 44px;"
+            />
+            <p v-if="feeType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-slate-400">
+              = {{ originAccountCurrency }} {{ computedFeeAmount.toFixed(2) }}
+            </p>
+          </div>
+
+          <!-- Categoría -->
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1">Categoría del fee</label>
+            <select
+              v-model="feeCategoryId"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              style="min-height: 44px;"
+            >
+              <option value="">Selecciona categoría</option>
+              <option v-for="cat in feeCategories" :key="cat.id" :value="cat.id">
+                {{ cat.icon }} {{ cat.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
     <!-- Actions -->
     <div class="flex gap-3 pt-4 flex-col md:flex-row">
       <BaseButton
@@ -504,3 +619,19 @@ function handleSubmit() {
     </div>
   </form>
 </template>
+
+<style scoped>
+/* Fee section expand — accordion animation. */
+.fee-expand-enter-active,
+.fee-expand-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 400px;
+}
+
+.fee-expand-enter-from,
+.fee-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+</style>

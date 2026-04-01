@@ -26,6 +26,10 @@ import type { CreateTransactionDto, UpdateTransactionDto } from '@/types'
 const router = useRouter()
 const route = useRoute()
 const initialAccountId = route.query.account_id as string | undefined
+
+// Fee-related query params — set when navigating from a detail view's "Agregar fee" button
+const feeForTransactionId = route.query.fee_for_transaction_id as string | undefined
+const feeForTransferId = route.query.fee_for_transfer_id as string | undefined
 const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
@@ -55,14 +59,35 @@ const needsSetup = computed(
 
 const pendingHelper = usePendingOccurrences()
 
-async function handleSubmit(data: CreateTransactionDto | UpdateTransactionDto) {
+async function handleSubmit(data: CreateTransactionDto | UpdateTransactionDto, feeData?: CreateTransactionDto) {
   try {
     const createData = data as CreateTransactionDto
     // If editing a pending occurrence, attach the recurring_rule_id
     if (pendingOccurrenceId && recurringRuleId) {
       ;(createData as any).recurring_rule_id = recurringRuleId
     }
-    await transactionsStore.createTransaction(createData)
+    // If navigated from detail view "Agregar fee" button, attach the FK
+    if (feeForTransactionId) {
+      ;(createData as any).fee_for_transaction_id = feeForTransactionId
+    }
+    if (feeForTransferId) {
+      ;(createData as any).fee_for_transfer_id = feeForTransferId
+    }
+    const parentTx = await transactionsStore.createTransaction(createData)
+
+    // If a fee was submitted inline via the form toggle, create it linked to the parent
+    if (feeData && parentTx?.id) {
+      const feePayload: CreateTransactionDto = {
+        ...feeData,
+        fee_for_transaction_id: parentTx.id,
+      }
+      try {
+        await transactionsStore.createTransaction(feePayload)
+      } catch {
+        uiStore.showError('Transacción creada, pero hubo un error al registrar el fee. Puedes agregarlo desde el detalle.')
+      }
+    }
+
     // Mark pending occurrence as confirmed and increment occurrences_created on the rule
     if (pendingOccurrenceId) {
       await pendingHelper.loadOccurrences()

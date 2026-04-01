@@ -7,21 +7,35 @@
 
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTransfersStore, useAccountsStore, useUiStore } from '@/stores'
+import { useTransfersStore, useAccountsStore, useUiStore, useTransactionsStore } from '@/stores'
 import TransferForm from '@/components/transfers/TransferForm.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
-import type { CreateTransferDto, UpdateTransferDto } from '@/types'
+import type { CreateTransferDto, UpdateTransferDto, CreateTransactionDto } from '@/types'
 
 const router = useRouter()
 const transfersStore = useTransfersStore()
+const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 const uiStore = useUiStore()
 
 const accounts = computed(() => accountsStore.activeAccounts)
 
-async function handleSubmit(data: CreateTransferDto | UpdateTransferDto) {
+async function handleSubmit(data: CreateTransferDto | UpdateTransferDto, feeData?: CreateTransactionDto) {
   try {
-    await transfersStore.createTransfer(data as CreateTransferDto)
+    const transfer = await transfersStore.createTransfer(data as CreateTransferDto)
+
+    if (feeData && transfer?.id) {
+      const feePayload: CreateTransactionDto = {
+        ...feeData,
+        fee_for_transfer_id: transfer.id,
+      }
+      try {
+        await transactionsStore.createTransaction(feePayload)
+      } catch {
+        uiStore.showError('Transferencia creada, pero hubo un error al registrar el fee.')
+      }
+    }
+
     // Balances are updated by adjustBalance() inside createTransfer — no API call needed.
     uiStore.showSuccess('Transferencia creada exitosamente')
     router.push('/')

@@ -52,7 +52,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  submit: [data: CreateTransactionDto | UpdateTransactionDto]
+  submit: [data: CreateTransactionDto | UpdateTransactionDto, feeData?: CreateTransactionDto]
   cancel: []
 }>()
 
@@ -315,6 +315,40 @@ const FREQUENCY_OPTIONS = [
 ]
 
 // ---------------------------------------------------------------------------
+// Fee section state (create mode only)
+// ---------------------------------------------------------------------------
+
+const hasFee = ref(false)
+const feeType = ref<'fixed' | 'percentage'>('fixed')
+const feeAmount = ref<number>(0)
+const feeCategoryId = ref<string>('')
+
+const FEE_TYPE_OPTIONS = [
+  { value: 'fixed', label: 'Fijo' },
+  { value: 'percentage', label: 'Porcentaje (%)' },
+]
+
+// Computed: resolves percentage to fixed amount for display hint
+const computedFeeAmount = computed<number | null>(() => {
+  if (!hasFee.value || feeType.value !== 'percentage') return null
+  if (!form.amount || feeAmount.value <= 0) return null
+  return parseFloat(((feeAmount.value / 100) * form.amount).toFixed(8))
+})
+
+// Resolved fee amount used at submit time
+const resolvedFeeAmount = computed<number>(() => {
+  if (feeType.value === 'percentage') {
+    return computedFeeAmount.value ?? 0
+  }
+  return feeAmount.value
+})
+
+// Expense-or-both categories only (fees are always expenses)
+const feeCategories = computed(() =>
+  props.categories.filter(c => c.type === 'expense' || c.type === 'both')
+)
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -416,7 +450,7 @@ async function handleSubmit() {
       recurring_rule_id: rule.id,
     }
 
-    emit('submit', data)
+    emit('submit', data, undefined)
     return
   }
 
@@ -435,7 +469,21 @@ async function handleSubmit() {
     exchange_rate: fxActive.value ? (exchangeRate.value ?? null) : null
   }
 
-  emit('submit', data)
+  // Build fee payload if toggle is active (create mode only)
+  let feeData: CreateTransactionDto | undefined
+  if (hasFee.value && !isEditMode.value && resolvedFeeAmount.value > 0 && feeCategoryId.value) {
+    feeData = {
+      type: 'expense' as TransactionType,
+      amount: resolvedFeeAmount.value,
+      date: form.date,
+      account_id: form.account_id,
+      category_id: feeCategoryId.value,
+      tags: [],
+      // fee_for_transaction_id will be set by the parent CreateView after it knows the parent ID
+    }
+  }
+
+  emit('submit', data, feeData)
 }
 </script>
 
@@ -778,6 +826,58 @@ async function handleSubmit() {
               </div>
             </Transition>
           </div>
+
+          <!-- Fee toggle (create mode only) -->
+          <div v-if="!isEditMode" class="rounded-lg border border-dark-border bg-dark-bg-tertiary overflow-hidden">
+            <label
+              class="flex items-center gap-3 px-4 py-3 cursor-pointer min-h-touch hover:bg-dark-bg-secondary transition-colors select-none"
+            >
+              <input
+                v-model="hasFee"
+                type="checkbox"
+                class="w-5 h-5 rounded accent-accent cursor-pointer"
+              />
+              <div>
+                <span class="text-sm font-medium text-dark-text-primary">Agregar fee</span>
+                <p class="text-xs text-dark-text-secondary">Registrar comisión o cargo asociado a esta transacción</p>
+              </div>
+            </label>
+
+            <Transition name="fee-expand">
+              <div
+                v-if="hasFee"
+                class="px-4 pb-4 space-y-3 border-t border-dark-border pt-4"
+              >
+                <!-- Tipo: Fijo / Porcentaje -->
+                <BaseSelect
+                  v-model="feeType"
+                  label="Tipo de fee"
+                  :options="FEE_TYPE_OPTIONS"
+                />
+
+                <!-- Monto del fee -->
+                <div>
+                  <AmountInput
+                    v-model="feeAmount"
+                    label="Monto del fee"
+                    :currency="feeType === 'percentage' ? '%' : selectedAccountCurrency"
+                    placeholder="0.00"
+                  />
+                  <p v-if="feeType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-dark-text-tertiary">
+                    = {{ selectedAccountCurrency }} {{ computedFeeAmount.toFixed(2) }}
+                  </p>
+                </div>
+
+                <!-- Categoría del fee (expense/both only) -->
+                <CategorySelect
+                  v-model="feeCategoryId"
+                  :categories="feeCategories"
+                  label="Categoría del fee"
+                  :filter-type="'expense' as any"
+                />
+              </div>
+            </Transition>
+          </div>
         </div>
       </Transition>
     </div>
@@ -847,6 +947,20 @@ async function handleSubmit() {
 
 .rec-expand-enter-from,
 .rec-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Fee section expand — same accordion pattern. */
+.fee-expand-enter-active,
+.fee-expand-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 400px;
+}
+
+.fee-expand-enter-from,
+.fee-expand-leave-to {
   max-height: 0;
   opacity: 0;
 }
