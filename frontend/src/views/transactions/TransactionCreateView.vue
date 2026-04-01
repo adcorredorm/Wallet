@@ -11,6 +11,9 @@
  *
  * On success: redirects to / (home) so the user lands on the dashboard
  * where they can see their updated activity.
+ *
+ * Note: fee creation from detail views is handled inline in the detail views.
+ * The fee toggle on this form handles inline fee creation tied to the new transaction.
  */
 
 import { computed } from 'vue'
@@ -27,9 +30,6 @@ const router = useRouter()
 const route = useRoute()
 const initialAccountId = route.query.account_id as string | undefined
 
-// Fee-related query params — set when navigating from a detail view's "Agregar fee" button
-const feeForTransactionId = route.query.fee_for_transaction_id as string | undefined
-const feeForTransferId = route.query.fee_for_transfer_id as string | undefined
 const transactionsStore = useTransactionsStore()
 const accountsStore = useAccountsStore()
 const categoriesStore = useCategoriesStore()
@@ -39,15 +39,17 @@ const rulesStore = useRecurringRulesStore()
 // Pre-fill from pending occurrence (bell dropdown "Edit" action)
 const pendingOccurrenceId = route.query.pending_occurrence_id as string | undefined
 const recurringRuleId = route.query.recurring_rule_id as string | undefined
-const prefill = pendingOccurrenceId ? {
-  type: (route.query.type as 'income' | 'expense') ?? 'expense',
-  amount: route.query.amount ? Number(route.query.amount) : undefined,
-  date: route.query.date as string | undefined,
-  account_id: route.query.account_id as string | undefined,
-  category_id: route.query.category_id as string | undefined,
-  title: route.query.title as string | undefined,
-  description: route.query.description as string | undefined,
-} : undefined
+const prefill = pendingOccurrenceId
+  ? {
+      type: (route.query.type as 'income' | 'expense') ?? 'expense',
+      amount: route.query.amount ? Number(route.query.amount) : undefined,
+      date: route.query.date as string | undefined,
+      account_id: route.query.account_id as string | undefined,
+      category_id: route.query.category_id as string | undefined,
+      title: route.query.title as string | undefined,
+      description: route.query.description as string | undefined,
+    }
+  : undefined
 
 const accounts = computed(() => accountsStore.activeAccounts)
 const categories = computed(() => categoriesStore.categories)
@@ -65,13 +67,6 @@ async function handleSubmit(data: CreateTransactionDto | UpdateTransactionDto, f
     // If editing a pending occurrence, attach the recurring_rule_id
     if (pendingOccurrenceId && recurringRuleId) {
       ;(createData as any).recurring_rule_id = recurringRuleId
-    }
-    // If navigated from detail view "Agregar fee" button, attach the FK
-    if (feeForTransactionId) {
-      ;(createData as any).fee_for_transaction_id = feeForTransactionId
-    }
-    if (feeForTransferId) {
-      ;(createData as any).fee_for_transfer_id = feeForTransferId
     }
     const parentTx = await transactionsStore.createTransaction(createData)
 
