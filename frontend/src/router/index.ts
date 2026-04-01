@@ -94,6 +94,15 @@ const router = createRouter({
       }
     },
     {
+      path: '/transactions/:id',
+      name: 'transaction-detail',
+      component: () => import('@/views/transactions/TransactionDetailView.vue'),
+      meta: {
+        title: 'Detalle de Transacción',
+        showBackButton: true
+      }
+    },
+    {
       path: '/transfers',
       name: 'transfers',
       component: () => import('@/views/transfers/TransfersListView.vue'),
@@ -118,6 +127,15 @@ const router = createRouter({
       component: () => import('@/views/transfers/TransferEditView.vue'),
       meta: {
         title: 'Editar Transferencia',
+        showBackButton: true
+      }
+    },
+    {
+      path: '/transfers/:id',
+      name: 'transfer-detail',
+      component: () => import('@/views/transfers/TransferDetailView.vue'),
+      meta: {
+        title: 'Detalle de Transferencia',
         showBackButton: true
       }
     },

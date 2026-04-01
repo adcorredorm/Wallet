@@ -37,7 +37,7 @@ onMounted(async () => {
 })
 
 function goToTransaction(transaction: any) {
-  router.push(`/transactions/${transaction.id}/edit`)
+  router.push(`/transactions/${transaction.id}`)
 }
 
 function createTransaction() {

@@ -59,7 +59,7 @@ onMounted(async () => {
 })
 
 function goToTransfer(transfer: LocalTransfer) {
-  router.push(`/transfers/${transfer.id}/edit`)
+  router.push(`/transfers/${transfer.id}`)
 }
 
 function createTransfer() {
