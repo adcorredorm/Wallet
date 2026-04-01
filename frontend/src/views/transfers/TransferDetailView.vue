@@ -16,7 +16,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import AmountInput from '@/components/shared/AmountInput.vue'
 import CategorySelect from '@/components/categories/CategorySelect.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
-import { formatDateRelative } from '@/utils/formatters'
+import { formatDateRelative, formatCurrency } from '@/utils/formatters'
 import { db } from '@/offline'
 import type { LocalTransaction } from '@/offline/types'
 import { TransactionType } from '@/types'
@@ -255,7 +255,7 @@ async function submitFee() {
                 placeholder="0.00"
               />
               <p v-if="feeFormType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-dark-text-tertiary">
-                = {{ sourceAccount?.currency || '' }} {{ computedFeeAmount.toFixed(2) }}
+                = {{ formatCurrency(computedFeeAmount, sourceAccount?.currency || 'COP') }}
               </p>
             </div>
 

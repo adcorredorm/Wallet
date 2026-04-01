@@ -22,7 +22,7 @@ import CategorySelect from '@/components/categories/CategorySelect.vue'
 import ExchangeRateInput from '@/components/shared/ExchangeRateInput.vue'
 import { TRANSACTION_TYPES, CURRENCIES } from '@/utils/constants'
 import { positiveNumber } from '@/utils/validators'
-import { formatDateForInput } from '@/utils/formatters'
+import { formatDateForInput, formatCurrency } from '@/utils/formatters'
 import { useExchangeRatesStore } from '@/stores/exchangeRates'
 import { useRecurringRulesStore } from '@/stores/recurringRules'
 import { advanceDate } from '@/composables/useRecurringEngine'
@@ -875,7 +875,7 @@ async function handleSubmit() {
                     placeholder="0.00"
                   />
                   <p v-if="feeType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-dark-text-tertiary">
-                    = {{ selectedAccountCurrency }} {{ computedFeeAmount.toFixed(2) }}
+                    = {{ formatCurrency(computedFeeAmount, selectedAccountCurrency) }}
                   </p>
                 </div>
 
