@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.category import Category
     from app.models.recurring_rule import RecurringRule
+    from app.models.transfer import Transfer
 
 
 class TransactionType(enum.Enum):
@@ -81,6 +82,16 @@ class Transaction(BaseModel):
         ForeignKey("recurring_rules.id"),
         nullable=True,
     )
+    fee_for_transaction_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    fee_for_transfer_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("transfers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Relationships
     account = relationship(
@@ -92,6 +103,17 @@ class Transaction(BaseModel):
         back_populates="transactions",
     )
     recurring_rule = relationship("RecurringRule")
+    fee_for_transaction = relationship(
+        "Transaction",
+        foreign_keys="Transaction.fee_for_transaction_id",
+        remote_side="Transaction.id",
+        uselist=False,
+    )
+    fee_for_transfer = relationship(
+        "Transfer",
+        foreign_keys="Transaction.fee_for_transfer_id",
+        uselist=False,
+    )
 
     # Indexes and constraints
     __table_args__ = (
@@ -99,6 +121,8 @@ class Transaction(BaseModel):
         Index("idx_transactions_account_type", "account_id", "type"),
         Index("idx_transactions_category", "category_id"),
         Index("idx_transactions_date", "date"),
+        Index("idx_transactions_fee_for_transaction", "fee_for_transaction_id"),
+        Index("idx_transactions_fee_for_transfer", "fee_for_transfer_id"),
         UniqueConstraint("user_id", "offline_id", name="uq_transactions_user_offline"),
     )
 

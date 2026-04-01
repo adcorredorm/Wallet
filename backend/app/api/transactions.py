@@ -230,6 +230,8 @@ def create_transaction():
             exchange_rate=transaction_data.exchange_rate,
             base_rate=transaction_data.base_rate,
             recurring_rule_id=transaction_data.recurring_rule_id,
+            fee_for_transaction_id=transaction_data.fee_for_transaction_id,
+            fee_for_transfer_id=transaction_data.fee_for_transfer_id,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")
@@ -317,6 +319,8 @@ def update_transaction(transaction_id: UUID):
             original_currency=transaction_data.original_currency,
             exchange_rate=transaction_data.exchange_rate,
             base_rate=transaction_data.base_rate,
+            fee_for_transaction_id=transaction_data.fee_for_transaction_id,
+            fee_for_transfer_id=transaction_data.fee_for_transfer_id,
         )
 
         data = TransactionResponse.model_validate(transaction).model_dump(mode="json")

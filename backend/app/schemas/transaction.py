@@ -65,6 +65,8 @@ class TransactionCreate(BaseModel):
     exchange_rate: Optional[Decimal] = None
     base_rate: Optional[Decimal] = None
     recurring_rule_id: Optional[UUID] = None
+    fee_for_transaction_id: Optional[UUID] = None
+    fee_for_transfer_id: Optional[UUID] = None
 
     @field_validator("amount")
     @classmethod
@@ -124,6 +126,11 @@ class TransactionCreate(BaseModel):
                 "original_currency es requerido cuando original_amount o exchange_rate son proporcionados"
             )
 
+        if self.fee_for_transaction_id is not None and self.fee_for_transfer_id is not None:
+            raise ValueError(
+                "fee_for_transaction_id y fee_for_transfer_id no pueden estar ambos definidos"
+            )
+
         return self
 
 
@@ -150,6 +157,8 @@ class TransactionUpdate(BaseModel):
     original_currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     base_rate: Optional[Decimal] = None
+    fee_for_transaction_id: Optional[UUID] = None
+    fee_for_transfer_id: Optional[UUID] = None
 
     @field_validator("amount")
     @classmethod
@@ -209,6 +218,11 @@ class TransactionUpdate(BaseModel):
             if self.exchange_rate <= 0:
                 raise ValueError("exchange_rate debe ser mayor a 0")
 
+        if self.fee_for_transaction_id is not None and self.fee_for_transfer_id is not None:
+            raise ValueError(
+                "fee_for_transaction_id y fee_for_transfer_id no pueden estar ambos definidos"
+            )
+
         return self
 
 
@@ -253,6 +267,8 @@ class TransactionResponse(BaseModel):
     exchange_rate: Optional[Decimal] = None
     base_rate: Optional[Decimal] = None
     recurring_rule_id: Optional[UUID] = None
+    fee_for_transaction_id: Optional[UUID] = None
+    fee_for_transfer_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

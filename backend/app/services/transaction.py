@@ -108,6 +108,8 @@ class TransactionService:
         exchange_rate: Decimal | None = None,
         base_rate: Decimal | None = None,
         recurring_rule_id: UUID | None = None,
+        fee_for_transaction_id: UUID | None = None,
+        fee_for_transfer_id: UUID | None = None,
     ) -> Transaction:
         """
         Create a new transaction for a user.
@@ -183,6 +185,8 @@ class TransactionService:
             exchange_rate=exchange_rate,
             base_rate=base_rate,
             recurring_rule_id=recurring_rule_id,
+            fee_for_transaction_id=fee_for_transaction_id,
+            fee_for_transfer_id=fee_for_transfer_id,
         )
 
     def update(
@@ -201,6 +205,8 @@ class TransactionService:
         original_currency: str | None = None,
         exchange_rate: Decimal | None = None,
         base_rate: Decimal | None = None,
+        fee_for_transaction_id: UUID | None = None,
+        fee_for_transfer_id: UUID | None = None,
     ) -> Transaction:
         """
         Update an existing transaction.
@@ -297,6 +303,10 @@ class TransactionService:
             update_data["exchange_rate"] = exchange_rate
         if base_rate is not None:
             update_data["base_rate"] = base_rate
+        if fee_for_transaction_id is not None:
+            update_data["fee_for_transaction_id"] = fee_for_transaction_id
+        if fee_for_transfer_id is not None:
+            update_data["fee_for_transfer_id"] = fee_for_transfer_id
 
         return self.repository.update(transaction, **update_data)
 
