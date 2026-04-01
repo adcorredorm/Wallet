@@ -538,32 +538,32 @@ function handleSubmit() {
     />
 
     <!-- Fee toggle (create mode only) -->
-    <div v-if="!isEditMode" class="rounded-lg border border-slate-700 bg-slate-800 overflow-hidden">
+    <div v-if="!isEditMode" class="rounded-lg border border-dark-border bg-dark-bg-secondary overflow-hidden">
       <label
-        class="flex items-center gap-3 px-4 py-3 cursor-pointer min-h-[44px] hover:bg-slate-700 transition-colors select-none"
+        class="flex items-center gap-3 px-4 py-3 cursor-pointer min-h-touch hover:bg-dark-bg-tertiary transition-colors select-none"
       >
         <input
           v-model="hasFee"
           type="checkbox"
-          class="w-5 h-5 rounded accent-blue-500 cursor-pointer"
+          class="w-5 h-5 rounded accent-accent cursor-pointer"
         />
         <div>
-          <span class="text-sm font-medium text-slate-200">Agregar fee</span>
-          <p class="text-xs text-slate-400">Registrar comisión o cargo asociado a esta transferencia</p>
+          <span class="text-sm font-medium text-dark-text-primary">Agregar fee</span>
+          <p class="text-xs text-dark-text-secondary">Registrar comisión o cargo asociado a esta transferencia</p>
         </div>
       </label>
 
       <Transition name="fee-expand">
         <div
           v-if="hasFee"
-          class="px-4 pb-4 space-y-3 border-t border-slate-700 pt-4"
+          class="px-4 pb-4 space-y-3 border-t border-dark-border pt-4"
         >
           <!-- Tipo -->
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Tipo de fee</label>
+            <label class="block text-sm font-medium text-dark-text-secondary mb-1">Tipo de fee</label>
             <select
               v-model="feeType"
-              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              class="w-full bg-dark-bg-tertiary border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent"
               style="min-height: 44px;"
             >
               <option v-for="opt in FEE_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -572,7 +572,7 @@ function handleSubmit() {
 
           <!-- Monto -->
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Monto del fee</label>
+            <label class="block text-sm font-medium text-dark-text-secondary mb-1">Monto del fee</label>
             <input
               v-model.number="feeAmount"
               type="number"
@@ -580,22 +580,22 @@ function handleSubmit() {
               step="any"
               placeholder="0.00"
               inputmode="decimal"
-              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              class="w-full bg-dark-bg-tertiary border border-dark-border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent"
               style="min-height: 44px;"
             />
-            <p v-if="feeType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-slate-400">
+            <p v-if="feeType === 'percentage' && computedFeeAmount !== null" class="mt-1 text-xs text-dark-text-tertiary">
               = {{ originAccountCurrency }} {{ computedFeeAmount.toFixed(2) }}
             </p>
           </div>
 
           <!-- Categoría -->
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1">Categoría del fee</label>
+            <label class="block text-sm font-medium text-dark-text-secondary mb-1">Categoría del fee</label>
             <select
               v-model="feeCategoryId"
               :class="[
-                'w-full bg-slate-700 border rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500',
-                errors.fee_category_id ? 'border-red-500' : 'border-slate-600'
+                'w-full bg-dark-bg-tertiary border rounded-lg px-3 py-2 text-dark-text-primary text-sm focus:outline-none focus:border-accent',
+                errors.fee_category_id ? 'border-error' : 'border-dark-border'
               ]"
               style="min-height: 44px;"
             >
@@ -604,7 +604,7 @@ function handleSubmit() {
                 {{ cat.icon }} {{ cat.name }}
               </option>
             </select>
-            <p v-if="errors.fee_category_id" class="mt-1 text-xs text-red-400">{{ errors.fee_category_id }}</p>
+            <p v-if="errors.fee_category_id" class="mt-1 text-xs text-error">{{ errors.fee_category_id }}</p>
           </div>
         </div>
       </Transition>

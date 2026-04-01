@@ -344,11 +344,6 @@ const resolvedFeeAmount = computed<number>(() => {
   return feeAmount.value
 })
 
-// Expense-or-both categories only (fees are always expenses)
-const feeCategories = computed(() =>
-  props.categories.filter(c => c.type === 'expense' || c.type === 'both')
-)
-
 // Pre-load fee category with the parent's category when toggle is activated
 watch(hasFee, (active) => {
   if (active && !feeCategoryId.value && form.category_id) {
@@ -887,7 +882,6 @@ async function handleSubmit() {
                 <!-- Categoría del fee (expense/both only) -->
                 <CategorySelect
                   v-model="feeCategoryId"
-                  :categories="feeCategories"
                   label="Categoría del fee"
                   :filter-type="'expense' as any"
                   :error="errors.fee_category_id"
