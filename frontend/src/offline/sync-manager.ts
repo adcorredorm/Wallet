@@ -835,8 +835,19 @@ export class SyncManager {
         break
 
       case 'transaction':
+        // Update fee transactions that reference this transaction as their parent.
+        await db.transactions
+          .where('fee_for_transaction_id')
+          .equals(tempId)
+          .modify({ fee_for_transaction_id: realId })
+        break
+
       case 'transfer':
-        // Transactions and transfers do not act as FKs in other tables.
+        // Update fee transactions that reference this transfer as their parent.
+        await db.transactions
+          .where('fee_for_transfer_id')
+          .equals(tempId)
+          .modify({ fee_for_transfer_id: realId })
         break
 
       case 'setting':

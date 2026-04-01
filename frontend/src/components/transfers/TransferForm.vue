@@ -105,7 +105,8 @@ const errors = reactive({
   source_account_id: '',
   destination_account_id: '',
   amount: '',
-  date: ''
+  date: '',
+  fee_category_id: ''
 })
 
 // ---------------------------------------------------------------------------
@@ -333,6 +334,13 @@ function validateForm(): boolean {
     errors.date = ''
   }
 
+  if (hasFee.value && !isEditMode.value && !feeCategoryId.value) {
+    errors.fee_category_id = 'Selecciona una categoría para el fee'
+    isValid = false
+  } else {
+    errors.fee_category_id = ''
+  }
+
   return isValid
 }
 
@@ -369,6 +377,7 @@ function handleSubmit() {
       date: form.date,
       account_id: form.source_account_id,
       category_id: feeCategoryId.value,
+      title: 'Fee',
       tags: [],
       // fee_for_transfer_id will be set by TransferCreateView after it knows the transfer ID
     }
@@ -584,7 +593,10 @@ function handleSubmit() {
             <label class="block text-sm font-medium text-slate-300 mb-1">Categoría del fee</label>
             <select
               v-model="feeCategoryId"
-              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500"
+              :class="[
+                'w-full bg-slate-700 border rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-500',
+                errors.fee_category_id ? 'border-red-500' : 'border-slate-600'
+              ]"
               style="min-height: 44px;"
             >
               <option value="">Selecciona categoría</option>
@@ -592,6 +604,7 @@ function handleSubmit() {
                 {{ cat.icon }} {{ cat.name }}
               </option>
             </select>
+            <p v-if="errors.fee_category_id" class="mt-1 text-xs text-red-400">{{ errors.fee_category_id }}</p>
           </div>
         </div>
       </Transition>

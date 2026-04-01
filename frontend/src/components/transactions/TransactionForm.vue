@@ -80,7 +80,8 @@ const errors = reactive({
   amount: '',
   date: '',
   account_id: '',
-  category_id: ''
+  category_id: '',
+  fee_category_id: ''
 })
 
 const isEditMode = computed(() => !!props.transaction)
@@ -348,6 +349,13 @@ const feeCategories = computed(() =>
   props.categories.filter(c => c.type === 'expense' || c.type === 'both')
 )
 
+// Pre-load fee category with the parent's category when toggle is activated
+watch(hasFee, (active) => {
+  if (active && !feeCategoryId.value && form.category_id) {
+    feeCategoryId.value = form.category_id
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -389,6 +397,13 @@ function validateForm(): boolean {
     isValid = false
   } else {
     errors.category_id = ''
+  }
+
+  if (hasFee.value && !isEditMode.value && !feeCategoryId.value) {
+    errors.fee_category_id = 'Selecciona una categoría para el fee'
+    isValid = false
+  } else {
+    errors.fee_category_id = ''
   }
 
   return isValid
@@ -478,6 +493,7 @@ async function handleSubmit() {
       date: form.date,
       account_id: form.account_id,
       category_id: feeCategoryId.value,
+      title: 'Fee',
       tags: [],
       // fee_for_transaction_id will be set by the parent CreateView after it knows the parent ID
     }
@@ -874,6 +890,7 @@ async function handleSubmit() {
                   :categories="feeCategories"
                   label="Categoría del fee"
                   :filter-type="'expense' as any"
+                  :error="errors.fee_category_id"
                 />
               </div>
             </Transition>
