@@ -80,10 +80,11 @@ You are the **team lead** for a feature development lifecycle. You coordinate an
 
 1. For each task that has an agent assignment, spawn the corresponding teammate (reading from `## The Team` in CLAUDE.md).
 
-2. Send each teammate via SendMessage:
-   - The full ADD
-   - Their specific tasks and acceptance criteria
-   - Instruction: "Use `superpowers:writing-plans` to produce a detailed implementation plan. Do NOT implement yet — return only the plan."
+2. Send each teammate via SendMessage with a short prompt:
+   - Spec path: `docs/superpowers/specs/<filename>.md`
+   - Their scope (e.g., "backend tasks" or "frontend tasks")
+   - Instruction: "Read the spec at the path above. Use `superpowers:writing-plans` to produce a detailed implementation plan for your scope. Save it to `docs/superpowers/plans/`. Do NOT implement yet — report back with the plan file path."
+   - Do NOT copy spec content into the message — have the agent read it directly.
 
 3. As plans come back, validate each against the ADD:
    - All acceptance criteria are addressed
@@ -98,6 +99,18 @@ You are the **team lead** for a feature development lifecycle. You coordinate an
 
 ## Phase 4: Implementation
 
+### Context hygiene — CRITICAL
+**Never read the plan file or spec file into this session.** Plan and spec files can be tens of thousands of tokens. Pass only the file path to teammates — let them read what they need. This keeps the team lead context lean so it can run the full lifecycle without compaction.
+
+**Agent prompts must be short:**
+```
+Plan: docs/superpowers/plans/<filename>.md
+Tasks: <N>–<M> (or "all backend tasks" / "all frontend tasks")
+Read the plan file directly. Implement each task in order. Report DONE when finished.
+```
+
+Do NOT embed plan content, code snippets, or file contents in agent prompts. The plan already has everything the agent needs — just point them to it.
+
 ### Parallelism rules
 - Spawn dev teammates for each domain that has tasks
 - Run in parallel when tasks have no shared files
@@ -105,9 +118,10 @@ You are the **team lead** for a feature development lifecycle. You coordinate an
 - Infrastructure tasks can run in parallel with backend unless they share config files
 
 ### Execution
-1. Send each teammate the go-ahead via SendMessage with their approved plan.
-2. Monitor the shared task list for progress.
-3. If a teammate reports a blocker, assess and either:
+1. Identify task groupings from the plan's File Map section (read only the first ~50 lines of the plan to get the file map — use `offset`/`limit`).
+2. Dispatch each agent with a short prompt: plan path + task range. Do NOT read the full plan yourself.
+3. Monitor the shared task list for progress.
+4. If a teammate reports a blocker, assess and either:
    - Provide the missing information
    - Reassign the task
    - Escalate to the user
@@ -118,7 +132,7 @@ You are the **team lead** for a feature development lifecycle. You coordinate an
 
 ### Failure recovery
 - If a teammate fails, do NOT re-launch with the same prompt.
-- Re-launch with: the approved plan + the error output + instruction to continue from last completed step.
+- Re-launch with: the plan path + the task range + the error output + instruction to continue from last completed step.
 - If it fails a second time, pause and report to the user.
 
 ---
