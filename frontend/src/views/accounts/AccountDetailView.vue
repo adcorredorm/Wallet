@@ -24,6 +24,7 @@ import PaginationControls from '@/components/ui/PaginationControls.vue'
 import { formatAccountType, formatDateRelative } from '@/utils/formatters'
 import { db } from '@/offline'
 import type { LocalTransfer } from '@/offline/types'
+import BudgetMiniWidget from '@/components/budgets/BudgetMiniWidget.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -348,6 +349,9 @@ function getAccountCurrency(id: string): string {
         </div>
       </BaseCard>
     </div>
+
+    <!-- Budget mini widget -->
+    <BudgetMiniWidget :account-id="accountId" />
 
     <!-- Movimientos (transacciones + transferencias) -->
     <div>

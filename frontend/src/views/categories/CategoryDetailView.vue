@@ -23,6 +23,7 @@ import PaginationControls from '@/components/ui/PaginationControls.vue'
 import CurrencyDisplay from '@/components/shared/CurrencyDisplay.vue'
 import { formatCategoryType } from '@/utils/formatters'
 import { db } from '@/offline'
+import BudgetMiniWidget from '@/components/budgets/BudgetMiniWidget.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +291,9 @@ function goToTransaction(transaction: any) {
         </div>
       </BaseCard>
     </div>
+
+    <!-- Budget mini widget -->
+    <BudgetMiniWidget :category-id="categoryId" />
 
     <!-- Transaction list -->
     <div>

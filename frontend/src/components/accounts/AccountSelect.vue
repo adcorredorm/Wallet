@@ -43,7 +43,7 @@ const options = computed(() => {
     })
     .map(account => ({
       value: account.id,
-      label: `${account.name} (${account.currency})`
+      label: `${account.icon ? account.icon + ' ' : ''}${account.name} (${account.currency})`
     }))
 })
 </script>

@@ -140,6 +140,43 @@ const router = createRouter({
       }
     },
     {
+      path: '/budgets',
+      name: 'budgets',
+      component: () => import('@/views/budgets/BudgetListView.vue'),
+      meta: {
+        title: 'Presupuestos',
+        showInBottomNav: true,
+        icon: 'budget'
+      }
+    },
+    {
+      path: '/budgets/new',
+      name: 'budget-create',
+      component: () => import('@/views/budgets/BudgetFormView.vue'),
+      meta: {
+        title: 'Nuevo Presupuesto',
+        showBackButton: true
+      }
+    },
+    {
+      path: '/budgets/:id',
+      name: 'budget-detail',
+      component: () => import('@/views/budgets/BudgetDetailView.vue'),
+      meta: {
+        title: 'Presupuesto',
+        showBackButton: true
+      }
+    },
+    {
+      path: '/budgets/:id/edit',
+      name: 'budget-edit',
+      component: () => import('@/views/budgets/BudgetFormView.vue'),
+      meta: {
+        title: 'Editar Presupuesto',
+        showBackButton: true
+      }
+    },
+    {
       path: '/analytics',
       name: 'analytics',
       component: () => import('@/views/AnalyticsView.vue'),
