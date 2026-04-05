@@ -15,7 +15,13 @@ depends_on = None
 
 
 def upgrade():
-    op.drop_column('recurring_rules', 'day_of_week')
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'recurring_rules' AND column_name = 'day_of_week'"
+    ))
+    if result.fetchone():
+        op.drop_column('recurring_rules', 'day_of_week')
 
 
 def downgrade():
