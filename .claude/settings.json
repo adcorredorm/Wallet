@@ -7,7 +7,6 @@
     "allow": [
       "Bash(docker*)",
       "Bash(git*)"
-    ],
-    "defaultMode": "bypassPermissions"
+    ]
   }
 }
